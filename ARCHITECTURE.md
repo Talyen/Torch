@@ -163,18 +163,21 @@ The current UI-only Inventory fixtures follow the same boundary in
 descriptions, and presentation icon IDs, while React maps those icon IDs to
 Lucide components. Content definitions do not import React or Lucide.
 
-Terrain generation uses smooth seeded elevation fields and derives mountain
-regions over a single vibrant grassland base. Seeded path bands keep grass
-corridors open so mountain regions do not form traversal walls. Mountains are
-impassable terrain and grass is walkable. Ore candidates are deterministic walkable tiles adjacent to
-mountains; the initial ore node is materialized from that rule while broader
-chunk/entity materialization remains future work. The spawn area is an authored
-grassland safety ring so the first few actions remain readable.
+Terrain generation uses smooth seeded elevation fields over a single vibrant
+grassland base. Mountains are impassable terrain. Forests are not terrain kinds:
+seeded grove signals materialize bounded, interactive tree entities on grass,
+while path bands stay clear so groves leave traversal routes between them. Every
+walkable tile directly adjacent to a mountain is an ore candidate; the initial
+ore node is materialized from that rule while broader chunk/entity materialization
+remains future work. Generated trees are pruned outside the active Hero ring and
+chopped trees are retained as sparse removal mutations. The spawn area is an
+authored grassland safety ring so the first few actions remain readable.
 
 Visibility transitions are rendered from immutable action-boundary snapshots. The
 Torch level is interpolated per tile and staggered along the Hero's movement
 vector, producing a directional reveal sweep for newly visible and remembered
-tiles rather than recoloring the entire board at once.
+tiles rather than recoloring the entire board at once. Transitioning tiles get a
+brief gold edge highlight so the sweep is legible at normal movement speed.
 
 Content definitions should be validated at load time. Procedural systems should compose authored definitions rather than hide important game rules in opaque generator logic. Generated output must record the seed and relevant version so failures can be reproduced.
 

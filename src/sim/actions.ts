@@ -92,6 +92,9 @@ export function resolveAction(state: GameState, action: ActionRequest, events: S
 
   const resource = entity.resourceType ?? (action.kind === 'chop' ? 'wood' : 'ore');
   state.hero.inventory[resource] = (state.hero.inventory[resource] ?? 0) + 1;
+  if (entity.id.startsWith('generated-tree:')) {
+    state.removedGeneratedEntities[entity.id] = true;
+  }
   delete state.entities[entity.id];
   events.push({ type: 'resource-gathered', resource, amount: 1 });
   events.push({ type: 'message', text: `${action.kind === 'chop' ? 'Chopped' : 'Mined'} 1 ${resource}.` });

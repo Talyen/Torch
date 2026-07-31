@@ -37,7 +37,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add one tree, one ore node, and basic gathering actions.
 - [x] Resolve context actions for blocked movement (attack, chop, and mine).
 - [x] Add a simple homestead location and bound respawn point.
-- [x] Add seeded grassland/mountain terrain with clear traversal corridors and mountain-adjacent ore placement.
+- [x] Add seeded grassland with interactive tree groves, clear traversal corridors, bright mountain regions, and ore on every walkable mountain neighbor.
 - [ ] Save, reload, die, and respawn deterministically.
 - [ ] Run the same seed and command transcript in automated tests.
 

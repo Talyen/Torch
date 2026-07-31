@@ -5,7 +5,10 @@ import {
   createInitialGameState,
   generateChunk,
   generatedResourceAt,
+  generatedTreeAt,
+  generatedTreeId,
   isTerrainWalkable,
+  materializeGeneratedTrees,
   positionKey,
   PRIMARY_STAT_BUDGET,
   primaryStatTotal,
@@ -20,19 +23,57 @@ describe('Torch simulation', () => {
     expect(second).toEqual(first);
   });
 
-  it('generates seeded grassland and mountain regions with mountain-side ore candidates', () => {
+  it('generates grassland and mountain terrain with deterministic tree groves and ore candidates', () => {
     const seed = 1234;
     const positions = Array.from({ length: 129 }, (_, index) => index - 64)
       .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })));
     const mountain = positions.find((position) => tileAt(seed, position) === 'mountain');
     const ore = positions.find((position) => generatedResourceAt(seed, position) === 'ore');
+    const treeCount = positions.filter((position) => generatedTreeAt(seed, position)).length;
     const kinds = new Set(positions.map((position) => tileAt(seed, position)));
 
     expect(mountain).toBeDefined();
     expect(ore).toBeDefined();
+    expect(treeCount).toBeGreaterThan(positions.length * 0.15);
     expect(kinds).toEqual(new Set(['grass', 'mountain']));
     expect(isTerrainWalkable('mountain')).toBe(false);
     expect(isTerrainWalkable('grass')).toBe(true);
+  });
+
+  it('places ore on every walkable tile adjacent to a mountain', () => {
+    const seed = 1234;
+    const mountain = Array.from({ length: 129 }, (_, index) => index - 64)
+      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
+      .find((position) => tileAt(seed, position) === 'mountain');
+    const adjacent = [
+      { x: mountain!.x, y: mountain!.y - 1 },
+      { x: mountain!.x + 1, y: mountain!.y },
+      { x: mountain!.x, y: mountain!.y + 1 },
+      { x: mountain!.x - 1, y: mountain!.y },
+    ].filter((position) => isTerrainWalkable(tileAt(seed, position)));
+
+    expect(mountain).toBeDefined();
+    expect(adjacent.length).toBeGreaterThan(0);
+    expect(adjacent.every((position) => generatedResourceAt(seed, position) === 'ore')).toBe(true);
+  });
+
+  it('materializes generated trees as chop actions and remembers removed groves', () => {
+    const state = createInitialGameState(1234);
+    const position = Array.from({ length: 129 }, (_, index) => index - 64)
+      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
+      .find((candidate) => generatedTreeAt(state.seed, candidate));
+
+    expect(position).toBeDefined();
+    materializeGeneratedTrees(state, position!);
+    const treeId = generatedTreeId(position!);
+    expect(state.entities[treeId]?.actions).toEqual(['chop']);
+
+    state.hero.position = { x: position!.x - 1, y: position!.y };
+    const result = applyCommand(state, { type: 'interact', target: position! });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.entities[treeId]).toBeUndefined();
+    expect(result.state.removedGeneratedEntities[treeId]).toBe(true);
   });
 
   it('reveals the Torch radius around the Hero', () => {

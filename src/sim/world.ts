@@ -1,10 +1,10 @@
-import { floorDiv, positionKey } from './coords';
+import { floorDiv, positionKey, samePosition } from './coords';
 import { unitRandom } from './rng';
 import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
 import { heroDefinitions } from '../content/heroes';
 
-export const GENERATION_VERSION = 4;
+export const GENERATION_VERSION = 6;
 export const CHUNK_SIZE = 16;
 export const TORCH_RADIUS = 3;
 
@@ -51,7 +51,7 @@ function safeSpawnArea(position: Position): boolean {
   return Math.abs(position.x) <= 4 && Math.abs(position.y - 2) <= 4;
 }
 
-/** Broad seeded bands stay grass so mountain regions leave routes around them. */
+/** Broad seeded bands stay grass so tree groves and mountain regions leave routes around them. */
 function pathSignal(seed: number, position: Position): number {
   const phaseX = unitRandom(seed, 0, 0, 94) * Math.PI * 2;
   const phaseY = unitRandom(seed, 0, 0, 95) * Math.PI * 2;
@@ -65,7 +65,7 @@ export function tileAt(seed: number, position: Position): TileKind {
 
   const elevation = valueNoise(seed, position, 14, 11) * 0.72
     + valueNoise(seed, position, 6, 12) * 0.28;
-  const path = pathSignal(seed, position) < 0.14;
+  const path = pathSignal(seed, position) < 0.18;
 
   if (!path && elevation > 0.76) return 'mountain';
   return 'grass';
@@ -77,13 +77,62 @@ export function isTerrainWalkable(kind: TileKind): boolean {
 
 export type GeneratedResourceKind = 'ore';
 
-/** Ore nodes are seeded on walkable tiles directly beside mountain terrain. */
+/** Every walkable tile directly beside mountain terrain contains ore by default. */
 export function generatedResourceAt(seed: number, position: Position): GeneratedResourceKind | undefined {
   if (!isTerrainWalkable(tileAt(seed, position))) return undefined;
   const besideMountain = CARDINAL_OFFSETS.some((offset) => (
     tileAt(seed, { x: position.x + offset.x, y: position.y + offset.y }) === 'mountain'
   ));
-  return besideMountain && unitRandom(seed, position.x, position.y, 120) > 0.58 ? 'ore' : undefined;
+  return besideMountain ? 'ore' : undefined;
+}
+
+function groveSignal(seed: number, position: Position): number {
+  return valueNoise(seed, position, 16, 21) * 0.7
+    + valueNoise(seed, position, 8, 22) * 0.3;
+}
+
+/** Forests are interactive tree entities layered over grass, never terrain kinds. */
+export function generatedTreeAt(seed: number, position: Position): boolean {
+  if (safeSpawnArea(position) || tileAt(seed, position) !== 'grass') return false;
+  if (pathSignal(seed, position) < 0.18 || groveSignal(seed, position) <= 0.4) return false;
+  return unitRandom(seed, position.x, position.y, 101) > 0.28;
+}
+
+export function generatedTreeId(position: Position): string {
+  return `generated-tree:${positionKey(position)}`;
+}
+
+/** Materialize only a bounded ring of generated trees and retain chop mutations. */
+export function materializeGeneratedTrees(state: GameState, center: Position, radius = TORCH_RADIUS + 5): void {
+  const activeIds = new Set<string>();
+
+  for (let y = center.y - radius; y <= center.y + radius; y += 1) {
+    for (let x = center.x - radius; x <= center.x + radius; x += 1) {
+      const position = { x, y };
+      if (!generatedTreeAt(state.seed, position)) continue;
+
+      const id = generatedTreeId(position);
+      activeIds.add(id);
+      if (state.removedGeneratedEntities[id] || state.entities[id]) continue;
+      if (Object.values(state.entities).some((entity) => samePosition(entity.position, position))) continue;
+
+      state.entities[id] = {
+        id,
+        kind: 'tree',
+        name: 'Forest Tree',
+        position,
+        blocksMovement: true,
+        resourceType: 'wood',
+        actions: ['chop'],
+      };
+    }
+  }
+
+  for (const [id] of Object.entries(state.entities)) {
+    if (id.startsWith('generated-tree:') && !activeIds.has(id)) {
+      delete state.entities[id];
+    }
+  }
 }
 
 export function findGeneratedResourcePosition(
@@ -191,10 +240,12 @@ export function createInitialGameState(seed = 20260730): GameState {
         footprint: { ...enemyDefinitions.slime.footprint },
       },
     },
+    removedGeneratedEntities: {},
     revealedTiles: {},
   };
 
   revealAround(state, heroPosition);
+  materializeGeneratedTrees(state, heroPosition);
   return state;
 }
 

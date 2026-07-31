@@ -25,8 +25,9 @@ import type { VisibilitySnapshot } from './visibility';
 
 const COLORS = {
   grass: 0x345f3b,
-  mountain: 0x414751,
+  mountain: 0x66717d,
   grid: 0x3a4a48,
+  visibilitySweep: 0xf2c463,
   unseen: 0x151719,
   remembered: 0x111722,
   enemy: 0xe86a67,
@@ -339,6 +340,13 @@ export class TorchScene extends Phaser.Scene {
         if (gridAlpha > 0) {
           this.board.lineStyle(1, COLORS.grid, gridAlpha);
           this.board.strokeRect(screen.x, screen.y, tileSize - 1, tileSize - 1);
+        }
+
+        const visibilityDelta = Math.abs(toVisibility - fromVisibility);
+        const sweepEdgeAlpha = visibilityDelta * Math.sin(Math.PI * tileProgress) * 0.42;
+        if (sweepEdgeAlpha > 0.015) {
+          this.board.lineStyle(2, COLORS.visibilitySweep, sweepEdgeAlpha);
+          this.board.strokeRect(screen.x + 1, screen.y + 1, tileSize - 3, tileSize - 3);
         }
       }
     }

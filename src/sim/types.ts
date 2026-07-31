@@ -61,6 +61,7 @@ export interface GameState {
   hero: HeroState;
   homestead: Position;
   entities: Record<string, EntityState>;
+  removedGeneratedEntities: Record<string, true>;
   revealedTiles: Record<string, true>;
 }
 

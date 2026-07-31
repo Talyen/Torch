@@ -57,7 +57,9 @@ export function visibilityColor(
 /**
  * Staggers a visibility transition along the Hero's movement direction. The
  * leading edge reveals after the tiles behind it, which makes fog changes feel
- * like a moving Torch sweep instead of a simultaneous recolor.
+ * like a moving Torch sweep instead of a simultaneous recolor. The delayed
+ * portion is intentionally long enough to read at the game's short movement
+ * duration; the renderer adds a brief edge highlight while a tile is changing.
  */
 export function directionalVisibilityProgress(
   previousHero: Position,
@@ -79,8 +81,9 @@ export function directionalVisibilityProgress(
     + (position.y - currentHero.y) * forwardY;
   const sweepRange = TORCH_RADIUS * 2 + 2;
   const normalizedProjection = Math.max(0, Math.min(1, (projection + TORCH_RADIUS + 1) / sweepRange));
-  const delay = normalizedProjection * 0.42;
-  return Math.max(0, Math.min(1, (clampedProgress - delay) / (1 - delay)));
+  const delay = normalizedProjection * 0.72;
+  const localProgress = Math.max(0, Math.min(1, (clampedProgress - delay) / (1 - delay)));
+  return localProgress * localProgress * (3 - 2 * localProgress);
 }
 
 export function mixColor(from: number, to: number, progress: number): number {

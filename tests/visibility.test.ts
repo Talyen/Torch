@@ -42,6 +42,7 @@ describe('visibility presentation helpers', () => {
     const leadingTile = directionalVisibilityProgress(previousHero, currentHero, { x: 4, y: 2 }, 0.35);
 
     expect(trailingTile).toBeGreaterThan(leadingTile);
+    expect(leadingTile).toBe(0);
     expect(directionalVisibilityProgress(previousHero, currentHero, { x: 4, y: 2 }, 1)).toBe(1);
   });
 });

@@ -8,7 +8,7 @@ import {
 } from './coords';
 import { defaultActionForEntity, resolveAction } from './actions';
 import { entityOccupiesPosition } from './footprint';
-import { isTerrainWalkable, revealAround, tileAt } from './world';
+import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
 import type { Command, CommandResult, Direction, EntityState, GameState, Position, SimEvent } from './types';
 
 function cloneState(state: GameState): GameState {
@@ -40,6 +40,7 @@ function respawnHero(state: GameState, events: SimEvent[]): void {
   state.hero.position = { ...state.hero.boundPosition };
   state.hero.health = state.hero.maxHealth;
   revealAround(state, state.hero.position);
+  materializeGeneratedTrees(state, state.hero.position);
   events.push({ type: 'hero-respawned', position: { ...state.hero.position } });
   events.push({ type: 'message', text: 'The Torch gutters out. You awaken at your bound homestead.' });
 }
@@ -99,6 +100,8 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
   const events: SimEvent[] = [];
   let accepted = false;
 
+  materializeGeneratedTrees(next, next.hero.position);
+
   if (command.type === 'move') {
     const destination = addPosition(next.hero.position, directionDelta(command.direction));
     const destinationTerrain = tileAt(next.seed, destination);
@@ -126,6 +129,7 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
         const from = { ...next.hero.position };
         next.hero.position = destination;
         revealAround(next, destination);
+        materializeGeneratedTrees(next, destination);
         events.push({ type: 'hero-moved', from, to: { ...destination } });
         events.push({ type: 'message', text: `Moved to ${destination.x}, ${destination.y}.` });
         accepted = true;

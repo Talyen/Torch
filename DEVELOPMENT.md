@@ -43,6 +43,9 @@ the Playwright browser smoke suite. The development-only FPS monitor may log
 browser long-task warnings during automated browser work; those warnings are
 diagnostic and should be investigated separately from test failures.
 
+If another local app is already using port 4173, isolate the Playwright server
+with `TORCH_E2E_PORT=4174 npm run verify`.
+
 GitHub Actions runs the same `npm run verify` gate on pushes to `main` and
 agent branches and on every pull request. The workflow installs Chromium with
 its system dependencies and uploads Playwright reports when a browser check

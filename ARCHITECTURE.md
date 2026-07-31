@@ -101,12 +101,14 @@ The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP ba
 
 The main menu is intentionally reserved for secondary destinations such as
 Crafting, Journal, Talents, and Settings; Hero and Inventory are opened from
-their dedicated HUD actions. Hero details keep Stats, Equipment, and Abilities
-in one screen. Equipment and ability assignment are currently UI prototypes:
-slot selection opens an inline compatible-item picker, so the player does not
-lose Hero context by being sent to a separate inventory flow. The three starter
-ability definitions use stable IDs and native 3:4 art variants; gameplay
-effects and durable loadout state remain simulation/save work.
+their dedicated HUD actions. Hero details keep native-ratio art and Stats side
+by side at every orientation and target no scrolling in normal device
+viewports. Equipment and Abilities are mutually exclusive compact tabs in the
+right column. Slot selection replaces the active tab's slot view with an inline
+compatible-item or ability picker, so the player does not lose Hero context by
+being sent to a separate inventory flow. The three starter ability definitions
+use stable IDs and native 3:4 art variants; gameplay effects and durable
+loadout state remain simulation/save work.
 
 ## Input
 

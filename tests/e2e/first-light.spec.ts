@@ -98,12 +98,13 @@ test('loads the first-light vertical slice with a minimal menu overlay', async (
     await expect(page.getByText(stat, { exact: true })).toBeVisible();
   }
   await expect(page.getByTestId('equipment-slot-main-hand')).toBeVisible();
-  await expect(page.getByTestId('ability-slot-basic')).toBeVisible();
   await page.getByTestId('equipment-slot-main-hand').click();
   await expect(page.getByTestId('equipment-picker')).toBeVisible();
   await page.getByRole('button', { name: 'Iron Sword', exact: true }).click();
   await page.getByRole('button', { name: 'Equip', exact: true }).click();
   await expect(page.getByTestId('equipment-slot-main-hand')).toHaveAttribute('aria-label', 'Main Hand: Iron Sword');
+  await page.getByTestId('hero-loadout-abilities-tab').click();
+  await expect(page.getByTestId('ability-slot-basic')).toBeVisible();
   await page.getByTestId('ability-slot-basic').click();
   await expect(page.getByTestId('ability-picker')).toBeVisible();
   await expect(page.getByTestId('ability-choice-bash')).toBeVisible();
@@ -153,6 +154,8 @@ test('fits the Hero detail content within landscape and portrait viewports', asy
         statsWidth: statsRect?.width ?? 0,
         renderedRatio: imageRect ? imageRect.width / imageRect.height : 0,
         nativeRatio: image && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0,
+        loadoutScrollHeight: document.querySelector<HTMLElement>('[data-testid="hero-loadout-panel"]')?.scrollHeight ?? 0,
+        loadoutClientHeight: document.querySelector<HTMLElement>('[data-testid="hero-loadout-panel"]')?.clientHeight ?? 0,
       };
     });
     expect(layout.panelBottom).toBeLessThanOrEqual(viewport.height + 1);
@@ -164,5 +167,6 @@ test('fits the Hero detail content within landscape and portrait viewports', asy
     expect(layout.artWidth).toBeGreaterThan(0);
     expect(layout.statsWidth).toBeGreaterThan(0);
     expect(layout.artRight).toBeLessThanOrEqual(layout.statsLeft + 1);
+    expect(layout.loadoutScrollHeight).toBe(layout.loadoutClientHeight);
   }
 });

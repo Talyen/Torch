@@ -57,7 +57,7 @@ The current spacing scale is 4 px based:
 - Inventory uses a square responsive grid. It defaults to all items; clicking the active category tab toggles back to all items. Cells show an icon and quantity only; item names and descriptions belong in the selected Item Detail surface.
 - Inventory category tabs are icon-first and always carry an accessible label. Sorting is a compact custom popover control aligned with the tab row. Drag-and-drop and manual reordering are intentionally out of scope.
 - The main menu contains secondary destinations only. Hero and Inventory are dedicated HUD actions; Equipment belongs inside Hero details.
-- Hero details keep the native-ratio Hero art beside Stats at every orientation. Equipment and Ability slots use compact list/grid controls; clicking a slot opens an inline picker and keeps the player in context. Ability art is always rendered with its native 3:4 ratio, including compact previews.
+- Hero details keep the native-ratio Hero art beside Stats at every orientation and target a no-scroll experience in normal device viewports. Equipment and Abilities are mutually exclusive compact tabs in the right column; clicking a slot replaces that tab's slot view with an inline picker and keeps the player in context. Ability art is always rendered with its native 3:4 ratio, including compact previews.
 - Settings uses the same centered wide panel and groups controls by Display, Audio, and Gameplay. Prototype controls should clearly indicate when persistence or platform adapters are not yet connected.
 
 ## Component and accessibility rules

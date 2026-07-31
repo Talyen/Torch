@@ -2,6 +2,7 @@ import { isCardinallyAdjacent } from './coords';
 import { entityAt } from './entities';
 import { entityOccupiesPosition } from './footprint';
 import { abilityActionDefinition, DEFAULT_ABILITY_PRIORITY } from './ability-rules';
+import { GATHERING_ACTION_COSTS } from './gathering';
 import type {
   ActionKind,
   ActionRequest,
@@ -22,10 +23,9 @@ const ACTION_LABELS: Record<ActionKind, string> = {
   ability: 'Ability',
 };
 
-export const GATHERING_ACTION_COSTS = {
-  chop: 1,
-  mine: 1,
-} as const;
+export function actionLabel(kind: ActionKind): string {
+  return ACTION_LABELS[kind];
+}
 
 /**
  * Returns the actions currently authored for an entity. Keeping this list
@@ -87,7 +87,7 @@ export function availableActionsAt(state: GameState, target: Position): ActionOp
     kind,
     entityId: entity.id,
     target: { ...target },
-    label: ACTION_LABELS[kind],
+    label: actionLabel(kind),
   }));
 }
 
@@ -103,7 +103,7 @@ export function resolveAction(
 
   if (
     !entity ||
-    entity.health === 0 ||
+    (entity.health ?? 1) <= 0 ||
     !isCardinallyAdjacent(state.hero.position, action.target) ||
     !entityOccupiesPosition(entity, action.target) ||
     (!isAbilityAction && !actionKinds.includes(action.kind))
@@ -117,7 +117,12 @@ export function resolveAction(
     return resolveAbilityAction(state, entity, action, events, consumedAbilityIds);
   }
 
-  events.push({ type: 'action-resolved', action: action.kind, entityId: entity.id });
+  events.push({
+    type: 'action-resolved',
+    action: action.kind,
+    entityId: entity.id,
+    target: { ...action.target },
+  });
 
   if (action.kind === 'attack') {
     const amount = 1;
@@ -191,8 +196,20 @@ function resolveAbilityAction(
   entity.alerted = true;
   state.hero.abilityCooldowns[action.abilityId] = ability.cooldown;
   consumedAbilityIds.add(action.abilityId);
-  events.push({ type: 'action-resolved', action: 'ability', entityId: entity.id, abilityId: action.abilityId });
-  events.push({ type: 'ability-used', abilityId: action.abilityId, entityId: entity.id, amount });
+  events.push({
+    type: 'action-resolved',
+    action: 'ability',
+    entityId: entity.id,
+    target: { ...action.target },
+    abilityId: action.abilityId,
+  });
+  events.push({
+    type: 'ability-used',
+    abilityId: action.abilityId,
+    entityId: entity.id,
+    target: { ...action.target },
+    amount,
+  });
 
   if (amount > 0) {
     entity.health = Math.max(0, (entity.health ?? 1) - amount);

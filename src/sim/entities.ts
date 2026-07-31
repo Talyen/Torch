@@ -1,5 +1,5 @@
 import { entityOccupiesPosition } from './footprint';
-import { isCardinallyAdjacent } from './coords';
+import { CARDINAL_OFFSETS } from './coords';
 import type { EntityState, GameState, Position } from './types';
 
 /**
@@ -9,7 +9,7 @@ import type { EntityState, GameState, Position } from './types';
  */
 export function entityAt(state: GameState, position: Position): EntityState | undefined {
   return Object.values(state.entities).find(
-    (entity) => entity.health !== 0 && entityOccupiesPosition(entity, position),
+    (entity) => (entity.health ?? 1) > 0 && entityOccupiesPosition(entity, position),
   );
 }
 
@@ -19,10 +19,13 @@ export function blockingEntityAt(state: GameState, position: Position): EntitySt
 }
 
 export function findAdjacentResource(state: GameState): Position | undefined {
-  const adjacent = Object.values(state.entities).find(
-    (entity) =>
-      (entity.kind === 'tree' || entity.kind === 'ore') &&
-      isCardinallyAdjacent(entity.position, state.hero.position),
-  );
-  return adjacent ? { ...adjacent.position } : undefined;
+  for (const offset of CARDINAL_OFFSETS) {
+    const position = {
+      x: state.hero.position.x + offset.x,
+      y: state.hero.position.y + offset.y,
+    };
+    const entity = entityAt(state, position);
+    if (entity?.kind === 'tree' || entity?.kind === 'ore') return position;
+  }
+  return undefined;
 }

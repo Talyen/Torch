@@ -14,6 +14,20 @@ npm run dev                 # Vite development server at 127.0.0.1:5173
 Open the Vite URL rather than `index.html` directly. The Phaser module and
 generated asset paths rely on the development server.
 
+## Vercel deployment
+
+Torch is deployed as a Vite static client through the repository's Vercel Git
+integration. Keep the Vercel project rooted at the repository root with the
+Vite framework preset, `npm run build` as the build command, and `dist` as the
+output directory. The repository pins Node.js to `22.x`, matching the GitHub
+Actions workflow.
+
+Pushes to `main` are production deployments; pull requests and other branches
+are preview deployments. The Vercel build should run `npm run build`, not
+`npm run verify`: browser installation and the full Playwright gate remain in
+GitHub Actions. `vercel.json` provides the SPA fallback for future URL-based
+screens while preserving the generated static asset paths.
+
 ## Publishing
 
 The default handoff is a verified working tree for the user to review. Agents
@@ -27,6 +41,7 @@ the hosted safety gate.
 Run the focused checks while iterating:
 
 ```bash
+npm run check:theme
 npm run typecheck
 npm test
 npm run test:e2e -- --reporter=line
@@ -38,8 +53,9 @@ Run the complete local gate before handing off a change:
 npm run verify
 ```
 
-`verify` runs TypeScript checking, headless tests, the production build, and
-the Playwright browser smoke suite. The development-only FPS monitor may log
+`verify` first checks the Gold/Charcoal UI token contract, then runs TypeScript
+checking, headless tests, the production build, and the Playwright browser
+smoke suite. The development-only FPS monitor may log
 browser long-task warnings during automated browser work; those warnings are
 diagnostic and should be investigated separately from test failures.
 

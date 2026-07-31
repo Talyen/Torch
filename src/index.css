@@ -1,0 +1,108 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@custom-variant data-open {
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-closed {
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-active {
+  &:where([data-active]:not([data-active="false"])),
+  &:where([data-state="active"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-disabled {
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+
+@theme inline {
+  --color-background: var(--ui-color-background);
+  --color-foreground: var(--ui-color-text);
+  --color-card: var(--ui-color-surface-content);
+  --color-card-foreground: var(--ui-color-text);
+  --color-popover: var(--ui-color-surface-panel);
+  --color-popover-foreground: var(--ui-color-text);
+  --color-primary: var(--ui-color-accent);
+  --color-primary-foreground: var(--ui-color-on-accent);
+  --color-secondary: var(--ui-color-surface-content-raised);
+  --color-secondary-foreground: var(--ui-color-heading);
+  --color-muted: var(--ui-color-surface-content-raised);
+  --color-muted-foreground: var(--ui-color-muted);
+  --color-accent: var(--ui-color-accent-soft);
+  --color-accent-foreground: var(--ui-color-heading);
+  --color-border: var(--ui-border-subtle);
+  --color-input: var(--ui-border-subtle);
+  --color-ring: var(--ui-color-accent);
+  --color-destructive: var(--ui-color-danger);
+  --radius-sm: var(--ui-control-radius);
+  --radius-md: var(--ui-control-radius);
+  --radius-lg: var(--ui-card-radius);
+  --radius-xl: var(--ui-panel-radius);
+  --font-heading: var(--ui-font-family);
+  --font-sans: var(--ui-font-family);
+}
+
+:root {
+  --background: var(--ui-color-background);
+  --foreground: var(--ui-color-text);
+  --card: var(--ui-color-surface-content);
+  --card-foreground: var(--ui-color-text);
+  --popover: var(--ui-color-surface-panel);
+  --popover-foreground: var(--ui-color-text);
+  --primary: var(--ui-color-accent);
+  --primary-foreground: var(--ui-color-on-accent);
+  --secondary: var(--ui-color-surface-content-raised);
+  --secondary-foreground: var(--ui-color-heading);
+  --muted: var(--ui-color-surface-content-raised);
+  --muted-foreground: var(--ui-color-muted);
+  --accent: var(--ui-color-accent-soft);
+  --accent-foreground: var(--ui-color-heading);
+  --border: var(--ui-border-subtle);
+  --input: var(--ui-border-subtle);
+  --ring: var(--ui-color-accent);
+  --radius: var(--ui-control-radius);
+  --destructive: var(--ui-color-danger);
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--border);
+  }
+
+  html {
+    font-family: var(--ui-font-family);
+  }
+}

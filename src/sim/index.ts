@@ -4,6 +4,7 @@ export * from './ability-rules';
 export * from './context-actions';
 export * from './entities';
 export * from './footprint';
+export * from './gathering';
 export * from './rng';
 export * from './simulation';
 export * from './stats';

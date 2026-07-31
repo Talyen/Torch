@@ -1,20 +1,13 @@
-import { floorDiv, positionKey, samePosition } from './coords';
+import { CARDINAL_OFFSETS, floorDiv, positionKey, samePosition } from './coords';
 import { unitRandom } from './rng';
 import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
-import { GATHERING_ACTION_COSTS } from './actions';
+import { GATHERING_ACTION_COSTS } from './gathering';
 import { heroDefinitions } from '../content/heroes';
 
 export const GENERATION_VERSION = 6;
 export const CHUNK_SIZE = 16;
 export const TORCH_RADIUS = 3;
-
-const CARDINAL_OFFSETS = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-] as const;
 
 export interface GeneratedTile {
   position: Position;

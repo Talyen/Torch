@@ -1,25 +1,37 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import {
   Axe,
+  Accessibility,
   Backpack,
   ArrowLeft,
+  BookOpen,
   Check,
   CircleEllipsis,
   Coins,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FlaskConical,
   Gem,
+  Gamepad2,
+  Hammer,
+  Keyboard,
   ListFilter,
   Map as MapIcon,
   Menu as MenuIcon,
+  Monitor,
   PackageOpen,
   Pickaxe,
+  RotateCcw,
+  Settings2,
   Shield,
+  Shovel,
   Sparkles,
+  Swords,
   Sword,
   TreePine,
-  Wrench,
+  Volume2,
   X as CloseIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -34,30 +46,67 @@ import { toolSlots, tools } from '../content/tools';
 import type { ToolSlotId } from '../content/tools';
 import { inventoryCategories, inventoryItems } from '../content/inventory';
 import type { InventoryCategory, InventoryIconId } from '../content/inventory';
-import { abilityActionDefinition, positionKey, tileAt } from '../sim';
-import type { GameState, Position } from '../sim';
 import {
-  SHOW_GRID_EVENT,
-  readShowGridPreference,
-  setShowGridPreference,
+  clampInventoryPage,
+  filterAndSortInventoryItems,
+  inventoryLayoutForViewport,
+  inventoryPageCount,
+  inventoryPageItems,
+  inventoryPageRange,
+} from './inventory-pagination';
+import type { InventoryLayout, InventorySort } from './inventory-pagination';
+import { abilityActionDefinition, positionKey, tileAt } from '../sim';
+import type { GameState, Position, SimEvent } from '../sim';
+import {
+  PRESENTATION_SETTINGS_EVENT,
+  PresentationSettings,
+  PresentationSettingKey,
+  readPresentationSettings,
+  resetPresentationSettings,
+  setPresentationSetting,
 } from '../game/presentation-settings';
 import { ContextActionHand } from './context-action-hand';
+import {
+  TorchButton,
+  TorchDialog,
+  TorchMenuContent,
+  TorchMenuRadioGroup,
+  TorchMenuRadioItem,
+  TorchMenuRoot,
+  TorchMenuTrigger,
+  TorchTabsContent,
+  TorchTabsList,
+  TorchTabsRoot,
+  TorchTabsTab,
+} from './primitives';
+import {
+  formatBindingKey,
+  defaultKeyBindings,
+  keyBindingDefinitions,
+  KEY_BINDINGS_EVENT,
+  OPEN_MAP_EVENT,
+  readKeyBindings,
+  setKeyBindings,
+  updateKeyBinding,
+} from '../game/input-bindings';
+import type { KeyBindingAction, KeyBindings } from '../game/input-bindings';
 
 type MenuItem = {
   label: string;
-  detail: string;
+  icon: LucideIcon;
+  screen: Screen;
   available?: boolean;
+  testId?: string;
 };
 
-type InventorySort = 'category' | 'name' | 'quantity';
-type Screen = 'menu' | 'hero' | 'inventory' | 'abilities' | 'map' | 'settings';
-type InventorySection = 'inventory' | 'gear' | 'tools';
+type Screen = 'menu' | 'hero' | 'inventory' | 'gear' | 'abilities' | 'map' | 'settings';
 
 const menuItems: MenuItem[] = [
-  { label: 'Crafting', detail: 'Coming soon' },
-  { label: 'Journal', detail: 'Coming soon' },
-  { label: 'Talents', detail: 'Coming soon' },
-  { label: 'Settings', detail: 'Controls & display', available: true },
+  { label: 'Map', icon: MapIcon, screen: 'map', available: true },
+  { label: 'Crafting', icon: Hammer, screen: 'menu' },
+  { label: 'Journal', icon: BookOpen, screen: 'menu' },
+  { label: 'Talents', icon: Sparkles, screen: 'menu' },
+  { label: 'Options', icon: Settings2, screen: 'settings', available: true, testId: 'menu-settings' },
 ];
 
 const HERO_STAT_LABELS = {
@@ -72,9 +121,18 @@ const SCREEN_TITLES: Record<Screen, string> = {
   menu: 'Menu',
   hero: 'Hero',
   inventory: 'Inventory',
+  gear: 'Equipment',
   abilities: 'Abilities',
   map: 'Map',
-  settings: 'Settings',
+  settings: 'Options',
+};
+
+const SCREEN_TRIGGER_TEST_IDS: Partial<Record<Screen, string>> = {
+  hero: 'hud-hero-button',
+  inventory: 'hud-inventory-button',
+  gear: 'hud-gear-button',
+  abilities: 'hud-abilities-button',
+  menu: 'menu-button',
 };
 
 const sortOptions = [
@@ -111,22 +169,30 @@ const equipmentSlotIcons: Record<EquipmentSlotId, LucideIcon> = {
 const toolSlotIcons: Record<ToolSlotId, LucideIcon> = {
   axe: Axe,
   pickaxe: Pickaxe,
+  hammer: Hammer,
+  shovel: Shovel,
 };
 
 export function MenuOverlay(): ReactElement {
   const [open, setOpen] = useState(false);
   const [screen, setScreen] = useState<Screen>('menu');
-  const [inventorySection, setInventorySection] = useState<InventorySection>('inventory');
   const [gameState, setGameState] = useState(() => gameSession.state);
+  const [gameEvents, setGameEvents] = useState<SimEvent[]>([]);
   const [heroStatus, setHeroStatus] = useState(() => ({
     health: gameSession.state.hero.health,
     maxHealth: gameSession.state.hero.maxHealth,
   }));
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const returnFocusTestIdRef = useRef<string | null>(null);
+  const previousOpenRef = useRef(false);
+  const gameplayHudRef = useRef<HTMLDivElement>(null);
+  const hudRailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = gameSession.subscribe((state) => {
+    const unsubscribe = gameSession.subscribe((state, events) => {
       setGameState(state);
+      setGameEvents(events);
       setHeroStatus({
         health: state.hero.health,
         maxHealth: state.hero.maxHealth,
@@ -148,25 +214,69 @@ export function MenuOverlay(): ReactElement {
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setOpen(false);
-      }
+    const handleOpenMap = (): void => {
+      setScreen('map');
+      setOpen(true);
     };
+    window.addEventListener(OPEN_MAP_EVENT, handleOpenMap);
+    return () => window.removeEventListener(OPEN_MAP_EVENT, handleOpenMap);
+  }, []);
 
-    window.addEventListener('keydown', handleKeyDown);
-    closeButtonRef.current?.focus();
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
-
-  const openMenu = (nextScreen: Screen = 'menu', nextInventorySection: InventorySection = 'inventory'): void => {
+  const openMenu = (nextScreen: Screen = 'menu', invoker?: HTMLElement | null): void => {
+    const triggerTestId = invoker?.dataset.testid ?? SCREEN_TRIGGER_TEST_IDS[nextScreen] ?? null;
+    returnFocusTestIdRef.current = triggerTestId;
+    returnFocusRef.current = invoker
+      ?? (triggerTestId ? document.querySelector<HTMLElement>(`[data-testid="${triggerTestId}"]`) : null)
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setScreen(nextScreen);
-    setInventorySection(nextInventorySection);
     setOpen(true);
   };
+
+  const restoreMenuFocus = (): void => {
+    const target = returnFocusRef.current ?? (returnFocusTestIdRef.current
+      ? document.querySelector<HTMLElement>(`[data-testid="${returnFocusTestIdRef.current}"]`)
+      : null);
+    if (!target || !document.contains(target)) return;
+    target.focus({ preventScroll: true });
+  };
+
+  const scheduleMenuFocusRestore = (): void => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        restoreMenuFocus();
+        window.setTimeout(restoreMenuFocus, 120);
+        window.setTimeout(restoreMenuFocus, 300);
+      });
+    });
+  };
+
+  const handleMenuOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen);
+    if (!nextOpen) scheduleMenuFocusRestore();
+  };
+
+  useEffect(() => {
+    if (previousOpenRef.current && !open) scheduleMenuFocusRestore();
+    previousOpenRef.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    const host = gameplayHudRef.current;
+    const rail = hudRailRef.current;
+    if (!host || !rail) return;
+
+    const syncRailHeight = (): void => {
+      host.style.setProperty('--hud-rail-height', `${rail.getBoundingClientRect().height}px`);
+    };
+    syncRailHeight();
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(syncRailHeight);
+    observer?.observe(rail);
+    window.addEventListener('resize', syncRailHeight);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', syncRailHeight);
+    };
+  }, [open]);
 
   const hpRatio = heroStatus.maxHealth > 0
     ? Math.max(0, Math.min(1, heroStatus.health / heroStatus.maxHealth))
@@ -174,19 +284,21 @@ export function MenuOverlay(): ReactElement {
 
   return (
     <>
-      <ContextActionHand state={gameState} hidden={open} />
-      {!open ? (
-        <div className="hud-rail" aria-label="Hero controls">
-          <button
+      <div ref={gameplayHudRef} className="gameplay-hud" data-testid="gameplay-hud">
+        <ContextActionHand state={gameState} events={gameEvents} hidden={open} />
+        {!open ? (
+          <div ref={hudRailRef} className="hud-rail" data-testid="hud-rail" aria-label="Hero controls">
+          <TorchButton
             className="hud-icon-button hud-hero-button"
             type="button"
             aria-label="Open hero"
+            title="Hero"
             aria-controls="torch-menu"
             data-testid="hud-hero-button"
-            onClick={() => openMenu('hero')}
+            onClick={(event) => openMenu('hero', event.currentTarget)}
           >
             <img src={heroAssets.knight.hud} alt="" />
-          </button>
+          </TorchButton>
 
           <div className="hud-hp" data-testid="hero-hp" aria-label={`Hero HP ${heroStatus.health} of ${heroStatus.maxHealth}`}>
             <div className="hud-hp-meta">
@@ -198,169 +310,141 @@ export function MenuOverlay(): ReactElement {
             </div>
           </div>
 
-          <button
+          <TorchButton
             className="hud-icon-button"
             type="button"
             aria-label="Open inventory"
+            title="Inventory"
             aria-controls="torch-menu"
             data-testid="hud-inventory-button"
-            onClick={() => openMenu('inventory')}
+            onClick={(event) => openMenu('inventory', event.currentTarget)}
           >
             <Backpack aria-hidden="true" />
-          </button>
+          </TorchButton>
 
-          <button
+          <TorchButton
+            className="hud-icon-button"
+            type="button"
+            aria-label="Open gear"
+            title="Equipment"
+            aria-controls="torch-menu"
+            data-testid="hud-gear-button"
+            onClick={(event) => openMenu('gear', event.currentTarget)}
+          >
+            <Swords aria-hidden="true" />
+          </TorchButton>
+
+          <TorchButton
             className="hud-icon-button"
             type="button"
             aria-label="Open abilities"
+            title="Abilities"
             aria-controls="torch-menu"
             data-testid="hud-abilities-button"
-            onClick={() => openMenu('abilities')}
+            onClick={(event) => openMenu('abilities', event.currentTarget)}
           >
             <Sparkles aria-hidden="true" />
-          </button>
+          </TorchButton>
 
-          <button
-            className="hud-icon-button"
-            type="button"
-            aria-label="Open map"
-            aria-controls="torch-menu"
-            data-testid="hud-map-button"
-            onClick={() => openMenu('map')}
-          >
-            <MapIcon aria-hidden="true" />
-          </button>
-
-          <button
+          <TorchButton
             className="hud-icon-button"
             type="button"
             aria-label="Open menu"
+            title="Menu"
             aria-controls="torch-menu"
             aria-expanded={open}
             data-testid="menu-button"
-            onClick={() => openMenu()}
+            onClick={(event) => openMenu('menu', event.currentTarget)}
           >
             <MenuIcon aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
+          </TorchButton>
+          </div>
+        ) : null}
+      </div>
 
-      {open ? (
-        <div className="menu-layer">
-          <button
-            className="menu-backdrop"
-            type="button"
-            aria-label="Close menu"
-            data-testid="menu-backdrop"
-            onClick={() => setOpen(false)}
-          />
-
-          <section
-            id="torch-menu"
-            className={`menu-panel${screen !== 'menu' ? ' menu-panel-wide' : ''}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="menu-title"
-          >
-            <div className={`menu-header${screen === 'inventory' ? ' inventory-menu-header' : ''}`}>
-              <div className="menu-header-main">
-                <p className="menu-kicker">Torch</p>
-                <h1 id="menu-title">
-                  {SCREEN_TITLES[screen]}
-                </h1>
-              </div>
-              <button
-                ref={closeButtonRef}
-                className="menu-close"
-                type="button"
-                aria-label="Close menu"
-                data-testid="close-menu"
-                onClick={() => setOpen(false)}
+      <TorchDialog.Root open={open} onOpenChange={handleMenuOpenChange}>
+        <TorchDialog.Portal>
+          <div className="menu-layer">
+            <TorchDialog.Backdrop
+              className="menu-backdrop"
+              data-testid="menu-backdrop"
+            />
+            <TorchDialog.Viewport className="menu-viewport">
+              <TorchDialog.Popup
+                id="torch-menu"
+                className={`menu-panel${screen !== 'menu' ? ' menu-panel-wide' : ''}`}
+                initialFocus={closeButtonRef}
               >
-                <CloseIcon aria-hidden="true" />
-              </button>
-              {screen === 'inventory' ? (
-                <InventorySectionTabs section={inventorySection} onSectionChange={setInventorySection} />
-              ) : null}
-            </div>
-
-            {screen === 'menu' ? (
-              <nav className="menu-list" aria-label="Game menu">
-                {menuItems.map((item) => (
-                  <button
-                    className="menu-item"
-                    type="button"
-                    disabled={!item.available}
-                    data-testid={item.available ? `menu-${item.label.toLowerCase()}` : undefined}
-                    key={item.label}
-                    onClick={item.available ? () => setScreen(item.label === 'Settings' ? 'settings' : 'menu') : undefined}
+                <div className="menu-header">
+                  <div className="menu-header-main">
+                    <TorchDialog.Title id="menu-title">
+                      {SCREEN_TITLES[screen]}
+                    </TorchDialog.Title>
+                  </div>
+                  <TorchDialog.Close
+                    ref={closeButtonRef}
+                    className="menu-close"
+                    aria-label="Close menu"
+                    data-testid="close-menu"
+                    onPointerDown={() => {
+                      const triggerTestId = returnFocusTestIdRef.current;
+                      if (triggerTestId) {
+                        window.setTimeout(() => {
+                          document.querySelector<HTMLElement>(`[data-testid="${triggerTestId}"]`)?.focus();
+                        }, 180);
+                      }
+                    }}
+                    onClick={scheduleMenuFocusRestore}
                   >
-                    <span className="menu-item-label">{item.label}</span>
-                    <span className="menu-item-detail">{item.detail}</span>
-                  </button>
-                ))}
-              </nav>
-            ) : screen === 'hero' ? (
-              <HeroScreen state={gameState} />
-            ) : screen === 'inventory' ? (
-              <InventoryScreen section={inventorySection} />
-            ) : screen === 'abilities' ? (
-              <AbilitiesScreen />
-            ) : screen === 'map' ? (
-              <MapScreen />
-            ) : (
-              <SettingsScreen />
-            )}
-          </section>
-        </div>
-      ) : null}
+                    <CloseIcon aria-hidden="true" />
+                  </TorchDialog.Close>
+                </div>
+
+                {screen === 'menu' ? (
+                  <nav className="menu-grid" aria-label="Game menu">
+                    {menuItems.map((item) => {
+                      const Icon = item.icon;
+                      return <TorchButton
+                        variant="outline"
+                        size="lg"
+                        className="menu-item"
+                        type="button"
+                        disabled={!item.available}
+                        aria-label={`${item.label}${item.available ? '' : ', coming soon'}`}
+                        title={item.available ? undefined : 'Coming soon'}
+                        data-testid={item.available ? (item.testId ?? `menu-${item.label.toLowerCase()}`) : undefined}
+                        key={item.label}
+                        onClick={item.available ? () => setScreen(item.screen) : undefined}
+                      >
+                        <span className="menu-item-icon" aria-hidden="true"><Icon /></span>
+                        <span className="menu-item-label">{item.label}</span>
+                      </TorchButton>
+                    })}
+                  </nav>
+                ) : screen === 'hero' ? (
+                  <HeroScreen state={gameState} />
+                ) : screen === 'inventory' ? (
+                  <InventoryScreen />
+                ) : screen === 'gear' ? (
+                  <GearPanel />
+                ) : screen === 'abilities' ? (
+                  <AbilitiesScreen />
+                ) : screen === 'map' ? (
+                  <MapScreen />
+                ) : (
+                  <SettingsScreen />
+                )}
+              </TorchDialog.Popup>
+            </TorchDialog.Viewport>
+          </div>
+        </TorchDialog.Portal>
+      </TorchDialog.Root>
     </>
   );
 }
 
-function InventoryScreen({
-  section,
-}: {
-  section: InventorySection;
-}): ReactElement {
-  return (
-    <div className="inventory-screen" data-testid="inventory-screen">
-      {section === 'inventory' ? <InventoryItemsPanel /> : null}
-      {section === 'gear' ? <GearPanel /> : null}
-      {section === 'tools' ? <ToolsPanel /> : null}
-    </div>
-  );
-}
-
-function InventorySectionTabs({
-  section,
-  onSectionChange,
-}: {
-  section: InventorySection;
-  onSectionChange: (section: InventorySection) => void;
-}): ReactElement {
-  return (
-    <nav className="inventory-section-tabs" role="tablist" aria-label="Inventory sections" data-testid="inventory-section-tabs">
-      {([
-        { id: 'inventory' as const, label: 'Inventory', icon: Backpack },
-        { id: 'gear' as const, label: 'Gear', icon: Shield },
-        { id: 'tools' as const, label: 'Tools', icon: Wrench },
-      ]).map(({ id, label, icon: Icon }) => (
-        <button
-          className={`inventory-section-tab${section === id ? ' is-active' : ''}`}
-          type="button"
-          role="tab"
-          aria-selected={section === id}
-          data-testid={`inventory-section-tab-${id}`}
-          key={id}
-          onClick={() => onSectionChange(id)}
-        >
-          <Icon aria-hidden="true" />
-          <span>{label}</span>
-        </button>
-      ))}
-    </nav>
-  );
+function InventoryScreen(): ReactElement {
+  return <InventoryItemsPanel />;
 }
 
 function InventoryItemsPanel(): ReactElement {
@@ -368,134 +452,320 @@ function InventoryItemsPanel(): ReactElement {
   const [sort, setSort] = useState<InventorySort>('category');
   const [sortOpen, setSortOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>();
-  const sortRef = useRef<HTMLDivElement>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === 'undefined' ? 1280 : window.innerWidth,
+    height: typeof window === 'undefined' ? 720 : window.innerHeight,
+  }));
+  const categoryPointerStateRef = useRef<'active' | 'inactive' | undefined>(undefined);
+  const itemButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
-    if (!sortOpen) return;
-
-    const handlePointerDown = (event: PointerEvent): void => {
-      if (!sortRef.current?.contains(event.target as Node)) setSortOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setSortOpen(false);
+    const updateViewport = (): void => {
+      setViewport({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
     };
 
-    document.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [sortOpen]);
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
 
-  const visibleItems = inventoryItems
-    .filter((item) => !category || item.category === category)
-    .sort((a, b) => {
-      if (sort === 'name') return a.name.localeCompare(b.name);
-      if (sort === 'quantity') return b.quantity - a.quantity || a.name.localeCompare(b.name);
-      return a.id.localeCompare(b.id);
-  });
-  const selectedItem = visibleItems.find((item) => item.id === selectedId);
-  const SelectedIcon = selectedItem ? inventoryIcons[selectedItem.icon] : undefined;
+  const layout = useMemo<InventoryLayout>(
+    () => inventoryLayoutForViewport(viewport.width, viewport.height),
+    [viewport.height, viewport.width],
+  );
+  const filteredItems = useMemo(
+    () => filterAndSortInventoryItems(inventoryItems, category, sort),
+    [category, sort],
+  );
+  const pageCount = inventoryPageCount(filteredItems.length, layout.pageSize);
+  const safePageIndex = clampInventoryPage(pageIndex, pageCount);
+  const pageItems = inventoryPageItems(filteredItems, safePageIndex, layout.pageSize);
+  const isCompactLayout = layout.profile === 'compact' || layout.profile === 'tiny';
+  const selectedItem = pageItems.find((item) => item.id === selectedId);
+  const selectedItemFromFilteredItems = filteredItems.find((item) => item.id === selectedId);
+  const SelectedIcon = selectedItemFromFilteredItems ? inventoryIcons[selectedItemFromFilteredItems.icon] : undefined;
+
+  useEffect(() => {
+    if (safePageIndex !== pageIndex) setPageIndex(safePageIndex);
+    if (selectedId && !selectedItemFromFilteredItems) {
+      setSelectedId(undefined);
+      setDetailOpen(false);
+    }
+  }, [pageIndex, safePageIndex, selectedId, selectedItemFromFilteredItems]);
 
   const selectCategory = (nextCategory: InventoryCategory): void => {
     setCategory((currentCategory) => currentCategory === nextCategory ? undefined : nextCategory);
     setSelectedId(undefined);
+    setPageIndex(0);
+    setDetailOpen(false);
+  };
+
+  const selectSort = (nextSort: InventorySort): void => {
+    setSort(nextSort);
+    setPageIndex(0);
+    setSelectedId(undefined);
+    setDetailOpen(false);
+  };
+
+  const goToPage = (nextPageIndex: number): void => {
+    const nextPage = clampInventoryPage(nextPageIndex, pageCount);
+    if (nextPage === safePageIndex) return;
+    setPageIndex(nextPage);
+    setSelectedId(undefined);
+    setDetailOpen(false);
+  };
+
+  const moveItemFocus = (itemIndex: number, direction: 'left' | 'right' | 'up' | 'down' | 'first' | 'last'): void => {
+    let nextIndex = itemIndex;
+    if (direction === 'left') nextIndex -= 1;
+    if (direction === 'right') nextIndex += 1;
+    if (direction === 'up') nextIndex -= layout.columns;
+    if (direction === 'down') nextIndex += layout.columns;
+    if (direction === 'first') nextIndex = 0;
+    if (direction === 'last') nextIndex = pageItems.length - 1;
+    const nextItem = pageItems[nextIndex];
+    if (!nextItem) return;
+    itemButtonRefs.current[nextItem.id]?.focus();
   };
 
   return (
-    <div className="inventory-screen">
-      <div className="inventory-toolbar">
-        <div className="inventory-tabs" role="tablist" aria-label="Inventory categories">
-          {inventoryCategories.map(({ id, label, icon }) => {
-            const Icon = inventoryIcons[icon];
-            return (
-              <button
-                className={`inventory-tab${category === id ? ' is-active' : ''}`}
-                type="button"
-                role="tab"
-                aria-selected={category === id}
-                aria-label={label}
-                title={label}
-                data-testid={`inventory-tab-${id}`}
-                key={id}
-                onClick={() => selectCategory(id)}
-              >
-                <Icon aria-hidden="true" />
-              </button>
-            );
-          })}
+    <div
+      className={`inventory-screen inventory-layout-${layout.profile}${detailOpen && isCompactLayout ? ' is-detail-open' : ''}`}
+      style={{ '--inventory-columns': layout.columns, '--inventory-rows': layout.rows } as CSSProperties}
+    >
+      <div className="inventory-heading-row">
+        <div>
+          <p className="inventory-kicker">Items</p>
+          <p className="inventory-range" aria-live="polite">{inventoryPageRange(filteredItems.length, safePageIndex, layout.pageSize)}</p>
         </div>
-
-        <div className={`inventory-sort${sortOpen ? ' is-open' : ''}`} ref={sortRef}>
-          <button
-            className="inventory-sort-trigger"
-            type="button"
-            aria-label="Sort inventory"
-            aria-haspopup="menu"
-            aria-expanded={sortOpen}
-            data-testid="inventory-sort"
-            onClick={() => setSortOpen((open) => !open)}
-          >
-            <ListFilter aria-hidden="true" />
-            <span>{sortOptions.find((option) => option.value === sort)?.label}</span>
-            <ChevronDown aria-hidden="true" />
-          </button>
-          {sortOpen ? (
-            <div className="inventory-sort-menu" role="menu" aria-label="Sort inventory by">
-              {sortOptions.map((option) => (
-                <button
-                  className="inventory-sort-option"
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={sort === option.value}
-                  key={option.value}
-                  onClick={() => {
-                    setSort(option.value);
-                    setSortOpen(false);
-                  }}
-                >
-                  <span>{option.label}</span>
-                  {sort === option.value ? <Check aria-hidden="true" /> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <span className="inventory-page-status" aria-live="polite">Page {safePageIndex + 1} of {pageCount}</span>
       </div>
 
-      <div className={`inventory-content${selectedItem && SelectedIcon ? ' has-detail' : ''}`}>
-        <div className="inventory-grid" data-testid="inventory-grid" role="grid" aria-label={`${category ?? 'all'} items`}>
-          {visibleItems.map((item) => {
+      <div className="inventory-toolbar">
+        <TorchTabsRoot
+          className="inventory-tabs"
+          value={category ?? null}
+          onValueChange={(value) => {
+            if (typeof value === 'string') {
+              setCategory(value as InventoryCategory);
+              setSelectedId(undefined);
+              setPageIndex(0);
+              setDetailOpen(false);
+            }
+          }}
+        >
+          <TorchTabsList aria-label="Inventory categories" activateOnFocus variant="line">
+            {inventoryCategories.map(({ id, label, icon }) => {
+              const Icon = inventoryIcons[icon];
+              return (
+                <TorchTabsTab
+                  className="inventory-tab"
+                  value={id}
+                  aria-label={label}
+                  title={label}
+                  data-testid={`inventory-tab-${id}`}
+                  key={id}
+                  onPointerDown={(event) => {
+                    categoryPointerStateRef.current = category === id ? 'active' : 'inactive';
+                    event.preventBaseUIHandler();
+                    selectCategory(id);
+                  }}
+                  onClick={(event) => {
+                    if (categoryPointerStateRef.current === 'active') event.preventBaseUIHandler();
+                    categoryPointerStateRef.current = undefined;
+                  }}
+                >
+                  <Icon aria-hidden="true" />
+                  <span className="inventory-tab-label">{label}</span>
+                </TorchTabsTab>
+              );
+            })}
+          </TorchTabsList>
+        </TorchTabsRoot>
+
+        <TorchMenuRoot open={sortOpen} onOpenChange={setSortOpen}>
+          <div className={`inventory-sort${sortOpen ? ' is-open' : ''}`}>
+            <TorchMenuTrigger
+              render={<TorchButton variant="outline" size="lg" />}
+              className="inventory-sort-trigger"
+              aria-label="Sort inventory"
+              data-testid="inventory-sort"
+            >
+              <ListFilter aria-hidden="true" />
+              <span>{sortOptions.find((option) => option.value === sort)?.label}</span>
+              <ChevronDown aria-hidden="true" />
+            </TorchMenuTrigger>
+            <TorchMenuContent
+              container={typeof document === 'undefined' ? null : document.getElementById('torch-menu')}
+              className="inventory-sort-menu"
+              aria-label="Sort inventory by"
+              side="bottom"
+              align="end"
+              sideOffset={6}
+            >
+                  <TorchMenuRadioGroup value={sort} onValueChange={(value) => selectSort(value as InventorySort)}>
+                    {sortOptions.map((option) => (
+                      <TorchMenuRadioItem
+                        className="inventory-sort-option"
+                        value={option.value}
+                        key={option.value}
+                        closeOnClick
+                      >
+                        <span>{option.label}</span>
+                      </TorchMenuRadioItem>
+                    ))}
+                  </TorchMenuRadioGroup>
+            </TorchMenuContent>
+          </div>
+        </TorchMenuRoot>
+      </div>
+
+      <div className="inventory-content">
+        <div
+          className="inventory-grid"
+          data-testid="inventory-grid"
+          role="grid"
+          aria-label={`${category ?? 'all'} items`}
+          aria-colcount={layout.columns}
+          aria-rowcount={Math.max(1, Math.ceil(pageItems.length / layout.columns))}
+        >
+          {pageItems.map((item, itemIndex) => {
             const Icon = inventoryIcons[item.icon];
             return (
-              <div className="inventory-cell" role="gridcell" key={item.id}>
-                <button
+              <div
+                className="inventory-cell"
+                role="gridcell"
+                aria-rowindex={Math.floor(itemIndex / layout.columns) + 1}
+                aria-colindex={(itemIndex % layout.columns) + 1}
+                key={item.id}
+              >
+                <TorchButton
                   className={`inventory-item${selectedId === item.id ? ' is-selected' : ''}`}
                   type="button"
                   aria-label={`${item.name}, quantity ${item.quantity}`}
+                  aria-pressed={selectedId === item.id}
                   data-testid={`inventory-item-${item.id}`}
-                  onClick={() => setSelectedId(item.id)}
+                  ref={(element) => {
+                    itemButtonRefs.current[item.id] = element;
+                  }}
+                  onClick={() => {
+                    setSelectedId(item.id);
+                    if (isCompactLayout) setDetailOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    const navigation: Record<string, 'left' | 'right' | 'up' | 'down' | 'first' | 'last'> = {
+                      ArrowLeft: 'left',
+                      ArrowRight: 'right',
+                      ArrowUp: 'up',
+                      ArrowDown: 'down',
+                      Home: 'first',
+                      End: 'last',
+                    };
+                    const direction = navigation[event.key];
+                    if (!direction) return;
+                    event.preventDefault();
+                    moveItemFocus(itemIndex, direction);
+                  }}
                 >
                   <span className="inventory-item-icon"><Icon aria-hidden="true" /></span>
-                </button>
-                <span className="inventory-item-quantity">×{item.quantity}</span>
+                  <span className="inventory-item-quantity">×{item.quantity}</span>
+                </TorchButton>
               </div>
             );
           })}
+          {pageItems.length === 0 ? (
+            <div className="inventory-empty-state" role="status">
+              <PackageOpen aria-hidden="true" />
+              <strong>{category ? `No ${inventoryCategories.find((item) => item.id === category)?.label.toLowerCase() ?? 'items'} yet` : 'Your inventory is empty'}</strong>
+              <span>{category ? 'Items you find will appear here.' : 'Items you discover will appear here.'}</span>
+              {category ? (
+                <TorchButton
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => selectCategory(category)}
+                >
+                  View all items
+                </TorchButton>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        {selectedItem && SelectedIcon ? (
-          <section className="inventory-detail" data-testid="inventory-detail" aria-label="Item detail">
-            <p className="inventory-detail-kicker">Item Detail</p>
-            <div className="inventory-detail-heading">
-              <SelectedIcon aria-hidden="true" />
-              <h2>{selectedItem.name}</h2>
-            </div>
-            <p>{selectedItem.description}</p>
-            <span className="inventory-detail-quantity">Quantity {selectedItem.quantity}</span>
-          </section>
-        ) : null}
+        <section
+          className={`inventory-detail${selectedItem && SelectedIcon ? ' has-item' : ' is-empty'}`}
+          data-testid="inventory-detail"
+          aria-label="Item detail"
+          aria-live="polite"
+        >
+          {selectedItem && SelectedIcon ? (
+            <>
+              {isCompactLayout ? (
+                <TorchButton
+                  variant="ghost"
+                  size="sm"
+                  className="inventory-detail-back"
+                  type="button"
+                  data-testid="inventory-detail-back"
+                  onClick={() => setDetailOpen(false)}
+                >
+                  <ArrowLeft aria-hidden="true" />
+                  Back to items
+                </TorchButton>
+              ) : null}
+              <p className="inventory-detail-kicker">Item detail</p>
+              <div className="inventory-detail-heading">
+                <SelectedIcon aria-hidden="true" />
+                <h2>{selectedItem.name}</h2>
+              </div>
+              <span className="inventory-detail-category">
+                {inventoryCategories.find((item) => item.id === selectedItem.category)?.label}
+              </span>
+              <p>{selectedItem.description}</p>
+              <span className="inventory-detail-quantity">Quantity {selectedItem.quantity}</span>
+            </>
+          ) : (
+            <>
+              <PackageOpen aria-hidden="true" />
+              <strong>Select an item to inspect it.</strong>
+              <span>Names and descriptions appear here.</span>
+            </>
+          )}
+        </section>
+      </div>
+
+      <div className="inventory-pagination" aria-label="Inventory pagination">
+        <TorchButton
+          variant="outline"
+          size="sm"
+          type="button"
+          className="inventory-page-button"
+          aria-label="Previous inventory page"
+          data-testid="inventory-page-previous"
+          disabled={safePageIndex === 0}
+          onClick={() => goToPage(safePageIndex - 1)}
+        >
+          <ChevronLeft aria-hidden="true" />
+          <span className="inventory-page-button-label">Previous</span>
+        </TorchButton>
+        <span className="inventory-pagination-label" aria-live="polite">Page {safePageIndex + 1} of {pageCount}</span>
+        <TorchButton
+          variant="outline"
+          size="sm"
+          type="button"
+          className="inventory-page-button"
+          aria-label="Next inventory page"
+          data-testid="inventory-page-next"
+          disabled={safePageIndex >= pageCount - 1}
+          onClick={() => goToPage(safePageIndex + 1)}
+        >
+          <span className="inventory-page-button-label">Next</span>
+          <ChevronRight aria-hidden="true" />
+        </TorchButton>
       </div>
     </div>
   );
@@ -521,6 +791,10 @@ function HeroScreen({ state }: { state: GameState }): ReactElement {
           <div className="stats-panel-header">
             <p className="stats-kicker">{heroDefinition.name}</p>
             <h2 id="hero-stats-title">Stats</h2>
+          </div>
+          <div className="hero-summary" aria-label="Hero status">
+            <span><small>Health</small><strong>{state.hero.health}/{state.hero.maxHealth}</strong></span>
+            <span><small>Turn</small><strong>{state.turn}</strong></span>
           </div>
           <dl className="stats-list">
             {(Object.keys(HERO_STAT_LABELS) as Array<keyof typeof HERO_STAT_LABELS>).map((stat) => (
@@ -565,22 +839,12 @@ function mapBounds(state: GameState): MapBounds {
 
 function MapScreen(): ReactElement {
   const [mapState, setMapState] = useState(() => gameSession.state);
-  const [showGrid, setShowGrid] = useState(readShowGridPreference);
   const [mapViewportSize, setMapViewportSize] = useState({ width: 0, height: 0 });
   const mapViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = gameSession.subscribe((state) => setMapState(state));
     return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const handleShowGridChange = (event: Event): void => {
-      const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
-      setShowGrid(enabled ?? readShowGridPreference());
-    };
-    window.addEventListener(SHOW_GRID_EVENT, handleShowGridChange);
-    return () => window.removeEventListener(SHOW_GRID_EVENT, handleShowGridChange);
   }, []);
 
   useEffect(() => {
@@ -618,11 +882,26 @@ function MapScreen(): ReactElement {
         ...candidate,
         cellSize: Math.min(mapViewportSize.width / candidate.columns, mapViewportSize.height / candidate.rows),
       }));
-      return candidates.reduce((best, candidate) => {
-        const bestArea = best.cellSize * best.columns * best.cellSize * best.rows;
+      const best = candidates.reduce((currentBest, candidate) => {
+        const bestArea = currentBest.cellSize * currentBest.columns * currentBest.cellSize * currentBest.rows;
         const candidateArea = candidate.cellSize * candidate.columns * candidate.cellSize * candidate.rows;
-        return candidateArea > bestArea ? candidate : best;
+        return candidateArea > bestArea ? candidate : currentBest;
       });
+      // Bias the final fit toward the full viewport width. When height is the
+      // limiting dimension, keep a little vertical breathing room instead of
+      // shrinking every cell and leaving a wide unused strip on the sides.
+      const columns = Math.max(
+        exploredColumns,
+        Math.ceil(mapViewportSize.width / best.cellSize),
+        Math.ceil((mapViewportSize.width * exploredRows) / mapViewportSize.height),
+      );
+      const cellSize = mapViewportSize.width / columns;
+      const rows = Math.max(exploredRows, Math.floor(mapViewportSize.height / cellSize));
+      return {
+        columns,
+        rows,
+        cellSize,
+      };
     })()
     : undefined;
   const cellSize = mapSizing?.cellSize;
@@ -653,7 +932,7 @@ function MapScreen(): ReactElement {
     <div className="map-screen" data-testid="map-screen">
       <div className="map-viewport" ref={mapViewportRef}>
         <div
-          className={`map-grid${showGrid ? ' is-grid-visible' : ''}`}
+          className="map-grid"
           data-testid="map-grid"
           role="img"
           aria-label={`Explored terrain map with Hero at ${mapState.hero.position.x}, ${mapState.hero.position.y}`}
@@ -687,6 +966,8 @@ function MapScreen(): ReactElement {
 function GearPanel(): ReactElement {
   const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlotId>();
   const [equippedEquipment, setEquippedEquipment] = useState<Partial<Record<EquipmentSlotId, string>>>({});
+  const [selectedToolSlot, setSelectedToolSlot] = useState<ToolSlotId>();
+  const [equippedTools, setEquippedTools] = useState<Partial<Record<ToolSlotId, string>>>({});
   const equipmentItems = inventoryItems.filter((item) => item.category === 'equipment');
 
   if (activeEquipmentSlot) {
@@ -706,78 +987,92 @@ function GearPanel(): ReactElement {
     );
   }
 
-  return (
-    <section className="loadout-screen equipment-screen" data-testid="equipment-screen" aria-label="Gear loadout">
-      <div className="equipment-paper-doll" role="list" aria-label="Gear slots">
-        {equipmentSlots.map((slot) => {
-          const equippedItem = inventoryItems.find((item) => item.id === equippedEquipment[slot.id]);
-          const Icon = equipmentSlotIcons[slot.id];
-          return (
-            <button
-              className={`equipment-slot equipment-slot-${slot.id}`}
-              type="button"
-              key={slot.id}
-              data-testid={`equipment-slot-${slot.id}`}
-              aria-label={`${slot.label}: ${equippedItem?.name ?? 'Empty'}`}
-              onClick={() => setActiveEquipmentSlot(slot.id)}
-            >
-              <span className="equipment-slot-art">{equippedItem ? <Sword aria-hidden="true" /> : <Icon aria-hidden="true" />}</span>
-              <span className="equipment-slot-copy">
-                <span className="loadout-slot-label">{slot.label}</span>
-                {equippedItem ? <strong className="loadout-slot-value">{equippedItem.name}</strong> : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
+  const heroAsset = Object.values(heroAssets).find((asset) => asset.id === gameSession.state.hero.heroId)
+    ?? heroAssets.knight;
+  const paperDollSlots = ['helm', 'main-hand', 'body', 'off-hand', 'gloves', 'belt', 'boots'] as const;
+  const jewelrySlots = ['amulet', 'trinket', 'ring-1', 'ring-2'] as const;
 
-function ToolsPanel(): ReactElement {
-  const [activeToolSlot, setActiveToolSlot] = useState<ToolSlotId>();
-  const [equippedTools, setEquippedTools] = useState<Partial<Record<ToolSlotId, string>>>({});
-
-  if (activeToolSlot) {
-    const activeSlot = toolSlots.find((slot) => slot.id === activeToolSlot);
-    const toolChoices = tools.filter((tool) => tool.action === activeSlot?.action);
+  if (selectedToolSlot) {
+    const activeSlot = toolSlots.find((slot) => slot.id === selectedToolSlot);
     return (
       <ToolSelectorScreen
         slot={activeSlot}
-        items={toolChoices}
-        selectedId={equippedTools[activeToolSlot]}
-        onBack={() => setActiveToolSlot(undefined)}
+        items={tools.filter((tool) => tool.action === activeSlot?.action)}
+        selectedId={equippedTools[selectedToolSlot]}
+        onBack={() => setSelectedToolSlot(undefined)}
         onSelect={(toolId) => {
-          setEquippedTools((current) => ({ ...current, [activeToolSlot]: toolId }));
-          setActiveToolSlot(undefined);
+          setEquippedTools((current) => ({ ...current, [selectedToolSlot]: toolId }));
+          setSelectedToolSlot(undefined);
         }}
       />
     );
   }
 
+  const equipmentButton = (slotId: EquipmentSlotId): ReactElement => {
+    const slot = equipmentSlots.find((candidate) => candidate.id === slotId);
+    if (!slot) return <span key={slotId} />;
+    const equippedItem = inventoryItems.find((item) => item.id === equippedEquipment[slot.id]);
+    const Icon = equipmentSlotIcons[slot.id];
+    return (
+      <TorchButton
+        className={`equipment-slot equipment-slot-${slot.id}`}
+        type="button"
+        key={slot.id}
+        data-testid={`equipment-slot-${slot.id}`}
+        aria-label={`${slot.label}: ${equippedItem?.name ?? 'Empty'}`}
+        title={equippedItem ? `${slot.label}: ${equippedItem.name}` : `Equip ${slot.label}`}
+        onClick={() => setActiveEquipmentSlot(slot.id)}
+      >
+        <span className="equipment-slot-art">{equippedItem ? <Sword aria-hidden="true" /> : <Icon aria-hidden="true" />}</span>
+        <span className="equipment-slot-copy">
+          <span className="loadout-slot-label">{slot.label}</span>
+          {equippedItem ? <strong className="loadout-slot-value">{equippedItem.name}</strong> : <small className="loadout-slot-empty">Empty</small>}
+        </span>
+      </TorchButton>
+    );
+  };
+
   return (
-    <section className="loadout-screen tools-screen" data-testid="tools-screen" aria-label="Tool loadout">
-      <div className="tool-loadout-grid" role="list" aria-label="Tool slots">
-        {toolSlots.map((slot) => {
-          const equippedTool = tools.find((tool) => tool.id === equippedTools[slot.id]);
-          const Icon = toolSlotIcons[slot.id];
-          return (
-            <button
-              className="tool-slot"
-              type="button"
-              key={slot.id}
-              data-testid={`tool-slot-${slot.id}`}
-              aria-label={`${slot.label}: ${equippedTool?.name ?? 'Empty'}`}
-              onClick={() => setActiveToolSlot(slot.id)}
-            >
-              <span className="tool-slot-art"><Icon aria-hidden="true" /></span>
-              <span className="tool-slot-copy">
-                <span className="loadout-slot-label">{slot.label}</span>
-                {equippedTool ? <strong className="loadout-slot-value">{equippedTool.name}</strong> : null}
-              </span>
-            </button>
-          );
-        })}
+    <section className="loadout-screen gear-screen" data-testid="equipment-screen" aria-label="Equipment and tools">
+      <div className="gear-hero-pane">
+        <img className="gear-hero-art" src={heroAsset.full} alt={heroAsset.fullAlt} />
+      </div>
+      <div className="gear-loadout-pane">
+        <section className="gear-slot-group gear-paper-doll" aria-label="Equipment slots">
+          <div className="paper-doll-grid">
+            {paperDollSlots.map(equipmentButton)}
+          </div>
+        </section>
+        <section className="gear-slot-group gear-jewelry" aria-label="Jewelry slots">
+          <div className="jewelry-grid">
+            {jewelrySlots.map(equipmentButton)}
+          </div>
+        </section>
+        <section className="gear-slot-group gear-tools" aria-label="Tool slots">
+          <div className="tool-loadout-grid" role="group" aria-label="Tool slots">
+            {toolSlots.map((slot) => {
+              const equippedTool = tools.find((tool) => tool.id === equippedTools[slot.id]);
+              const Icon = toolSlotIcons[slot.id];
+              return (
+                <TorchButton
+                  className="tool-slot"
+                  type="button"
+                  key={slot.id}
+                  data-testid={`tool-slot-${slot.id}`}
+                  aria-label={`${slot.label}: ${equippedTool?.name ?? 'Empty'}`}
+                  title={equippedTool ? `${slot.label}: ${equippedTool.name}` : `Equip ${slot.label}`}
+                  onClick={() => setSelectedToolSlot(slot.id)}
+                >
+                  <span className="tool-slot-art"><Icon aria-hidden="true" /></span>
+                  <span className="tool-slot-copy">
+                    <span className="loadout-slot-label">{slot.label}</span>
+                    {equippedTool ? <strong className="loadout-slot-value">{equippedTool.name}</strong> : <small className="loadout-slot-empty">Empty</small>}
+                  </span>
+                </TorchButton>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </section>
   );
@@ -799,15 +1094,15 @@ function EquipmentSelectorScreen({
   return (
     <div className="loadout-screen selector-screen" data-testid="equipment-picker" aria-label={`Choose ${slot?.label ?? 'Equipment'}`}>
       <header className="selector-header">
-        <button type="button" className="selector-back" aria-label="Back to Gear" data-testid="equipment-picker-back" onClick={onBack}>
+        <TorchButton type="button" className="selector-back" aria-label="Back to Equipment" data-testid="equipment-picker-back" onClick={onBack}>
           <ArrowLeft aria-hidden="true" />
-        </button>
+        </TorchButton>
         <h2>{slot?.label}</h2>
       </header>
       {items.length ? (
         <div className="equipment-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Equipment'} choices`}>
           {items.map((item) => (
-            <button
+            <TorchButton
               className={`equipment-choice${selectedId === item.id ? ' is-selected' : ''}`}
               type="button"
               role="listitem"
@@ -820,7 +1115,7 @@ function EquipmentSelectorScreen({
               <span className="equipment-choice-art"><Sword aria-hidden="true" /></span>
               <span className="equipment-choice-copy"><strong>{item.name}</strong></span>
               {selectedId === item.id ? <Check aria-hidden="true" /> : null}
-            </button>
+            </TorchButton>
           ))}
         </div>
       ) : (
@@ -846,16 +1141,19 @@ function ToolSelectorScreen({
   return (
     <div className="loadout-screen selector-screen" data-testid="tool-picker" aria-label={`Choose ${slot?.label ?? 'Tool'}`}>
       <header className="selector-header">
-        <button type="button" className="selector-back" aria-label="Back to Tools" data-testid="tool-picker-back" onClick={onBack}>
+        <TorchButton type="button" className="selector-back" aria-label="Back to Equipment" data-testid="tool-picker-back" onClick={onBack}>
           <ArrowLeft aria-hidden="true" />
-        </button>
+        </TorchButton>
         <h2>{slot?.label}</h2>
       </header>
       <div className="tool-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Tool'} choices`}>
         {items.map((tool) => {
-          const Icon = tool.icon === 'axe' ? Axe : Pickaxe;
+          const Icon = tool.icon === 'axe' ? Axe
+            : tool.icon === 'pickaxe' ? Pickaxe
+              : tool.icon === 'hammer' ? Hammer
+                : Shovel;
           return (
-            <button
+            <TorchButton
               className={`tool-choice${selectedId === tool.id ? ' is-selected' : ''}`}
               type="button"
               key={tool.id}
@@ -867,7 +1165,7 @@ function ToolSelectorScreen({
               <span className="tool-choice-art"><Icon aria-hidden="true" /></span>
               <span className="tool-choice-copy"><strong>{tool.name}</strong></span>
               {selectedId === tool.id ? <Check aria-hidden="true" /> : null}
-            </button>
+            </TorchButton>
           );
         })}
       </div>
@@ -876,64 +1174,110 @@ function ToolSelectorScreen({
 }
 
 function AbilitiesScreen(): ReactElement {
-  const [activeAbilitySlot, setActiveAbilitySlot] = useState<AbilitySlotId>();
+  const [activeAbilitySlot, setActiveAbilitySlot] = useState<AbilitySlotId>('basic');
+  const [pickerSlot, setPickerSlot] = useState<AbilitySlotId>();
   const [detailAbility, setDetailAbility] = useState<typeof abilities[number]>();
+  const [feedback, setFeedback] = useState<string>();
   const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({
     ...gameSession.state.hero.equippedAbilities,
+  });
+  const [abilityCooldowns, setAbilityCooldowns] = useState<Record<string, number>>({
+    ...gameSession.state.hero.abilityCooldowns,
   });
 
   useEffect(() => gameSession.subscribe((state) => {
     setEquippedAbilities({ ...state.hero.equippedAbilities });
+    setAbilityCooldowns({ ...state.hero.abilityCooldowns });
   }), []);
 
-  if (activeAbilitySlot) {
-    const activeSlot = abilitySlots.find((slot) => slot.id === activeAbilitySlot);
+  if (pickerSlot) {
+    const picker = abilitySlots.find((slot) => slot.id === pickerSlot);
     return (
       <AbilitySelectorScreen
-        slot={activeSlot}
-        abilities={abilities.filter((ability) => ability.slot === activeAbilitySlot)}
-        selectedId={equippedAbilities[activeAbilitySlot]}
-        onBack={() => setActiveAbilitySlot(undefined)}
-        onShowDetail={setDetailAbility}
-        detailAbility={detailAbility}
-        onCloseDetail={() => setDetailAbility(undefined)}
+        slot={picker}
+        abilities={abilities.filter((ability) => ability.slot === pickerSlot)}
+        selectedId={equippedAbilities[pickerSlot]}
+        onBack={() => setPickerSlot(undefined)}
         onSelect={(abilityId) => {
-          gameSession.equipAbility(activeAbilitySlot, abilityId);
-          setActiveAbilitySlot(undefined);
+          gameSession.equipAbility(pickerSlot, abilityId);
+          setActiveAbilitySlot(pickerSlot);
+          setPickerSlot(undefined);
+          const selectedAbility = abilities.find((ability) => ability.id === abilityId);
+          setFeedback(`${selectedAbility?.name ?? 'Ability'} equipped in ${picker?.label ?? 'slot'}.`);
         }}
       />
     );
   }
 
+  const activeSlot = abilitySlots.find((slot) => slot.id === activeAbilitySlot) ?? abilitySlots[0];
+  const activeAbility = abilities.find((ability) => ability.id === equippedAbilities[activeSlot.id]);
+  const equippedCount = abilitySlots.filter((slot) => equippedAbilities[slot.id]).length;
+
   return (
     <>
-      <div className="loadout-screen">
+      <div className="loadout-screen abilities-loadout-screen">
         <section className="abilities-screen" data-testid="abilities-screen" aria-label="Ability loadout">
-          <div className="ability-loadout-grid" role="list" aria-label="Equipped abilities">
-            {abilitySlots.map((slot) => {
-              const equipped = abilities.find((ability) => ability.id === equippedAbilities[slot.id]);
-              return (
-                <div
-                  className="ability-loadout-card"
-                  role="listitem"
-                  key={slot.id}
-                  data-testid={`ability-slot-${slot.id}`}
-                >
-                  <AbilityArtButton
-                    ability={equipped}
-                    className="ability-art-button"
-                    ariaLabel={`${slot.label}: ${equipped?.name ?? 'Empty'}`}
-                    onClick={() => setActiveAbilitySlot(slot.id)}
-                    onHold={equipped ? () => setDetailAbility(equipped) : undefined}
-                  />
-                  <div className="ability-loadout-label">
-                    <strong>{slot.label}</strong>
-                    {equipped ? <small>{equipped.name}</small> : null}
-                  </div>
+          <header className="abilities-intro">
+            <div>
+              <h2>Build your combat loadout</h2>
+              <p>Choose one ability for each slot. Changes do not consume a turn.</p>
+            </div>
+            <div className="abilities-progress" aria-label={`${equippedCount} of ${abilitySlots.length} ability slots equipped`}>
+              <strong>{equippedCount} / {abilitySlots.length}</strong>
+              <span>equipped</span>
+            </div>
+          </header>
+
+          <div className="abilities-workspace">
+            <section className="ability-loadout-surface" aria-labelledby="ability-loadout-heading">
+              <div className="ability-surface-heading">
+                <div>
+                  <h3 id="ability-loadout-heading">Loadout</h3>
+                  <span>Select a slot to inspect or change it.</span>
                 </div>
-              );
-            })}
+              </div>
+              <div className="ability-loadout-grid" role="list" aria-label="Equipped abilities">
+                {abilitySlots.map((slot) => {
+                  const equipped = abilities.find((ability) => ability.id === equippedAbilities[slot.id]);
+                  const selected = activeSlot.id === slot.id;
+                  return (
+                    <div
+                      className={`ability-loadout-card${selected ? ' is-active' : ''}`}
+                      role="listitem"
+                      key={slot.id}
+                      data-testid={`ability-slot-${slot.id}`}
+                    >
+                      <AbilityArtButton
+                        ability={equipped}
+                        className="ability-art-button"
+                        ariaLabel={`${slot.label}: ${equipped?.name ?? 'Empty'}`}
+                        selected={selected}
+                        onClick={() => {
+                          setActiveAbilitySlot(slot.id);
+                          setFeedback(undefined);
+                        }}
+                      />
+                      <div className="ability-loadout-label">
+                        <strong>{slot.label}</strong>
+                        <small>{equipped?.name ?? 'Empty slot'}</small>
+                        <span>{equipped ? abilityCooldownLabel(equipped.id, abilityCooldowns) : 'Choose an ability'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <AbilityInspector
+              slot={activeSlot}
+              ability={activeAbility}
+              cooldown={activeAbility ? abilityCooldownLabel(activeAbility.id, abilityCooldowns) : undefined}
+              onChange={() => setPickerSlot(activeSlot.id)}
+              onShowDetail={activeAbility ? () => setDetailAbility(activeAbility) : undefined}
+            />
           </div>
+
+          {feedback ? <div className="ability-feedback" data-testid="ability-feedback" role="status" aria-live="polite">{feedback}</div> : null}
         </section>
       </div>
       {detailAbility ? <AbilityDetailDialog ability={detailAbility} onClose={() => setDetailAbility(undefined)} /> : null}
@@ -941,51 +1285,70 @@ function AbilitiesScreen(): ReactElement {
   );
 }
 
-function useAbilityHold(onHold: (() => void) | undefined): {
-  onPointerDown: () => void;
-  onPointerUp: () => void;
-  onPointerCancel: () => void;
-  onPointerLeave: () => void;
-  consumeClick: () => boolean;
-} {
-  const timerRef = useRef<number | undefined>(undefined);
-  const heldRef = useRef(false);
+function abilityCooldownLabel(abilityId: string, cooldowns: Record<string, number>): string {
+  const remaining = cooldowns[abilityId] ?? 0;
+  if (remaining > 0) return `Cooling down · ${remaining}`;
+  const cooldown = abilityActionDefinition(abilityId)?.cooldown ?? 0;
+  return cooldown > 0 ? `${cooldown} action cooldown` : 'Ready';
+}
 
-  useEffect(() => () => {
-    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-  }, []);
+function AbilityInspector({
+  slot,
+  ability,
+  cooldown,
+  onChange,
+  onShowDetail,
+}: {
+  slot: (typeof abilitySlots)[number];
+  ability: typeof abilities[number] | undefined;
+  cooldown: string | undefined;
+  onChange: () => void;
+  onShowDetail: (() => void) | undefined;
+}): ReactElement {
+  return (
+    <section className="ability-inspector" data-testid="ability-inspector" aria-labelledby="ability-inspector-heading">
+      <header className="ability-inspector-header">
+        <div>
+          <p className="stats-kicker">{slot.label} slot</p>
+          <h3 id="ability-inspector-heading">{ability?.name ?? 'Empty slot'}</h3>
+        </div>
+        <span className={`ability-status${ability ? '' : ' is-empty'}`}>{cooldown ?? 'Not equipped'}</span>
+      </header>
 
-  const clearTimer = (): void => {
-    if (timerRef.current !== undefined) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = undefined;
-    }
-  };
-
-  return {
-    onPointerDown: () => {
-      heldRef.current = false;
-      clearTimer();
-      if (!onHold) return;
-      timerRef.current = window.setTimeout(() => {
-        heldRef.current = true;
-        onHold();
-      }, 520);
-    },
-    onPointerUp: clearTimer,
-    onPointerCancel: () => {
-      clearTimer();
-      heldRef.current = false;
-    },
-    onPointerLeave: () => {
-      if (!heldRef.current) clearTimer();
-    },
-    consumeClick: () => {
-      if (!heldRef.current) return false;
-      heldRef.current = false;
-      return true;
-    },
-  };
+      {ability ? (
+        <div className="ability-inspector-content">
+          <div className="ability-inspector-art">
+            <img src={ability.assetPath} alt={ability.assetAlt} />
+          </div>
+          <div className="ability-inspector-copy">
+            <p>{ability.description}</p>
+            <dl className="ability-metadata">
+              <div><dt>Slot</dt><dd>{slot.label}</dd></div>
+              <div><dt>Cooldown</dt><dd>{abilityActionDefinition(ability.id)?.cooldown ? `${abilityActionDefinition(ability.id)?.cooldown} actions` : 'No cooldown'}</dd></div>
+            </dl>
+            <div className="ability-inspector-actions">
+              <TorchButton type="button" className="ability-change-button" data-testid="ability-change" onClick={onChange}>
+                Change ability
+              </TorchButton>
+              {onShowDetail ? (
+                <TorchButton type="button" className="ability-details-button" data-testid="ability-view-details" onClick={onShowDetail}>
+                  View full details
+                </TorchButton>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="ability-inspector-empty" role="status">
+          <strong>No ability equipped</strong>
+          <span>Choose an ability to make this slot ready for combat.</span>
+          <TorchButton type="button" className="ability-change-button" data-testid="ability-change" onClick={onChange}>
+            Choose ability
+          </TorchButton>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function AbilityArtButton({
@@ -993,31 +1356,24 @@ function AbilityArtButton({
   className,
   ariaLabel,
   onClick,
-  onHold,
+  selected = false,
 }: {
   ability: typeof abilities[number] | undefined;
   className: string;
   ariaLabel: string;
   onClick: () => void;
-  onHold?: () => void;
+  selected?: boolean;
 }): ReactElement {
-  const hold = useAbilityHold(onHold);
   return (
-    <button
+    <TorchButton
       className={className}
       type="button"
       aria-label={ariaLabel}
-      onPointerDown={hold.onPointerDown}
-      onPointerUp={hold.onPointerUp}
-      onPointerCancel={hold.onPointerCancel}
-      onPointerLeave={hold.onPointerLeave}
-      onContextMenu={(event) => event.preventDefault()}
-      onClick={() => {
-        if (!hold.consumeClick()) onClick();
-      }}
+      aria-pressed={selected}
+      onClick={onClick}
     >
       {ability ? <img src={ability.assetPath} alt={ability.assetAlt} /> : <span className="ability-loadout-placeholder">+</span>}
-    </button>
+    </TorchButton>
   );
 }
 
@@ -1025,35 +1381,29 @@ function AbilityChoiceButton({
   ability,
   selected,
   onClick,
-  onHold,
 }: {
   ability: typeof abilities[number];
   selected: boolean;
   onClick: () => void;
-  onHold: () => void;
 }): ReactElement {
-  const hold = useAbilityHold(onHold);
+  const cooldown = abilityActionDefinition(ability.id)?.cooldown ?? 0;
   return (
-    <button
+    <TorchButton
       className={`ability-choice${selected ? ' is-selected' : ''}`}
       type="button"
-      role="listitem"
-      aria-label={ability.name}
+      aria-label={`${ability.name}: ${ability.description}`}
       aria-pressed={selected}
       data-testid={`ability-choice-${ability.id.replace('ability.', '')}`}
-      onPointerDown={hold.onPointerDown}
-      onPointerUp={hold.onPointerUp}
-      onPointerCancel={hold.onPointerCancel}
-      onPointerLeave={hold.onPointerLeave}
-      onContextMenu={(event) => event.preventDefault()}
-      onClick={() => {
-        if (!hold.consumeClick()) onClick();
-      }}
+      onClick={onClick}
     >
       <img src={ability.assetPath} alt={ability.assetAlt} />
-      <span className="ability-choice-copy"><strong>{ability.name}</strong></span>
+      <span className="ability-choice-copy">
+        <strong>{ability.name}</strong>
+        <small>{ability.description}</small>
+        <small>{cooldown > 0 ? `${cooldown} action cooldown` : 'Ready'}</small>
+      </span>
       {selected ? <Check aria-hidden="true" /> : null}
-    </button>
+    </TorchButton>
   );
 }
 
@@ -1067,36 +1417,41 @@ function AbilityDetailDialog({
   const closeRef = useRef<HTMLButtonElement>(null);
   const cooldown = abilityActionDefinition(ability.id)?.cooldown ?? 0;
 
-  useEffect(() => {
-    closeRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   return (
-    <div className="ability-detail-layer" data-testid="ability-detail">
-      <button className="ability-detail-backdrop" type="button" aria-label="Close ability details" onClick={onClose} />
-      <section className="ability-detail-dialog" role="dialog" aria-modal="true" aria-label={`${ability.name} details`}>
-        <button ref={closeRef} className="ability-detail-close" type="button" aria-label="Close ability details" data-testid="ability-detail-close" onClick={onClose}>
-          <CloseIcon aria-hidden="true" />
-        </button>
-        <div className="ability-detail-art">
-          <img src={ability.assetPath} alt={ability.assetAlt} />
+    <TorchDialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <TorchDialog.Portal>
+        <div className="ability-detail-layer" data-testid="ability-detail">
+          <TorchDialog.Backdrop className="ability-detail-backdrop" />
+          <TorchDialog.Viewport className="ability-detail-viewport">
+            <TorchDialog.Popup
+              className="ability-detail-dialog"
+              aria-label={`${ability.name} details`}
+              initialFocus={closeRef}
+            >
+              <TorchDialog.Close
+                ref={closeRef}
+                className="ability-detail-close"
+                aria-label="Close ability details"
+                data-testid="ability-detail-close"
+              >
+                <CloseIcon aria-hidden="true" />
+              </TorchDialog.Close>
+              <div className="ability-detail-art">
+                <img src={ability.assetPath} alt={ability.assetAlt} />
+              </div>
+              <div className="ability-detail-copy">
+                <p className="stats-kicker">{ability.slot}</p>
+                <TorchDialog.Title className="ability-detail-title">{ability.name}</TorchDialog.Title>
+                <p>{ability.description}</p>
+                <dl className="ability-detail-metadata">
+                  <div><dt>Cooldown</dt><dd>{cooldown > 0 ? `${cooldown} actions` : 'No cooldown'}</dd></div>
+                </dl>
+              </div>
+            </TorchDialog.Popup>
+          </TorchDialog.Viewport>
         </div>
-        <div className="ability-detail-copy">
-          <p className="stats-kicker">{ability.slot}</p>
-          <h2>{ability.name}</h2>
-          <p>{ability.description}</p>
-          <small>{cooldown > 0 ? `${cooldown} Action cooldown` : 'No cooldown'}</small>
-        </div>
-      </section>
-    </div>
+      </TorchDialog.Portal>
+    </TorchDialog.Root>
   );
 }
 
@@ -1106,42 +1461,35 @@ function AbilitySelectorScreen({
   selectedId,
   onBack,
   onSelect,
-  onShowDetail,
-  detailAbility,
-  onCloseDetail,
 }: {
   slot: (typeof abilitySlots)[number] | undefined;
   abilities: typeof abilities;
   selectedId: string | undefined;
   onBack: () => void;
   onSelect: (abilityId: string) => void;
-  onShowDetail: (ability: typeof abilities[number]) => void;
-  detailAbility: typeof abilities[number] | undefined;
-  onCloseDetail: () => void;
 }): ReactElement {
   return (
-    <>
-      <div className="loadout-screen selector-screen" data-testid="ability-picker" aria-label={`Choose ${slot?.label ?? 'Ability'}`}>
-        <header className="selector-header">
-          <button type="button" className="selector-back" aria-label="Back to Abilities" data-testid="ability-picker-back" onClick={onBack}>
-            <ArrowLeft aria-hidden="true" />
-          </button>
-          <h2>{slot?.label}</h2>
-        </header>
-        <div className="ability-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Ability'} choices`}>
-          {choices.map((ability) => (
-            <AbilityChoiceButton
-              ability={ability}
-              selected={selectedId === ability.id}
-              onClick={() => onSelect(ability.id)}
-              onHold={() => onShowDetail(ability)}
-              key={ability.id}
-            />
-          ))}
+    <div className="loadout-screen selector-screen ability-selector-screen" data-testid="ability-picker" aria-label={`Choose ${slot?.label ?? 'Ability'}`}>
+      <header className="selector-header">
+        <div>
+          <p className="stats-kicker">Abilities → {slot?.label ?? 'Slot'}</p>
+          <h2>Choose an ability</h2>
         </div>
+        <TorchButton type="button" className="selector-back" aria-label="Back to Abilities" data-testid="ability-picker-back" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" />
+        </TorchButton>
+      </header>
+      <div className="ability-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Ability'} choices`}>
+        {choices.length > 0 ? choices.map((ability) => (
+          <AbilityChoiceButton
+            ability={ability}
+            selected={selectedId === ability.id}
+            onClick={() => onSelect(ability.id)}
+            key={ability.id}
+          />
+        )) : <div className="selector-empty" role="status">No abilities available for this slot.</div>}
       </div>
-      {detailAbility ? <AbilityDetailDialog ability={detailAbility} onClose={onCloseDetail} /> : null}
-    </>
+    </div>
   );
 }
 
@@ -1159,124 +1507,360 @@ type TorchSelectProps = {
 };
 
 function TorchSelect({ value, options, onChange, ariaLabel, testId }: TorchSelectProps): ReactElement {
-  const [open, setOpen] = useState(false);
-  const selectRef = useRef<HTMLDivElement>(null);
-  const selectedOption = options.find((option) => option.value === value) ?? options[0];
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handlePointerDown = (event: PointerEvent): void => {
-      if (!selectRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
-
   return (
-    <div className={`torch-select${open ? ' is-open' : ''}`} ref={selectRef}>
-      <button
-        className="torch-select-trigger"
-        type="button"
-        role="combobox"
+    <label className="torch-select">
+      <select
+        className="torch-select-trigger torch-select-native"
+        value={value}
         aria-label={ariaLabel}
-        aria-controls={`${testId}-options`}
-        aria-expanded={open}
         data-testid={testId}
-        onClick={() => setOpen((current) => !current)}
+        onChange={(event) => onChange(event.target.value)}
       >
-        <span>{selectedOption?.label}</span>
-        <ChevronDown aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="torch-select-menu" id={`${testId}-options`} role="listbox" aria-label={ariaLabel}>
-          {options.map((option) => (
-            <button
-              className="torch-select-option"
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              key={option.value}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            >
-              <span>{option.label}</span>
-              {option.value === value ? <Check aria-hidden="true" /> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+        {options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+      </select>
+      <ChevronDown className="torch-select-chevron" aria-hidden="true" />
+    </label>
   );
 }
 
+type SettingsTab = 'display' | 'audio' | 'gameplay' | 'controls' | 'accessibility';
+
+type OptionsTabDefinition = {
+  id: SettingsTab;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  testId: string;
+};
+
+const optionsTabs: readonly OptionsTabDefinition[] = [
+  { id: 'display', label: 'Display', description: 'Window and board presentation', icon: Monitor, testId: 'settings-tab-display' },
+  { id: 'audio', label: 'Audio', description: 'Soundscape levels', icon: Volume2, testId: 'settings-tab-audio' },
+  { id: 'gameplay', label: 'Gameplay', description: 'Comfort and interaction', icon: Gamepad2, testId: 'settings-tab-gameplay' },
+  { id: 'controls', label: 'Controls', description: 'Keyboard bindings', icon: Keyboard, testId: 'settings-tab-bindings' },
+  { id: 'accessibility', label: 'Accessibility', description: 'Motion and readability', icon: Accessibility, testId: 'settings-tab-accessibility' },
+];
+
 function SettingsScreen(): ReactElement {
-  const [fullscreen, setFullscreen] = useState(false);
-  const [uiScale, setUiScale] = useState('auto');
-  const [showGrid, setShowGrid] = useState(readShowGridPreference);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const [screenShake, setScreenShake] = useState(true);
-  const [interactionHints, setInteractionHints] = useState(true);
-  const [confirmActions, setConfirmActions] = useState(false);
-  const [masterVolume, setMasterVolume] = useState(80);
-  const [musicVolume, setMusicVolume] = useState(70);
-  const [sfxVolume, setSfxVolume] = useState(85);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('display');
+  const [settings, setSettings] = useState<PresentationSettings>(readPresentationSettings);
+  const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement));
+  const [status, setStatus] = useState('Changes save locally; connected adapters update immediately.');
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  useEffect(() => {
+    const handleSettingsChange = (event: Event): void => {
+      const detail = (event as CustomEvent<PresentationSettings>).detail;
+      setSettings(detail ?? readPresentationSettings());
+    };
+    const handleFullscreenChange = (): void => setFullscreen(Boolean(document.fullscreenElement));
+    window.addEventListener(PRESENTATION_SETTINGS_EVENT, handleSettingsChange);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      window.removeEventListener(PRESENTATION_SETTINGS_EVENT, handleSettingsChange);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const updateSetting = <K extends PresentationSettingKey>(key: K, value: PresentationSettings[K]): void => {
+    const next = setPresentationSetting(key, value);
+    setSettings(next);
+    setStatus('Saved locally; connected adapters updated.');
+    setConfirmReset(false);
+  };
 
   const toggleFullscreen = async (): Promise<void> => {
     try {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
-        setFullscreen(false);
       } else if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
-        setFullscreen(true);
       }
+      setStatus('Display mode updated.');
     } catch {
       setFullscreen(Boolean(document.fullscreenElement));
+      setStatus('Fullscreen is unavailable in this browser window.');
     }
   };
 
+  const resetAll = (): void => {
+    const next = resetPresentationSettings();
+    setSettings(next);
+    const nextBindings = defaultKeyBindings();
+    setKeyBindings(nextBindings);
+    setConfirmReset(false);
+    setStatus('All options restored to their defaults.');
+  };
+
   return (
-    <div className="settings-screen" data-testid="settings-screen">
-      <section className="settings-group" aria-labelledby="settings-display-title">
-        <div className="settings-group-heading"><p className="stats-kicker">Presentation</p><h2 id="settings-display-title">Display</h2></div>
-        <div className="settings-row"><div><strong>Fullscreen</strong><small>Use the whole display for Torch.</small></div><button className="settings-action" type="button" onClick={toggleFullscreen}>{fullscreen ? 'On' : 'Off'}</button></div>
-        <div className="settings-row"><span><strong>UI Scale</strong><small>Adjust interface density independently of the board.</small></span><TorchSelect value={uiScale} options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compact' }, { value: 'large', label: 'Large' }]} onChange={setUiScale} ariaLabel="UI Scale" testId="settings-ui-scale" /></div>
-        <div className="settings-row"><div><strong>Reduce Motion</strong><small>Use shorter transitions and less camera movement.</small></div><button className="settings-toggle" type="button" aria-pressed={reduceMotion} onClick={() => setReduceMotion((value) => !value)}>{reduceMotion ? 'On' : 'Off'}</button></div>
-        <div className="settings-row"><div><strong>Show Grid</strong><small>Display tile boundaries across the lit Torch area.</small></div><button className="settings-toggle" type="button" aria-pressed={showGrid} data-testid="settings-show-grid" onClick={() => setShowGrid((value) => { const next = !value; setShowGridPreference(next); return next; })}>{showGrid ? 'On' : 'Off'}</button></div>
-      </section>
-      <section className="settings-group" aria-labelledby="settings-audio-title">
-        <div className="settings-group-heading"><p className="stats-kicker">Soundscape</p><h2 id="settings-audio-title">Audio</h2></div>
-        <SettingRange label="Master Volume" value={masterVolume} onChange={setMasterVolume} testId="settings-master-volume" />
-        <SettingRange label="Music Volume" value={musicVolume} onChange={setMusicVolume} />
-        <SettingRange label="Effects Volume" value={sfxVolume} onChange={setSfxVolume} />
-      </section>
-      <section className="settings-group" aria-labelledby="settings-gameplay-title">
-        <div className="settings-group-heading"><p className="stats-kicker">Comfort</p><h2 id="settings-gameplay-title">Gameplay</h2></div>
-        <div className="settings-row"><div><strong>Screen Shake</strong><small>Emphasize impactful actions and attacks.</small></div><button className="settings-toggle" type="button" aria-pressed={screenShake} onClick={() => setScreenShake((value) => !value)}>{screenShake ? 'On' : 'Off'}</button></div>
-        <div className="settings-row"><div><strong>Interaction Hints</strong><small>Show contextual action affordances near the Hero.</small></div><button className="settings-toggle" type="button" aria-pressed={interactionHints} onClick={() => setInteractionHints((value) => !value)}>{interactionHints ? 'On' : 'Off'}</button></div>
-        <div className="settings-row"><div><strong>Confirm Context Actions</strong><small>Ask before gathering, mining, or attacking from a blocked move.</small></div><button className="settings-toggle" type="button" aria-pressed={confirmActions} onClick={() => setConfirmActions((value) => !value)}>{confirmActions ? 'On' : 'Off'}</button></div>
-      </section>
-      <p className="settings-note">These controls are a local prototype. Save-backed preferences and platform adapters will be added with the settings service.</p>
+    <TorchTabsRoot
+      className="settings-screen options-screen"
+      value={activeTab}
+      orientation="vertical"
+      onValueChange={(value) => {
+        if (typeof value === 'string') setActiveTab(value as SettingsTab);
+      }}
+      data-testid="settings-screen"
+    >
+      <div className="options-heading">
+        <div>
+          <p className="stats-kicker">Game preferences</p>
+        <p className="options-subtitle">Tune Torch for your expedition. Preferences are saved as you change them.</p>
+        </div>
+      </div>
+
+      <div className="options-body">
+        <TorchTabsList className="settings-tabs options-nav" aria-label="Options sections" variant="line">
+          {optionsTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <TorchTabsTab value={tab.id} data-testid={tab.testId} key={tab.id}>
+                <Icon aria-hidden="true" />
+                <span className="options-nav-copy">
+                  <strong>{tab.label}</strong>
+                  <small>{tab.description}</small>
+                </span>
+              </TorchTabsTab>
+            );
+          })}
+        </TorchTabsList>
+
+        <div className="options-content">
+          <TorchTabsContent className="settings-tab-panel" value="display">
+            <OptionsGroup eyebrow="Presentation" title="Display" description="Keep the board readable at the size and brightness that suits you.">
+              <SettingRow label="Fullscreen" description="Use the whole display for Torch.">
+                <SettingSwitch label="Fullscreen" value={fullscreen} onChange={toggleFullscreen} testId="settings-fullscreen" />
+              </SettingRow>
+              <SettingRow label="UI Scale" description="Adjust interface density independently of the board.">
+                <TorchSelect value={settings.uiScale} options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compact' }, { value: 'large', label: 'Large' }]} onChange={(value) => updateSetting('uiScale', value as PresentationSettings['uiScale'])} ariaLabel="UI Scale" testId="settings-ui-scale" />
+              </SettingRow>
+              <SettingRow label="Show Grid" description="Display tile boundaries across the lit Torch area.">
+                <SettingSwitch label="Show Grid" value={settings.showGrid} onChange={() => updateSetting('showGrid', !settings.showGrid)} testId="settings-show-grid" />
+              </SettingRow>
+            </OptionsGroup>
+          </TorchTabsContent>
+
+          <TorchTabsContent className="settings-tab-panel" value="audio">
+            <OptionsGroup eyebrow="Soundscape" title="Audio" description="Balance the sounds that accompany each action.">
+              <SettingRange label="Master Volume" description="Overall Torch volume." value={settings.masterVolume} onChange={(value) => updateSetting('masterVolume', value)} testId="settings-master-volume" />
+              <SettingRange label="Music Volume" description="Ambient music and exploration themes." value={settings.musicVolume} onChange={(value) => updateSetting('musicVolume', value)} />
+              <SettingRange label="Effects Volume" description="Combat, gathering, and interface sounds." value={settings.sfxVolume} onChange={(value) => updateSetting('sfxVolume', value)} />
+            </OptionsGroup>
+          </TorchTabsContent>
+
+          <TorchTabsContent className="settings-tab-panel" value="gameplay">
+            <OptionsGroup eyebrow="Comfort" title="Gameplay" description="Shape how much feedback Torch gives you during play.">
+              <SettingRow label="Screen Shake" description="Emphasize impactful actions and attacks.">
+                <SettingSwitch label="Screen Shake" value={settings.screenShake} onChange={() => updateSetting('screenShake', !settings.screenShake)} />
+              </SettingRow>
+              <SettingRow label="Interaction Hints" description="Show contextual action affordances near the Hero.">
+                <SettingSwitch label="Interaction Hints" value={settings.interactionHints} onChange={() => updateSetting('interactionHints', !settings.interactionHints)} />
+              </SettingRow>
+              <SettingRow label="Confirm Context Actions" description="Ask before gathering, mining, or attacking from a blocked move.">
+                <SettingSwitch label="Confirm Context Actions" value={settings.confirmActions} onChange={() => updateSetting('confirmActions', !settings.confirmActions)} />
+              </SettingRow>
+            </OptionsGroup>
+          </TorchTabsContent>
+
+          <TorchTabsContent className="settings-tab-panel" value="controls">
+            <KeyBindingsPanel onStatus={setStatus} />
+          </TorchTabsContent>
+
+          <TorchTabsContent className="settings-tab-panel" value="accessibility">
+            <OptionsGroup eyebrow="Readability" title="Accessibility" description="Reduce visual intensity without changing the simulation rules.">
+              <SettingRow label="Reduce Motion" description="Use shorter transitions and less camera movement.">
+                <SettingSwitch label="Reduce Motion" value={settings.reduceMotion} onChange={() => updateSetting('reduceMotion', !settings.reduceMotion)} />
+              </SettingRow>
+              <div className="options-info" role="note">
+                <Accessibility aria-hidden="true" />
+                <p>More accessibility options will be added as the corresponding presentation adapters become available.</p>
+              </div>
+            </OptionsGroup>
+          </TorchTabsContent>
+        </div>
+      </div>
+
+      <div className="options-footer">
+        <div className="options-status" role="status" aria-live="polite">
+          <Check aria-hidden="true" />
+          <span>{status}</span>
+        </div>
+        <div className="options-footer-actions">
+          {confirmReset ? (
+            <div className="options-reset-confirm" role="group" aria-label="Confirm reset options">
+              <span>Reset all options?</span>
+              <TorchButton variant="destructive" size="sm" type="button" data-testid="options-reset-confirm" onClick={resetAll}>Reset</TorchButton>
+              <TorchButton variant="ghost" size="sm" type="button" data-testid="options-reset-cancel" onClick={() => setConfirmReset(false)}>Cancel</TorchButton>
+            </div>
+          ) : (
+            <TorchButton variant="ghost" size="sm" type="button" data-testid="options-reset" onClick={() => setConfirmReset(true)}>
+              <RotateCcw aria-hidden="true" />
+              Reset defaults
+            </TorchButton>
+          )}
+          <TorchButton variant="default" size="sm" type="button" className="options-done" onClick={() => document.querySelector<HTMLElement>('[data-testid="close-menu"]')?.click()}>
+            Done
+          </TorchButton>
+        </div>
+      </div>
+    </TorchTabsRoot>
+  );
+}
+
+function OptionsGroup({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactElement | ReactElement[] }): ReactElement {
+  return (
+    <section className="settings-group options-group" aria-labelledby={`options-${title.toLowerCase().replaceAll(' ', '-')}-title`}>
+      <div className="settings-group-heading options-group-heading">
+        <p className="stats-kicker">{eyebrow}</p>
+        <h2 id={`options-${title.toLowerCase().replaceAll(' ', '-')}-title`}>{title}</h2>
+        <p>{description}</p>
+      </div>
+      <div className="options-group-rows">{children}</div>
+    </section>
+  );
+}
+
+function SettingRow({ label, description, children }: { label: string; description: string; children: ReactElement }): ReactElement {
+  return (
+    <div className="settings-row options-row">
+      <div className="options-row-copy">
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </div>
+      <div className="options-row-control">{children}</div>
     </div>
   );
 }
 
-function SettingRange({ label, value, onChange, testId }: { label: string; value: number; onChange: (value: number) => void; testId?: string }): ReactElement {
+function SettingSwitch({ label, value, onChange, testId }: { label: string; value: boolean; onChange: () => void; testId?: string }): ReactElement {
+  return (
+    <TorchButton
+      variant="outline"
+      size="sm"
+      className="settings-switch"
+      type="button"
+      role="switch"
+      aria-label={label}
+      aria-checked={value}
+      data-testid={testId}
+      onClick={onChange}
+    >
+      <span className="settings-switch-track" aria-hidden="true"><span /></span>
+      <span>{value ? 'On' : 'Off'}</span>
+    </TorchButton>
+  );
+}
+
+const keyBindingGroups: readonly { label: string; actions: readonly KeyBindingAction[] }[] = [
+  { label: 'Movement', actions: ['move-north', 'move-south', 'move-west', 'move-east'] },
+  { label: 'Actions', actions: ['wait', 'gather'] },
+  { label: 'Navigation', actions: ['map'] },
+];
+
+function KeyBindingsPanel({ onStatus }: { onStatus: (message: string) => void }): ReactElement {
+  const [bindings, setBindings] = useState<KeyBindings>(readKeyBindings);
+  const [capturing, setCapturing] = useState<{ action: KeyBindingAction; slot: number }>();
+
+  useEffect(() => {
+    const handleBindingsChange = (): void => setBindings(readKeyBindings());
+    window.addEventListener(KEY_BINDINGS_EVENT, handleBindingsChange);
+    return () => window.removeEventListener(KEY_BINDINGS_EVENT, handleBindingsChange);
+  }, []);
+
+  useEffect(() => {
+    if (!capturing) return;
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setCapturing(undefined);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const next = updateKeyBinding(bindings, capturing.action, capturing.slot, event.key);
+      setBindings(next);
+      setKeyBindings(next);
+      setCapturing(undefined);
+      onStatus('Controls saved locally.');
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [bindings, capturing]);
+
+  return (
+    <section className="settings-group key-bindings-group options-group" aria-labelledby="settings-bindings-title">
+      <div className="settings-group-heading key-bindings-heading">
+        <div><p className="stats-kicker">Keyboard</p><h2 id="settings-bindings-title">Controls</h2><p>Choose the keys that feel natural for moving through the dark.</p></div>
+        <TorchButton
+          variant="ghost"
+          size="sm"
+          type="button"
+          data-testid="reset-key-bindings"
+          onClick={() => {
+            const next = defaultKeyBindings();
+            setBindings(next);
+            setKeyBindings(next);
+            setCapturing(undefined);
+            onStatus('Keyboard bindings restored to defaults.');
+          }}
+        >
+          Reset defaults
+        </TorchButton>
+      </div>
+      <p className="key-bindings-help">Select a key, then press a replacement. Escape cancels rebinding. Conflicts swap safely so every action keeps a key.</p>
+      {capturing ? (
+        <p className="key-bindings-status" role="status" aria-live="polite">
+          Press a replacement key for {keyBindingDefinitions.find((definition) => definition.id === capturing.action)?.label ?? 'this binding'}. Escape cancels.
+        </p>
+      ) : null}
+      <div className="key-bindings-list">
+        {keyBindingGroups.map((group) => (
+          <section className="key-binding-group" aria-labelledby={`key-binding-group-${group.label.toLowerCase()}`} key={group.label}>
+            <h3 id={`key-binding-group-${group.label.toLowerCase()}`}>{group.label}</h3>
+            {group.actions.map((action) => {
+              const definition = keyBindingDefinitions.find((candidate) => candidate.id === action);
+              if (!definition) return null;
+              return (
+                <div className="key-binding-row" key={definition.id}>
+                  <div><strong>{definition.label}</strong><small>{definition.description}</small></div>
+                  <div className="key-binding-keys">
+                    {(bindings[definition.id] ?? []).map((key, slot) => {
+                      const isCapturing = capturing?.action === definition.id && capturing.slot === slot;
+                      return (
+                        <TorchButton
+                          variant={isCapturing ? 'default' : 'outline'}
+                          size="sm"
+                          type="button"
+                          className="key-binding-key"
+                          key={`${definition.id}-${slot}`}
+                          data-testid={`key-binding-${definition.id}-${slot}`}
+                          aria-label={`${definition.label} key ${formatBindingKey(key)}${isCapturing ? ', press a replacement' : ''}`}
+                          aria-pressed={isCapturing}
+                          data-capturing={isCapturing ? 'true' : undefined}
+                          onClick={() => setCapturing({ action: definition.id, slot })}
+                        >
+                          {isCapturing ? 'Press key…' : formatBindingKey(key)}
+                        </TorchButton>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SettingRange({ label, description, value, onChange, testId }: { label: string; description: string; value: number; onChange: (value: number) => void; testId?: string }): ReactElement {
   return (
     <label className="settings-range-row">
-      <span><strong>{label}</strong><small>{value}%</small></span>
-      <input data-testid={testId} className="settings-range" type="range" min="0" max="100" value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <span className="options-row-copy"><strong>{label}</strong><small>{description}</small></span>
+      <span className="options-range-control"><output htmlFor={testId}>{value}%</output><input aria-label={label} data-testid={testId} className="settings-range" id={testId} type="range" min="0" max="100" value={value} onChange={(event) => onChange(Number(event.target.value))} /></span>
     </label>
   );
 }

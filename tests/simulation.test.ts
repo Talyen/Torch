@@ -182,6 +182,25 @@ describe('Torch simulation', () => {
     expect(result.state.entities['resource-tree']).toBeUndefined();
   });
 
+  it('does not expose entities with depleted health to action resolution', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    state.entities.slime.health = -1;
+
+    const result = applyCommand(state, {
+      type: 'action',
+      action: {
+        kind: 'attack',
+        entityId: 'slime',
+        target: { x: 5, y: 2 },
+      },
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.state.turn).toBe(0);
+    expect(result.events.some((event) => event.type === 'blocked')).toBe(true);
+  });
+
   it('defaults a blocked move into a tree to the chop action', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 2, y: 2 };
@@ -244,7 +263,7 @@ describe('Torch simulation', () => {
     ]);
   });
 
-  it('projects equipped abilities into combat cards and marks cooldowns', () => {
+  it('projects only ready equipped abilities into combat cards', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 4, y: 2 };
     state.hero.abilityCooldowns['ability.sunder'] = 2;
@@ -253,13 +272,9 @@ describe('Torch simulation', () => {
 
     expect(cards.map((card) => card.abilityId)).toEqual([
       'ability.bash',
-      'ability.sunder',
       'ability.avatar',
     ]);
-    expect(cards[1]).toEqual(expect.objectContaining({
-      disabledReason: 'Ready in 2 actions.',
-      cooldownRemaining: 2,
-    }));
+    expect(cards.some((card) => card.abilityId === 'ability.sunder')).toBe(false);
     expect(cards[0]?.action).toEqual({
       kind: 'ability',
       abilityId: 'ability.bash',

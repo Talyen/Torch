@@ -1,5 +1,12 @@
 import type { Direction, Position } from './types';
 
+export const CARDINAL_OFFSETS = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+] as const satisfies readonly Position[];
+
 export const DIRECTION_DELTAS: Record<Direction, Position> = {
   north: { x: 0, y: -1 },
   south: { x: 0, y: 1 },

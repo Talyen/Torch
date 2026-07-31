@@ -12,24 +12,33 @@ import { enemyAssets } from '../content/enemy-assets';
 import { devFrameMonitor } from '../dev/frame-monitor';
 import { tileSizeForViewport, viewRadiusForViewport } from './layout';
 import { gameSession } from './session';
+import { cssHexColorToNumber, readCssColorToken } from './presentation-colors';
 import {
   captureVisibilitySnapshot,
   entityVisibilityAlpha,
   fogAlphaForVisibility,
+  gridAlphaForVisibility,
   interpolatedVisibilityLevel,
   visibilityChanged,
 } from './visibility';
 import type { VisibilitySnapshot } from './visibility';
 import {
+  REDUCE_MOTION_EVENT,
   SHOW_GRID_EVENT,
+  readReduceMotionPreference,
   readShowGridPreference,
 } from './presentation-settings';
+import {
+  directionForKey,
+  keyMatchesBinding,
+  KEY_BINDINGS_EVENT,
+  OPEN_MAP_EVENT,
+  readKeyBindings,
+} from './input-bindings';
 
 const COLORS = {
   grass: 0x789f55,
   mountain: 0x7c8992,
-  grid: 0x3a4a48,
-  fog: 0x151719,
   enemy: 0xe86a67,
   tree: 0x79bd70,
   ore: 0xb8c9d4,
@@ -46,6 +55,8 @@ export class TorchScene extends Phaser.Scene {
   private board!: Phaser.GameObjects.Graphics;
   private fogLayer!: Phaser.GameObjects.Container;
   private fogTiles: Phaser.GameObjects.Rectangle[] = [];
+  private gridLayer!: Phaser.GameObjects.Container;
+  private gridTiles: Phaser.GameObjects.Rectangle[] = [];
   private heroImage!: Phaser.GameObjects.Image;
   private entityTokens = new Map<string, EntityToken>();
   private visualEntityPositions = new Map<string, Position>();
@@ -66,8 +77,37 @@ export class TorchScene extends Phaser.Scene {
   private tileCacheSeed?: number;
   private entityTokenTileSize?: number;
   private showGrid = false;
+  private reduceMotion = false;
+  private keyBindings = readKeyBindings();
   private terrainDrawKey?: string;
   private fogDrawKey?: string;
+  private presentationColors = {
+    grid: 0x3a3328,
+    fog: 0x15130f,
+  };
+
+  private handlePointerDown = (pointer: Phaser.Input.Pointer): void => {
+    this.handlePointer(pointer.x, pointer.y);
+  };
+
+  private handleKeyDown = (event: KeyboardEvent): void => {
+    if (gameSession.inputMode !== 'world' || this.heroAnimating) return;
+
+    const direction = directionForKey(this.keyBindings, event.key);
+    if (direction) {
+      event.preventDefault();
+      gameSession.move(direction);
+    } else if (keyMatchesBinding(this.keyBindings, 'wait', event.key)) {
+      event.preventDefault();
+      gameSession.wait();
+    } else if (keyMatchesBinding(this.keyBindings, 'gather', event.key)) {
+      event.preventDefault();
+      gameSession.gather();
+    } else if (keyMatchesBinding(this.keyBindings, 'map', event.key)) {
+      event.preventDefault();
+      window.dispatchEvent(new Event(OPEN_MAP_EVENT));
+    }
+  };
 
   public constructor() {
     super('torch-world');
@@ -84,13 +124,23 @@ export class TorchScene extends Phaser.Scene {
     // one large Graphics object during a reveal was the source of the WebGL
     // one-frame pops we saw around newly revealed trees and terrain.
     this.fogLayer = this.add.container(0, 0).setDepth(0.5);
+    // Grid strokes need their own layer: a lit tile has no fog fill alpha,
+    // so drawing the stroke on that same rectangle would make the grid
+    // disappear with the fill.
+    this.gridLayer = this.add.container(0, 0).setDepth(0.6);
     this.showGrid = readShowGridPreference();
+    this.reduceMotion = readReduceMotionPreference();
+    this.keyBindings = readKeyBindings();
     this.textures.get('hero-knight-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.textures.get('enemy-slime-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.heroImage = this.add
       .image(0, 0, 'hero-knight-marker')
       .setDepth(2);
-    this.cameras.main.setBackgroundColor('#080b10');
+    this.presentationColors = {
+      grid: cssHexColorToNumber(readCssColorToken('--ui-color-grid', '#3a3328'), 0x3a3328),
+      fog: cssHexColorToNumber(readCssColorToken('--ui-color-fog', '#15130f'), 0x15130f),
+    };
+    this.cameras.main.setBackgroundColor(readCssColorToken('--ui-color-background', '#0c0b09'));
     this.unsubscribe = gameSession.subscribe((_state, events) => this.redraw(true, events));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
     this.renderResolution = Math.min(2, Math.max(1, this.game.device.os.pixelRatio || 1));
@@ -100,34 +150,23 @@ export class TorchScene extends Phaser.Scene {
     this.resizeObserver?.observe(this.game.canvas.parentElement ?? this.game.canvas);
     window.addEventListener('resize', this.resizeToViewport);
     window.addEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
+    window.addEventListener(REDUCE_MOTION_EVENT, this.handleReduceMotionChange);
+    window.addEventListener(KEY_BINDINGS_EVENT, this.handleKeyBindingsChange);
 
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      this.handlePointer(pointer.x, pointer.y);
-    });
-
-    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
-      if (gameSession.inputMode !== 'world' || this.heroAnimating) return;
-
-      const direction = this.directionForKey(event.key);
-      if (direction) {
-        event.preventDefault();
-        gameSession.move(direction);
-      } else if (event.key.toLowerCase() === ' ') {
-        event.preventDefault();
-        gameSession.wait();
-      } else if (event.key.toLowerCase() === 'g') {
-        event.preventDefault();
-        gameSession.gather();
-      }
-    });
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown);
+    this.input.keyboard?.on('keydown', this.handleKeyDown);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribe?.();
+      this.input.off(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown);
+      this.input.keyboard?.off('keydown', this.handleKeyDown);
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
       this.heroTween?.stop();
       this.resizeObserver?.disconnect();
       window.removeEventListener('resize', this.resizeToViewport);
       window.removeEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
+      window.removeEventListener(REDUCE_MOTION_EVENT, this.handleReduceMotionChange);
+      window.removeEventListener(KEY_BINDINGS_EVENT, this.handleKeyBindingsChange);
     });
 
     this.resizeToViewport();
@@ -144,6 +183,19 @@ export class TorchScene extends Phaser.Scene {
     this.redraw(false);
   };
 
+  private handleReduceMotionChange = (event: Event): void => {
+    const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+    this.reduceMotion = enabled ?? readReduceMotionPreference();
+    this.heroTween?.stop();
+    this.heroTween = undefined;
+    this.heroAnimating = false;
+    this.redraw(false);
+  };
+
+  private handleKeyBindingsChange = (): void => {
+    this.keyBindings = readKeyBindings();
+  };
+
   private resizeToViewport = (): void => {
     const container = this.game.canvas.parentElement;
     if (!container) return;
@@ -156,25 +208,6 @@ export class TorchScene extends Phaser.Scene {
 
     this.scale.resize(width, height);
   };
-
-  private directionForKey(key: string): 'north' | 'south' | 'west' | 'east' | undefined {
-    switch (key.toLowerCase()) {
-      case 'arrowup':
-      case 'w':
-        return 'north';
-      case 'arrowdown':
-      case 's':
-        return 'south';
-      case 'arrowleft':
-      case 'a':
-        return 'west';
-      case 'arrowright':
-      case 'd':
-        return 'east';
-      default:
-        return undefined;
-    }
-  }
 
   private handlePointer(screenX: number, screenY: number): void {
     if (gameSession.inputMode !== 'world' || this.heroAnimating) return;
@@ -233,7 +266,7 @@ export class TorchScene extends Phaser.Scene {
     this.lastSimulationHeroPosition = { ...hero };
     this.lastVisibilitySnapshot = currentVisibility;
 
-    if (!animateHero || (!heroMoved && !entityMoved) || (heroMoved && !previousHero)) {
+    if (this.reduceMotion || !animateHero || (!heroMoved && !entityMoved) || (heroMoved && !previousHero)) {
       this.heroTween?.stop();
       this.heroTween = undefined;
       this.heroAnimating = false;
@@ -392,21 +425,29 @@ export class TorchScene extends Phaser.Scene {
         const screen = this.tileScreenPosition(position, tileSize, baseCamera);
         const visibility = interpolatedVisibilityLevel(previousVisibility, currentVisibility, position, progress);
         const fogAlpha = fogAlphaForVisibility(visibility);
-        const gridAlpha = this.showGrid
-          ? Math.max(0, Math.min(1, (visibility - 1.25) / 0.75)) * 0.32
-          : 0;
+        const gridAlpha = gridAlphaForVisibility(this.showGrid, visibility);
         const fogTile = this.fogTileAt(tileIndex, tileSize);
         fogTile
           .setPosition(screen.x + tileSize / 2, screen.y + tileSize / 2)
           .setAlpha(fogAlpha)
           .setVisible(fogAlpha > 0.005 || gridAlpha > 0);
-        fogTile.setStrokeStyle(1, COLORS.grid, gridAlpha);
+        fogTile.setStrokeStyle(0, this.presentationColors.grid, 0);
+
+        const gridTile = this.gridTileAt(tileIndex, tileSize);
+        gridTile
+          .setPosition(screen.x + tileSize / 2, screen.y + tileSize / 2)
+          .setAlpha(1)
+          .setVisible(gridAlpha > 0)
+          .setStrokeStyle(2, this.presentationColors.grid, gridAlpha);
         tileIndex += 1;
       }
     }
 
     for (let index = tileIndex; index < this.fogTiles.length; index += 1) {
       this.fogTiles[index].setVisible(false);
+    }
+    for (let index = tileIndex; index < this.gridTiles.length; index += 1) {
+      this.gridTiles[index].setVisible(false);
     }
   }
 
@@ -417,9 +458,22 @@ export class TorchScene extends Phaser.Scene {
       return existing;
     }
 
-    const tile = this.add.rectangle(0, 0, tileSize, tileSize, COLORS.fog, 1);
+    const tile = this.add.rectangle(0, 0, tileSize, tileSize, this.presentationColors.fog, 1);
     this.fogLayer.add(tile);
     this.fogTiles.push(tile);
+    return tile;
+  }
+
+  private gridTileAt(index: number, tileSize: number): Phaser.GameObjects.Rectangle {
+    const existing = this.gridTiles[index];
+    if (existing) {
+      existing.setSize(tileSize, tileSize).setDisplaySize(tileSize, tileSize);
+      return existing;
+    }
+
+    const tile = this.add.rectangle(0, 0, tileSize, tileSize, 0x000000, 0);
+    this.gridLayer.add(tile);
+    this.gridTiles.push(tile);
     return tile;
   }
 
@@ -466,6 +520,10 @@ export class TorchScene extends Phaser.Scene {
       (baseCamera.y - camera.y) * tileSize,
     );
     this.fogLayer.setPosition(
+      (baseCamera.x - camera.x) * tileSize,
+      (baseCamera.y - camera.y) * tileSize,
+    );
+    this.gridLayer.setPosition(
       (baseCamera.x - camera.x) * tileSize,
       (baseCamera.y - camera.y) * tileSize,
     );

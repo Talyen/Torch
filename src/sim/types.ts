@@ -103,8 +103,8 @@ export type SimEvent =
   | { type: 'message'; text: string }
   | { type: 'hero-moved'; from: Position; to: Position }
   | { type: 'enemy-moved'; entityId: string; from: Position; to: Position }
-  | { type: 'action-resolved'; action: ActionKind; entityId: string; abilityId?: string }
-  | { type: 'ability-used'; abilityId: string; entityId: string; amount: number }
+  | { type: 'action-resolved'; action: ActionKind; entityId: string; target: Position; abilityId?: string }
+  | { type: 'ability-used'; abilityId: string; entityId: string; target: Position; amount: number }
   | { type: 'ability-equipped'; slot: AbilitySlotId; abilityId: string }
   | { type: 'enemy-damaged'; entityId: string; amount: number }
   | { type: 'enemy-defeated'; entityId: string }

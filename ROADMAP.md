@@ -21,7 +21,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Establish browser smoke testing with Playwright.
 - [x] Add a responsive React UI overlay shell with a minimal menu.
 - [x] Add a UI-only Inventory prototype with category tabs, sorting, square item cells, and Item Detail.
-- [x] Add first-pass Settings plus dedicated Hero, consolidated Inventory/Gear/Tools, and Ability screens.
+- [x] Add first-pass Options plus dedicated Hero, consolidated Inventory/Gear/Tools, and Ability screens.
 - [x] Add a read-only explored-terrain Map screen with a relative Hero marker.
 - [x] Add native-ratio Bash, Sunder, and Avatar ability artwork to the asset pipeline.
 - [x] Add a minimal asset/content manifest convention.

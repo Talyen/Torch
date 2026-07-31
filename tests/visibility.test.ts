@@ -4,6 +4,7 @@ import {
   directionalVisibilityProgress,
   entityVisibilityAlpha,
   fogAlphaForVisibility,
+  gridAlphaForVisibility,
   REMEMBERED_TILE_MIX,
   interpolatedVisibilityLevel,
   visibilityChanged,
@@ -65,5 +66,12 @@ describe('visibility presentation helpers', () => {
     expect(fogAlphaForVisibility(0)).toBeGreaterThan(fogAlphaForVisibility(1));
     expect(fogAlphaForVisibility(1)).toBeGreaterThan(fogAlphaForVisibility(2));
     expect(fogAlphaForVisibility(2)).toBe(0);
+  });
+
+  it('draws grid strokes across remembered and currently lit tiles only when enabled', () => {
+    expect(gridAlphaForVisibility(false, 2)).toBe(0);
+    expect(gridAlphaForVisibility(true, 0)).toBe(0);
+    expect(gridAlphaForVisibility(true, 1)).toBeGreaterThan(0);
+    expect(gridAlphaForVisibility(true, 2)).toBeGreaterThan(gridAlphaForVisibility(true, 1));
   });
 });

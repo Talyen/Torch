@@ -52,11 +52,12 @@ npm run dev
 
 Then open [http://127.0.0.1:5173/](http://127.0.0.1:5173/). Do not open `index.html` with a `file://` URL; the Phaser module needs the Vite development server.
 
-Before handing off a change, run `npm run verify` to execute typechecking,
-headless tests, the production build, and the Playwright browser smoke suite.
+Before handing off a change, run `npm run verify` to execute the UI theme
+contract check, typechecking, headless tests, the production build, and the
+Playwright browser smoke suite.
 
 Raw artwork lives under [`Raw Assets/`](Raw%20Assets/). `npm run assets:build` uses the Sharp-based pipeline in [`scripts/`](scripts/) to create optimized WebP/PNG variants and a manifest under `public/assets/`. Raw sources are never modified by the pipeline.
 
 ## Current status
 
-The first browser foundation is in place: seeded grassland with dense interactive tree groves and clear paths, bright mountain regions, and deterministic ore on every walkable mountain neighbor, cardinal action movement, dark-charcoal unexplored Torch visibility, a stable pooled Phaser fog layer with a directional reveal sweep, one-action resource harvesting, context actions for combat, a responsive 3:4 Action Hand with stable card identity and card-play animation, typed Knight abilities with Trinket-inspired effects and Basic/Skill/Ultimate cooldowns, priority-based default combat actions, a disposition-driven enemy response, a full-screen Phaser board, and a React overlay with Hero, consolidated Inventory/Gear/Tools, Abilities, Map, and first-pass Settings actions. Native-ratio Bash, Sunder, and Avatar ability art flows through the asset pipeline, with hold-to-open detail dialogs. The next increment is durable save/load plus richer chunk/entity materialization for the complete first playable vertical slice.
+The first browser foundation is in place: seeded grassland with dense interactive tree groves and clear paths, bright mountain regions, and deterministic ore on every walkable mountain neighbor, cardinal action movement, dark-charcoal unexplored Torch visibility, a stable pooled Phaser fog layer with a directional reveal sweep, one-action resource harvesting, context actions for combat, a responsive 3:4 Action Hand with stable card identity and event-driven card-play/replacement animation, typed Knight abilities with Trinket-inspired effects and Basic/Skill/Ultimate cooldowns, priority-based default combat actions, a disposition-driven enemy response, a full-screen Phaser board, and a React overlay with Hero, square-card items-only Inventory, dedicated native-ratio Equipment with subtle art treatment and Hammer/Shovel tools, content-sized Abilities, a framed Map in the Main Menu, an icon-grid Main Menu, and a responsive Options surface with Display, Audio, Gameplay, Controls, and Accessibility sections. Native-ratio Bash, Sunder, and Avatar ability art flows through the asset pipeline, with hold-to-open detail dialogs. The next increment is durable save/load plus richer chunk/entity materialization for the complete first playable vertical slice.

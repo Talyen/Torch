@@ -1,15 +1,8 @@
-import { isCardinallyAdjacent } from './coords';
+import { CARDINAL_OFFSETS, isCardinallyAdjacent } from './coords';
 import { abilityActionDefinition } from './ability-rules';
-import { actionOptionsForEntity } from './actions';
+import { actionLabel, actionOptionsForEntity } from './actions';
 import { entityAt } from './entities';
 import type { AbilitySlotId, ActionKind, ActionRequest, EntityState, GameState, Position } from './types';
-
-const CARDINAL_OFFSETS = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-] as const;
 
 const ABILITY_SLOT_ORDER: readonly AbilitySlotId[] = ['basic', 'skill', 'ultimate'];
 
@@ -79,6 +72,8 @@ function equippedAbilityCards(state: GameState, entity: EntityState, target: Pos
     if (!ability) return [];
 
     const cooldownRemaining = state.hero.abilityCooldowns?.[ability.id] ?? 0;
+    if (cooldownRemaining > 0) return [];
+
     return [{
       id: `context:ability:${ability.id}`,
       label: ability.name,
@@ -86,8 +81,6 @@ function equippedAbilityCards(state: GameState, entity: EntityState, target: Pos
       entityName: entity.name,
       abilityId: ability.id,
       slot,
-      cooldownRemaining,
-      disabledReason: cooldownRemaining > 0 ? `Ready in ${cooldownRemaining} action${cooldownRemaining === 1 ? '' : 's'}.` : undefined,
       action: {
         kind: 'ability' as const,
         entityId: entity.id,
@@ -110,13 +103,4 @@ function entityActionCard(entity: EntityState, target: Position, kind: ActionKin
     entityName: entity.name,
     ...(isGathering && required > 1 ? { progress: { current: required - remaining, required } } : {}),
   };
-}
-
-function actionLabel(kind: ActionKind): string {
-  switch (kind) {
-    case 'attack': return 'Attack';
-    case 'chop': return 'Chop';
-    case 'mine': return 'Mine';
-    case 'ability': return 'Ability';
-  }
 }

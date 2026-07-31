@@ -70,6 +70,12 @@ export function fogAlphaForVisibility(visibility: number): number {
   return 0.72 * (2 - visibility);
 }
 
+/** Returns the optional tile-boundary stroke alpha for a visibility state. */
+export function gridAlphaForVisibility(showGrid: boolean, visibility: number): number {
+  if (!showGrid || visibility <= 0) return 0;
+  return Math.max(0, Math.min(1, visibility / 2)) * 0.62;
+}
+
 export function visibilityColor(
   baseColor: number,
   visibility: number,

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Torch Phaser"
+  short_description: "Phaser rendering and input guidance"
+  default_prompt: "Use $torch-phaser to review or implement Torch Phaser scenes, scaling, tile presentation, input, assets, and tween behavior."

@@ -84,6 +84,11 @@ The exact chunk dimensions and active radius are performance parameters to bench
 - Keep fog, weather, lighting, and spell effects incremental so static art remains useful.
 - Use responsive camera and HUD layout rather than assuming a fixed orientation.
 - Keep Phaser texture filtering smooth for painterly artwork; enable pixel-art sampling only for assets explicitly authored for that style.
+- Keep the Gold/Charcoal design-system palette scoped to UI chrome and board
+  presentation scaffolding. `src/game/presentation-colors.ts` bridges the
+  shared background, fog, and grid tokens into Phaser; terrain, entities,
+  resources, HP feedback, and authored artwork retain their semantic content
+  colors.
 
 The current Phase 1 presentation uses a Torch radius of 3 and derives the screen tile size from the shortest viewport dimension divided by seven. This keeps three tiles of lit distance reaching the screen edge while adapting to portrait and landscape layouts. Device pixels remain a presentation concern, not a simulation rule.
 
@@ -108,19 +113,28 @@ authority. The optional Show Grid presentation preference is a browser-side
 setting and never enters simulation
 state.
 
-The game board is a full-screen Phaser canvas. Application UI mounts in a sibling `#ui-root` overlay owned by React. This keeps inventory, settings, quest journals, crafting, talents, equipment, and modal flows in semantic DOM while Phaser owns world-space presentation and effects. A component source system such as shadcn/ui may be added selectively for those screens, but it must not become the simulation authority.
+The game board is a full-screen Phaser canvas. Application UI mounts in a sibling `#ui-root` overlay owned by React. This keeps inventory, settings, quest journals, crafting, talents, equipment, and modal flows in semantic DOM while Phaser owns world-space presentation and effects. Base UI supplies the accessible interaction behavior for complex React patterns, while the checked-in shadcn source components in `src/components/ui` provide the shared styled layer. Screens consume those through the Torch-owned wrappers in `src/ui/primitives.tsx`; neither layer may become the simulation authority or own game-content layout decisions.
 
-The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Abilities action, Map action, and Main Menu action. Inventory opens one shared surface with Inventory, Gear, and Tools categories; Gear uses paper-doll slots and Tools uses dedicated square loadout slots with selector submenus. The Map screen fills its dominant viewport with a responsive grid of square cells, expanding the rendered bounds with unexplored cells whenever the explored bounds do not match the viewport aspect ratio, and keeps a minimum-size Hero token at the Hero's world-relative position; it is a presentation surface over `GameState.revealedTiles`, not a second map authority. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
+The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Equipment action, Abilities action, and Main Menu action. Inventory is an items-only surface; Equipment is a dedicated surface with native-ratio hero art, paper-doll equipment, a single-row jewelry cluster, and a single-row tool loadout (including Hammer and Shovel). The Main Menu is an opaque, icon-first grid of secondary destinations and includes Map; the Map screen can also be opened with the configurable Map binding (M by default). The Map screen fills its dominant viewport with a responsive framed map of square cells, expanding the rendered bounds with unexplored cells whenever the explored bounds do not match the viewport aspect ratio, and keeps a minimum-size Hero token at the Hero's world-relative position; it is a presentation surface over `GameState.revealedTiles`, not a second map authority. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
 
-The gameplay HUD also exposes a contextual Action Hand above the HP rail. `src/sim/context-actions.ts` projects one focused adjacent target into stable, typed cards: equipped abilities for enemies and entity actions such as Chop or Mine for gatherables. `src/ui/context-action-hand.tsx` owns only the responsive DOM presentation: 3:4 artwork, dynamic fan geometry, hover/focus states, cooldown badges, a short card-play animation, and action callbacks. Card identity is keyed to the ability or action type rather than the current target, so retargeting an unchanged ability card does not replay its entrance animation; genuinely new cards animate as a reflow. The hand is hidden while menus are open and never replaces the simulation's blocked-movement default action.
+The gameplay HUD also exposes a contextual Action Hand anchored to the HP rail. Cards fan upward from behind the rail, with their lower edge tucked beneath the toolbar so the rail remains the readable foreground surface. `src/sim/context-actions.ts` projects one focused adjacent target into stable, typed cards: ready equipped abilities for enemies and entity actions such as Chop or Mine for gatherables. Cooldown abilities are omitted from the hand rather than shown as translucent disabled cards. `src/ui/context-action-hand.tsx` owns only the responsive DOM presentation: 3:4 artwork, dynamic fan geometry, hover/focus/press/drag states, reflow motion, and action callbacks. Card identity is keyed to the ability or action type rather than the current target, so retargeting an unchanged ability card does not replay its entrance animation; genuinely new cards animate as a reflow. The animation is driven by the typed `ability-used` and `action-resolved` events, so clicked actions and default actions triggered by blocked movement receive the same feedback. A played card hands off to a transient ghost that travels toward the board before the replacement card reveals. The hand is hidden while menus are open and never replaces the simulation's blocked-movement default action.
 
 The main menu is intentionally reserved for secondary destinations such as
-Crafting, Journal, Talents, and Settings; Hero, the shared Inventory/Gear/Tools
-surface, and Abilities are opened from their dedicated HUD actions. Hero details
-keep native-ratio art and a single-column Stats list beside it at every
-orientation and target no scrolling in normal device viewports. Gear presents a
-square-slot paper doll with Helm/Amulet, hands/Body, rings/Belt, and Boots
-arranged around the Hero silhouette. Tools presents square Axe/Pickaxe slots.
+Map, Crafting, Journal, Talents, and Options; Hero, Inventory, Equipment, and
+Abilities are opened from their dedicated HUD actions.
+Options uses behavior-backed sections for Display, Audio, Gameplay, Controls,
+and Accessibility. Presentation preferences are persisted by the client in
+`src/game/presentation-settings.ts`; simulation rules remain independent of
+those settings.
+Rebindable keyboard actions are stored by the client input adapter in
+`src/game/input-bindings.ts`; Escape remains reserved for dismissal and is not
+rebindable. Hero details keep native-ratio art and a single-column Stats list in
+an equal side-by-side pane at every orientation and target no scrolling in
+normal device viewports. Equipment presents large, subtly blurred and dimmed
+native-ratio Hero art as the surface background, with equal square slots
+overlaid in paper-doll rows: Helm; Main Hand/Body/Off-Hand; Gloves/Belt/Boots;
+then Jewelry and Tools rows. The four jewelry slots are Amulet, Trinket, Ring,
+Ring, and the tool row is Axe, Pickaxe, Hammer, Shovel.
 Clicking a gear or tool slot or an ability card transitions to a dedicated
 selector submenu with a grid of compatible artwork; choosing an item immediately
 returns to the loadout. The three starter ability definitions use stable IDs and

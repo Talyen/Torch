@@ -1,0 +1,148 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyCommand,
+  availableActionsAt,
+  createInitialGameState,
+  generateChunk,
+  positionKey,
+  PRIMARY_STAT_BUDGET,
+  primaryStatTotal,
+} from '../src/sim';
+
+describe('Torch simulation', () => {
+  it('generates the same chunk for the same seed and coordinates', () => {
+    const first = generateChunk(1234, -2, 4);
+    const second = generateChunk(1234, -2, 4);
+
+    expect(second).toEqual(first);
+  });
+
+  it('reveals the Torch radius around the Hero', () => {
+    const state = createInitialGameState(1234);
+
+    expect(state.revealedTiles[positionKey({ x: 0, y: 2 })]).toBe(true);
+    expect(state.revealedTiles[positionKey({ x: 3, y: 2 })]).toBe(true);
+    expect(state.revealedTiles[positionKey({ x: 4, y: 2 })]).toBeUndefined();
+  });
+
+  it('starts the Knight with the shared 60-point primary stat budget', () => {
+    const state = createInitialGameState(1234);
+
+    expect(state.hero.heroId).toBe('hero.knight');
+    expect(state.hero.primaryStats).toEqual({
+      strength: 14,
+      agility: 10,
+      toughness: 14,
+      wisdom: 12,
+      intellect: 10,
+    });
+    expect(primaryStatTotal(state.hero.primaryStats)).toBe(PRIMARY_STAT_BUDGET);
+    expect(primaryStatTotal(state.entities.slime.primaryStats!)).toBe(PRIMARY_STAT_BUDGET);
+  });
+
+  it('resolves cardinal movement as one action and lets a hostile enemy respond', () => {
+    const state = createInitialGameState(1234);
+    state.entities.slime.disposition = 'hostile';
+    const result = applyCommand(state, { type: 'move', direction: 'east' });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.turn).toBe(1);
+    expect(result.state.hero.position).toEqual({ x: 1, y: 2 });
+    expect(result.state.entities.slime.position).toEqual({ x: 4, y: 2 });
+    expect(result.events.some((event) => event.type === 'enemy-moved')).toBe(true);
+  });
+
+  it('keeps a neutral enemy passive until it is alerted', () => {
+    const state = createInitialGameState(1234);
+    const result = applyCommand(state, { type: 'move', direction: 'east' });
+
+    expect(result.state.entities.slime.position).toEqual({ x: 5, y: 2 });
+    expect(result.state.hero.health).toBe(result.state.hero.maxHealth);
+    expect(result.events.some((event) => event.type === 'enemy-moved')).toBe(false);
+  });
+
+  it('allows an alerted neutral enemy to use hostile movement rules', () => {
+    const state = createInitialGameState(1234);
+    state.entities.slime.alerted = true;
+    const result = applyCommand(state, { type: 'wait' });
+
+    expect(result.state.entities.slime.position).toEqual({ x: 4, y: 2 });
+    expect(result.events.some((event) => event.type === 'enemy-moved')).toBe(true);
+  });
+
+  it('gathers an adjacent resource and advances the turn', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 2, y: 2 };
+
+    const result = applyCommand(state, {
+      type: 'interact',
+      target: { x: 3, y: 2 },
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.turn).toBe(1);
+    expect(result.state.hero.inventory.wood).toBe(1);
+    expect(result.state.entities['resource-tree']).toBeUndefined();
+  });
+
+  it('defaults a blocked move into a tree to the chop action', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 2, y: 2 };
+
+    const result = applyCommand(state, { type: 'move', direction: 'east' });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.hero.position).toEqual({ x: 2, y: 2 });
+    expect(result.state.hero.inventory.wood).toBe(1);
+    expect(result.state.entities['resource-tree']).toBeUndefined();
+    expect(result.events.some((event) => event.type === 'action-resolved' && event.action === 'chop')).toBe(true);
+  });
+
+  it('defaults a blocked move into an enemy to attack and exposes the action option', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+
+    expect(availableActionsAt(state, { x: 5, y: 2 })).toEqual([
+      { kind: 'attack', entityId: 'slime', target: { x: 5, y: 2 }, label: 'Attack' },
+    ]);
+
+    const result = applyCommand(state, { type: 'move', direction: 'east' });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.hero.position).toEqual({ x: 4, y: 2 });
+    expect(result.state.entities.slime.health).toBe(3);
+    expect(result.state.entities.slime.alerted).toBe(true);
+    expect(result.state.hero.health).toBe(9);
+    expect(result.events.some((event) => event.type === 'enemy-damaged')).toBe(true);
+  });
+
+  it('resolves an explicit typed action through the same validation path', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: -2, y: 2 };
+
+    const result = applyCommand(state, {
+      type: 'action',
+      action: { kind: 'mine', entityId: 'resource-ore', target: { x: -3, y: 2 } },
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.hero.inventory.ore).toBe(1);
+    expect(result.state.entities['resource-ore']).toBeUndefined();
+  });
+
+  it('returns the Hero to the bound location after death without clearing inventory', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    state.hero.health = 1;
+    state.hero.inventory.wood = 3;
+    state.entities.slime.disposition = 'hostile';
+
+    const result = applyCommand(state, { type: 'wait' });
+
+    expect(result.state.hero.position).toEqual(state.hero.boundPosition);
+    expect(result.state.hero.health).toBe(result.state.hero.maxHealth);
+    expect(result.state.hero.deaths).toBe(1);
+    expect(result.state.hero.inventory.wood).toBe(3);
+    expect(result.events.some((event) => event.type === 'hero-respawned')).toBe(true);
+  });
+});

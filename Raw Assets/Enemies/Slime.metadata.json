@@ -1,0 +1,11 @@
+{
+  "sourceProject": "Trinket",
+  "sourceRelativePath": "Trinket/Assets.xcassets/enemy_slime_card.imageset/enemy_slime_card.heic",
+  "pipelineSource": "Raw Assets/Enemies/Slime.jpg",
+  "copiedUnmodified": true,
+  "sourceDimensions": {
+    "width": 1600,
+    "height": 1194
+  },
+  "notes": "The original HEIC is preserved. Slime.jpg is a loss-minimized pipeline-compatible copy because the local Sharp build cannot decode HEIC directly. The asset pipeline creates an original-ratio WebP plus a focused square PNG crop for the in-world enemy marker."
+}

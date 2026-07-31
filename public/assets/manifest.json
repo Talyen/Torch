@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "hero.knight",
+      "kind": "hero",
+      "source": "Raw Assets/Heroes/Knight.jpeg",
+      "sourceDimensions": {
+        "width": 1792,
+        "height": 2400
+      },
+      "variants": {
+        "full": {
+          "path": "assets/heroes/knight.webp",
+          "width": 1536,
+          "height": 2057,
+          "cornerRadius": 0.06
+        },
+        "square": {
+          "path": "assets/heroes/knight-square.webp",
+          "width": 1024,
+          "height": 1024,
+          "crop": {
+            "left": 0,
+            "top": 0,
+            "width": 1792,
+            "height": 1792
+          },
+          "cornerRadius": 0.1
+        },
+        "marker": {
+          "path": "assets/heroes/knight-marker.png",
+          "width": 896,
+          "height": 896,
+          "crop": {
+            "left": 412,
+            "top": 236,
+            "width": 968,
+            "height": 968
+          },
+          "cornerRadius": 0.1
+        },
+        "hud": {
+          "path": "assets/heroes/knight-hud.png",
+          "width": 896,
+          "height": 896,
+          "crop": {
+            "left": 520,
+            "top": 248,
+            "width": 753,
+            "height": 753
+          },
+          "cornerRadius": 0.1
+        }
+      }
+    },
+    {
+      "id": "enemy.slime",
+      "kind": "enemy",
+      "source": "Raw Assets/Enemies/Slime.jpg",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1194
+      },
+      "variants": {
+        "full": {
+          "path": "assets/enemies/slime.webp",
+          "width": 1536,
+          "height": 1146,
+          "cornerRadius": 0.06
+        },
+        "marker": {
+          "path": "assets/enemies/slime-marker.png",
+          "width": 896,
+          "height": 896,
+          "crop": {
+            "left": 466,
+            "top": 358,
+            "width": 669,
+            "height": 669
+          },
+          "cornerRadius": 0.1
+        }
+      }
+    },
+    {
+      "id": "ability.bash",
+      "kind": "ability",
+      "source": "Raw Assets/Abilities/Bash.jpeg",
+      "sourceDimensions": {
+        "width": 896,
+        "height": 1200
+      },
+      "variants": {
+        "full": {
+          "path": "assets/abilities/bash.webp",
+          "width": 896,
+          "height": 1200,
+          "cornerRadius": 0.06
+        }
+      }
+    },
+    {
+      "id": "ability.sunder",
+      "kind": "ability",
+      "source": "Raw Assets/Abilities/Sunder.jpeg",
+      "sourceDimensions": {
+        "width": 896,
+        "height": 1200
+      },
+      "variants": {
+        "full": {
+          "path": "assets/abilities/sunder.webp",
+          "width": 896,
+          "height": 1200,
+          "cornerRadius": 0.06
+        }
+      }
+    },
+    {
+      "id": "ability.avatar",
+      "kind": "ability",
+      "source": "Raw Assets/Abilities/Avatar.jpeg",
+      "sourceDimensions": {
+        "width": 896,
+        "height": 1200
+      },
+      "variants": {
+        "full": {
+          "path": "assets/abilities/avatar.webp",
+          "width": 896,
+          "height": 1200,
+          "cornerRadius": 0.06
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Native packaging outputs (added when desktop/mobile targets are introduced)
+release/
+out/
+ios/App/App/public/
+android/app/build/

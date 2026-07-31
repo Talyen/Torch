@@ -1,0 +1,10 @@
+{
+  "sourceProject": "Trinket",
+  "sourceRelativePath": "Raw Assets/Heroes/Knight.jpeg",
+  "copiedUnmodified": true,
+  "sourceDimensions": {
+    "width": 1792,
+    "height": 2400
+  },
+  "notes": "Preserve the original portrait source. The asset pipeline creates original-ratio and square WebP variants plus separate lossless PNG crops for the in-world tile marker and tighter HUD icon."
+}

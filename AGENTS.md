@@ -2,6 +2,27 @@
 
 Torch is a code-and-data-driven Phaser + TypeScript game. Agents are the primary development and content-authoring contributors.
 
+## Solo publishing workflow
+
+Torch is maintained as a solo project. The default workflow is direct to
+`main`; agents should not create a branch or pull request for ordinary feature
+work unless the user explicitly asks for one or the change is intentionally
+isolated as an experiment.
+
+Before publishing a normal change:
+
+1. Review `git status` and the diff, preserving unrelated user edits.
+2. Run `npm run verify` (or the narrowest available checks while iterating,
+   followed by `npm run verify` before handoff).
+3. Stage only the intended files and commit with a concise message.
+4. Push with `git push origin main`.
+5. Treat the GitHub Actions check as the hosted safety gate. If it fails,
+   fix forward with a follow-up commit; do not rewrite published history or
+   force-push.
+
+Branches and pull requests remain available for risky experiments, external
+collaboration, or an explicit user request. They are opt-in, not the default.
+
 ## Read first
 
 Before changing the project, read:

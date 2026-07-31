@@ -14,6 +14,14 @@ npm run dev                 # Vite development server at 127.0.0.1:5173
 Open the Vite URL rather than `index.html` directly. The Phaser module and
 generated asset paths rely on the development server.
 
+## Publishing
+
+Torch uses a solo-developer, direct-to-`main` workflow by default. After
+reviewing the intended diff and running `npm run verify`, commit the change on
+`main` and push it with `git push origin main`. GitHub Actions is the hosted
+safety gate. Use a branch or pull request only for an explicitly requested
+review boundary, risky experiment, or outside collaboration.
+
 ## Verification
 
 Run the focused checks while iterating:

@@ -104,7 +104,7 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
     const destinationTerrain = tileAt(next.seed, destination);
 
     if (!isTerrainWalkable(destinationTerrain)) {
-      const terrainName = destinationTerrain === 'mountain' ? 'A mountain' : 'Deep water';
+      const terrainName = 'A mountain';
       events.push({ type: 'blocked', reason: `${terrainName} blocks the way.` });
       events.push({ type: 'message', text: `${terrainName} blocks the way.` });
     } else {

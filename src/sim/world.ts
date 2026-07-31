@@ -4,7 +4,7 @@ import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
 import { heroDefinitions } from '../content/heroes';
 
-export const GENERATION_VERSION = 2;
+export const GENERATION_VERSION = 3;
 export const CHUNK_SIZE = 16;
 export const TORCH_RADIUS = 3;
 
@@ -51,19 +51,8 @@ function safeSpawnArea(position: Position): boolean {
   return Math.abs(position.x) <= 4 && Math.abs(position.y - 2) <= 4;
 }
 
-function riverDistance(seed: number, position: Position): number {
-  const horizontal = unitRandom(seed, 0, 0, 91) >= 0.5;
-  const axis = horizontal ? position.x : position.y;
-  const crossAxis = horizontal ? position.y : position.x;
-  const phase = unitRandom(seed, 0, 0, 92) * 40;
-  const offset = (unitRandom(seed, 0, 0, 93) - 0.5) * 12;
-  const meander = Math.sin((axis + phase) / 21) * 5
-    + Math.sin((axis + phase) / 49) * 3
-    + offset;
-  return Math.abs(crossAxis - meander);
-}
-
-function trailSignal(seed: number, position: Position): number {
+/** Broad seeded bands stay grass so forests and mountains leave routes around them. */
+function pathSignal(seed: number, position: Position): number {
   const phaseX = unitRandom(seed, 0, 0, 94) * Math.PI * 2;
   const phaseY = unitRandom(seed, 0, 0, 95) * Math.PI * 2;
   const vertical = Math.abs(Math.sin(position.x / 17 + Math.sin(position.y / 23 + phaseX)));
@@ -78,19 +67,15 @@ export function tileAt(seed: number, position: Position): TileKind {
     + valueNoise(seed, position, 6, 12) * 0.28;
   const moisture = valueNoise(seed, position, 12, 21) * 0.7
     + valueNoise(seed, position, 5, 22) * 0.3;
+  const path = pathSignal(seed, position) < 0.14;
 
-  if (elevation < 0.25) return 'water';
-  if (riverDistance(seed, position) < 0.9 && elevation < 0.77) return 'water';
-  if (elevation > 0.79) return 'mountain';
-  if (moisture > 0.58) {
-    return trailSignal(seed, position) < 0.08 ? 'trail' : 'forest';
-  }
-  if (moisture > 0.45 && trailSignal(seed, position) < 0.08) return 'trail';
+  if (!path && elevation > 0.76) return 'mountain';
+  if (!path && moisture > 0.39) return 'forest';
   return 'grass';
 }
 
 export function isTerrainWalkable(kind: TileKind): boolean {
-  return kind !== 'water' && kind !== 'mountain';
+  return kind !== 'mountain';
 }
 
 export type GeneratedResourceKind = 'ore';

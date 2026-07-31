@@ -7,7 +7,7 @@ export interface Position {
   y: number;
 }
 
-export type TileKind = 'grass' | 'forest' | 'trail' | 'mountain' | 'water';
+export type TileKind = 'grass' | 'forest' | 'mountain';
 
 export type EntityKind = 'homestead' | 'tree' | 'ore' | 'enemy';
 export type EnemyDisposition = 'neutral' | 'hostile';

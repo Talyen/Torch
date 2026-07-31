@@ -164,12 +164,18 @@ descriptions, and presentation icon IDs, while React maps those icon IDs to
 Lucide components. Content definitions do not import React or Lucide.
 
 Terrain generation uses smooth seeded value fields for broad elevation and
-moisture regions, then derives clustered lakes/rivers, mountain ranges,
-forest/grassland biomes, and sparse trail bands. Water and mountains are
-impassable terrain. Ore candidates are deterministic walkable tiles adjacent to
+moisture regions, then derives dense forest and mountain regions over a single
+grassland base. Seeded path bands keep grass corridors open so the larger biomes
+do not form traversal walls. Mountains are impassable terrain; grass and forest
+are walkable. Ore candidates are deterministic walkable tiles adjacent to
 mountains; the initial ore node is materialized from that rule while broader
 chunk/entity materialization remains future work. The spawn area is an authored
 grassland safety ring so the first few actions remain readable.
+
+Visibility transitions are rendered from immutable action-boundary snapshots. The
+Torch level is interpolated per tile and staggered along the Hero's movement
+vector, producing a directional reveal sweep for newly visible and remembered
+tiles rather than recoloring the entire board at once.
 
 Content definitions should be validated at load time. Procedural systems should compose authored definitions rather than hide important game rules in opaque generator logic. Generated output must record the seed and relevant version so failures can be reproduced.
 

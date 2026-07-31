@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   captureVisibilitySnapshot,
+  directionalVisibilityProgress,
   REMEMBERED_TILE_MIX,
   visibilityChanged,
   visibilityColor,
@@ -31,5 +32,16 @@ describe('visibility presentation helpers', () => {
     expect(visibilityColor(lit, 0, unseen, remembered)).toBe(unseen);
     expect(visibilityColor(lit, 1, unseen, remembered)).toBe(mixColor(remembered, lit, REMEMBERED_TILE_MIX));
     expect(visibilityColor(lit, 2, unseen, remembered)).toBe(lit);
+  });
+
+  it('sweeps visibility along the direction of movement', () => {
+    const previousHero = { x: 0, y: 2 };
+    const currentHero = { x: 1, y: 2 };
+
+    const trailingTile = directionalVisibilityProgress(previousHero, currentHero, { x: -2, y: 2 }, 0.35);
+    const leadingTile = directionalVisibilityProgress(previousHero, currentHero, { x: 4, y: 2 }, 0.35);
+
+    expect(trailingTile).toBeGreaterThan(leadingTile);
+    expect(directionalVisibilityProgress(previousHero, currentHero, { x: 4, y: 2 }, 1)).toBe(1);
   });
 });

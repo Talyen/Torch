@@ -20,21 +20,19 @@ describe('Torch simulation', () => {
     expect(second).toEqual(first);
   });
 
-  it('generates clustered terrain families with seeded mountain-side ore candidates', () => {
+  it('generates seeded grassland, forest, and mountain regions with mountain-side ore candidates', () => {
     const seed = 1234;
     const positions = Array.from({ length: 129 }, (_, index) => index - 64)
       .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })));
-    const water = positions.find((position) => tileAt(seed, position) === 'water');
     const forest = positions.find((position) => tileAt(seed, position) === 'forest');
     const mountain = positions.find((position) => tileAt(seed, position) === 'mountain');
-    const trail = positions.find((position) => tileAt(seed, position) === 'trail');
     const ore = positions.find((position) => generatedResourceAt(seed, position) === 'ore');
+    const kinds = new Set(positions.map((position) => tileAt(seed, position)));
 
-    expect(water).toBeDefined();
     expect(forest).toBeDefined();
     expect(mountain).toBeDefined();
-    expect(trail).toBeDefined();
     expect(ore).toBeDefined();
+    expect(kinds).toEqual(new Set(['grass', 'forest', 'mountain']));
     expect(isTerrainWalkable('mountain')).toBe(false);
     expect(isTerrainWalkable('grass')).toBe(true);
   });

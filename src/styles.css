@@ -860,6 +860,234 @@ button:disabled {
   min-height: 0;
 }
 
+.equipment-layout,
+.ability-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(240px, 1.05fr);
+  min-width: 0;
+  min-height: 0;
+  gap: var(--ui-space-3);
+  padding-top: var(--ui-space-3);
+  overflow: hidden;
+}
+
+.equipment-paper-doll {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  min-height: 0;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-card-radius);
+  background: radial-gradient(circle at 50% 45%, rgb(242 196 99 / 10%), transparent 52%), rgb(255 255 255 / 2%);
+}
+
+.equipment-slot-helm { grid-column: 3; grid-row: 1; }
+.equipment-slot-main-hand { grid-column: 1; grid-row: 2; }
+.equipment-slot-gloves { grid-column: 2; grid-row: 2; }
+.equipment-slot-amulet { grid-column: 3; grid-row: 2; }
+.equipment-slot-off-hand { grid-column: 5; grid-row: 2; }
+.equipment-slot-belt { grid-column: 3; grid-row: 3; }
+.equipment-slot-trinket { grid-column: 5; grid-row: 3; }
+.equipment-slot-ring-1 { grid-column: 2; grid-row: 4; }
+.equipment-slot-boots { grid-column: 3; grid-row: 4; }
+.equipment-slot-ring-2 { grid-column: 4; grid-row: 4; }
+
+.equipment-slot {
+  align-items: center;
+  justify-items: center;
+  min-height: 72px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.equipment-slot-art,
+.equipment-choice-art {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid rgb(206 169 88 / 18%);
+  border-radius: 12px;
+  color: var(--gold);
+  background: rgb(4 6 10 / 30%);
+}
+
+.equipment-slot-art svg {
+  width: 32px;
+  height: 32px;
+  stroke-width: 1.5;
+}
+
+.equipment-slot .loadout-slot-label,
+.equipment-slot .loadout-slot-value {
+  max-width: 100%;
+  text-align: center;
+}
+
+.equipment-picker,
+.ability-picker,
+.equipment-picker-empty,
+.ability-picker-empty {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-3);
+  border: 1px solid rgb(242 196 99 / 28%);
+  border-radius: var(--ui-card-radius);
+  background: linear-gradient(160deg, rgb(242 196 99 / 8%), rgb(255 255 255 / 2%));
+}
+
+.equipment-picker-empty,
+.ability-picker-empty {
+  align-content: center;
+  justify-items: center;
+  color: var(--muted);
+  text-align: center;
+}
+
+.equipment-picker-empty svg,
+.ability-picker-empty svg {
+  width: 34px;
+  height: 34px;
+  color: var(--gold);
+  stroke-width: 1.4;
+}
+
+.equipment-picker-empty strong,
+.ability-picker-empty strong {
+  color: var(--ui-color-heading);
+  font-size: 0.84rem;
+}
+
+.equipment-picker-empty span,
+.ability-picker-empty span {
+  max-width: 24ch;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.equipment-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.equipment-choice {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-height: 148px;
+  gap: 5px;
+  padding: 8px;
+  border-color: rgb(206 169 88 / 18%);
+  border-radius: 11px;
+  background: rgb(255 255 255 / 3%);
+  text-align: center;
+}
+
+.equipment-choice:hover,
+.equipment-choice.is-selected {
+  border-color: rgb(242 196 99 / 62%);
+  background: rgb(242 196 99 / 12%);
+}
+
+.equipment-choice-art {
+  width: 76px;
+  height: 76px;
+  border-radius: 16px;
+}
+
+.equipment-choice-art svg {
+  width: 48px;
+  height: 48px;
+  stroke-width: 1.4;
+}
+
+.equipment-choice strong {
+  color: var(--ui-color-heading);
+  font-size: 0.76rem;
+}
+
+.equipment-choice small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.equipment-choice > svg {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  color: var(--gold);
+}
+
+.ability-layout {
+  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1.2fr);
+}
+
+.ability-slot-list {
+  align-content: start;
+  gap: 8px;
+}
+
+.ability-slot {
+  min-height: 86px;
+  padding: 8px;
+}
+
+.ability-slot img {
+  width: 52px;
+  max-height: 72px;
+  border-radius: 8px;
+}
+
+.ability-slot-placeholder {
+  width: 52px;
+  height: 72px;
+  border-radius: 8px;
+  font-size: 1.4rem;
+}
+
+.ability-choice-grid {
+  display: grid;
+  min-height: 0;
+  gap: 8px;
+  overflow: auto;
+}
+
+.ability-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 112px;
+  gap: 10px;
+  padding: 8px;
+}
+
+.ability-choice img {
+  width: 64px;
+  height: 86px;
+  border-radius: 8px;
+}
+
+.ability-choice > span {
+  align-content: center;
+}
+
+.ability-choice > svg {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 .hero-details {
   display: grid;
   min-height: 0;
@@ -1152,6 +1380,64 @@ button:disabled {
   font-size: 0.74rem;
 }
 
+/* Dedicated loadout screens use larger art targets than the compact Hero-era prototype. */
+.equipment-slot {
+  min-height: 72px;
+  padding: 6px 4px;
+}
+
+.ability-slot-list {
+  align-content: start;
+  gap: 8px;
+}
+
+.ability-slot {
+  min-height: 86px;
+  padding: 8px;
+}
+
+.ability-slot img {
+  width: 52px;
+  max-height: 72px;
+}
+
+.ability-slot-placeholder {
+  width: 52px;
+  height: 72px;
+}
+
+.ability-choice-grid {
+  display: grid;
+  min-height: 0;
+  gap: 8px;
+  overflow: auto;
+}
+
+.ability-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 112px;
+  gap: 10px;
+  padding: 8px;
+}
+
+.ability-choice img {
+  width: 64px;
+  height: 86px;
+  border-radius: 8px;
+}
+
+.ability-choice > span {
+  align-content: center;
+}
+
+.ability-choice > svg {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 .ability-choice {
   align-items: stretch;
 }
@@ -1159,6 +1445,21 @@ button:disabled {
 .ability-choice img {
   width: 28px;
   height: auto;
+}
+
+/* Dedicated picker cards keep their native-ratio art larger than compact legacy slots. */
+.ability-choice {
+  align-items: stretch;
+}
+
+.ability-choice img {
+  width: 64px;
+  height: 86px;
+  border-radius: 8px;
+}
+
+.ability-choice > svg {
+  margin-left: 0;
 }
 
 .stats-panel-header {
@@ -1302,6 +1603,26 @@ button:disabled {
   .stat-row {
     padding: var(--ui-space-1) 0;
   }
+
+  .equipment-layout,
+  .ability-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, 0.9fr) minmax(150px, 1fr);
+    overflow: auto;
+  }
+
+  .equipment-paper-doll {
+    min-height: 260px;
+  }
+
+  .equipment-choice-grid {
+    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  }
+
+  .ability-choice img {
+    width: 56px;
+    height: 75px;
+  }
 }
 
 /* Keep the side-by-side Hero detail contract usable on short landscape screens. */
@@ -1348,6 +1669,43 @@ button:disabled {
 
   .loadout-section-header h2 {
     font-size: 0.95rem;
+  }
+
+  .equipment-layout,
+  .ability-layout {
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .equipment-slot {
+    min-height: 60px;
+  }
+
+  .equipment-slot-art {
+    width: 42px;
+    height: 42px;
+  }
+
+  .equipment-slot-art svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .ability-slot {
+    min-height: 68px;
+    padding: 5px;
+  }
+
+  .ability-slot img,
+  .ability-slot-placeholder {
+    width: 42px;
+    max-height: 58px;
+    height: 58px;
+  }
+
+  .ability-choice img {
+    width: 52px;
+    height: 70px;
   }
 
   .loadout-tabs {

@@ -26,7 +26,7 @@ test('loads the first-light vertical slice with a minimal menu overlay', async (
   await expect(page.getByTestId('hud-inventory-button')).toBeVisible();
   await expect(page.getByTestId('hud-inventory-button').locator('svg.lucide-backpack')).toBeVisible();
   await expect(page.getByTestId('hud-equipment-button')).toBeVisible();
-  await expect(page.getByTestId('hud-equipment-button').locator('svg.lucide-shield')).toBeVisible();
+  await expect(page.getByTestId('hud-equipment-button').locator('svg.lucide-sword')).toBeVisible();
   await expect(page.getByTestId('hud-abilities-button')).toBeVisible();
   await expect(page.getByTestId('hud-abilities-button').locator('svg.lucide-sparkles')).toBeVisible();
   await expect(page.getByTestId('menu-button')).toBeVisible();

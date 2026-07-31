@@ -16,6 +16,7 @@ import { tileSizeForViewport, viewRadiusForViewport } from './layout';
 import { gameSession } from './session';
 import {
   captureVisibilitySnapshot,
+  directionalVisibilityProgress,
   visibilityChanged,
   visibilityColor,
   visibilityLevel,
@@ -25,9 +26,7 @@ import type { VisibilitySnapshot } from './visibility';
 const COLORS = {
   grass: 0x263c2a,
   forest: 0x183b2f,
-  trail: 0x6e5a3f,
   mountain: 0x414751,
-  water: 0x1d3a58,
   grid: 0x3a4a48,
   unseen: 0x151719,
   remembered: 0x111722,
@@ -327,7 +326,13 @@ export class TorchScene extends Phaser.Scene {
         const baseColor = this.tileColor(this.cachedTileAt(state.seed, position));
         const fromVisibility = visibilityLevel(previousVisibility, position);
         const toVisibility = visibilityLevel(currentVisibility, position);
-        const visibility = fromVisibility + (toVisibility - fromVisibility) * progress;
+        const tileProgress = directionalVisibilityProgress(
+          previousVisibility.hero,
+          currentVisibility.hero,
+          position,
+          progress,
+        );
+        const visibility = fromVisibility + (toVisibility - fromVisibility) * tileProgress;
         this.board.fillStyle(visibilityColor(baseColor, visibility, COLORS.unseen, COLORS.remembered), 1);
         this.board.fillRect(screen.x, screen.y, tileSize - 1, tileSize - 1);
 
@@ -479,12 +484,8 @@ export class TorchScene extends Phaser.Scene {
     switch (kind) {
       case 'forest':
         return COLORS.forest;
-      case 'trail':
-        return COLORS.trail;
       case 'mountain':
         return COLORS.mountain;
-      case 'water':
-        return COLORS.water;
       case 'grass':
       default:
         return COLORS.grass;

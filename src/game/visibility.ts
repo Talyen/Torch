@@ -54,6 +54,35 @@ export function visibilityColor(
   return mixColor(rememberedTileColor, baseColor, Math.min(1, visibility - 1));
 }
 
+/**
+ * Staggers a visibility transition along the Hero's movement direction. The
+ * leading edge reveals after the tiles behind it, which makes fog changes feel
+ * like a moving Torch sweep instead of a simultaneous recolor.
+ */
+export function directionalVisibilityProgress(
+  previousHero: Position,
+  currentHero: Position,
+  position: Position,
+  progress: number,
+): number {
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  if (clampedProgress >= 1) return 1;
+
+  const directionX = currentHero.x - previousHero.x;
+  const directionY = currentHero.y - previousHero.y;
+  const movement = Math.max(Math.abs(directionX), Math.abs(directionY));
+  if (movement === 0) return clampedProgress;
+
+  const forwardX = directionX / movement;
+  const forwardY = directionY / movement;
+  const projection = (position.x - currentHero.x) * forwardX
+    + (position.y - currentHero.y) * forwardY;
+  const sweepRange = TORCH_RADIUS * 2 + 2;
+  const normalizedProjection = Math.max(0, Math.min(1, (projection + TORCH_RADIUS + 1) / sweepRange));
+  const delay = normalizedProjection * 0.42;
+  return Math.max(0, Math.min(1, (clampedProgress - delay) / (1 - delay)));
+}
+
 export function mixColor(from: number, to: number, progress: number): number {
   const clamped = Math.max(0, Math.min(1, progress));
   const fromRed = (from >> 16) & 0xff;

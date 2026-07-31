@@ -4,9 +4,12 @@ import {
   availableActionsAt,
   createInitialGameState,
   generateChunk,
+  generatedResourceAt,
+  isTerrainWalkable,
   positionKey,
   PRIMARY_STAT_BUDGET,
   primaryStatTotal,
+  tileAt,
 } from '../src/sim';
 
 describe('Torch simulation', () => {
@@ -15,6 +18,25 @@ describe('Torch simulation', () => {
     const second = generateChunk(1234, -2, 4);
 
     expect(second).toEqual(first);
+  });
+
+  it('generates clustered terrain families with seeded mountain-side ore candidates', () => {
+    const seed = 1234;
+    const positions = Array.from({ length: 129 }, (_, index) => index - 64)
+      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })));
+    const water = positions.find((position) => tileAt(seed, position) === 'water');
+    const forest = positions.find((position) => tileAt(seed, position) === 'forest');
+    const mountain = positions.find((position) => tileAt(seed, position) === 'mountain');
+    const trail = positions.find((position) => tileAt(seed, position) === 'trail');
+    const ore = positions.find((position) => generatedResourceAt(seed, position) === 'ore');
+
+    expect(water).toBeDefined();
+    expect(forest).toBeDefined();
+    expect(mountain).toBeDefined();
+    expect(trail).toBeDefined();
+    expect(ore).toBeDefined();
+    expect(isTerrainWalkable('mountain')).toBe(false);
+    expect(isTerrainWalkable('grass')).toBe(true);
   });
 
   it('reveals the Torch radius around the Hero', () => {
@@ -38,6 +60,41 @@ describe('Torch simulation', () => {
     });
     expect(primaryStatTotal(state.hero.primaryStats)).toBe(PRIMARY_STAT_BUDGET);
     expect(primaryStatTotal(state.entities.slime.primaryStats!)).toBe(PRIMARY_STAT_BUDGET);
+  });
+
+  it('places the starter ore beside a generated mountain for the default seed', () => {
+    const state = createInitialGameState();
+    const orePosition = state.entities['resource-ore'].position;
+
+    expect(generatedResourceAt(state.seed, orePosition)).toBe('ore');
+  });
+
+  it('treats generated mountains as impassable terrain', () => {
+    const state = createInitialGameState(1234);
+    const offsets = [
+      { x: -1, y: 0, direction: 'east' as const },
+      { x: 1, y: 0, direction: 'west' as const },
+      { x: 0, y: -1, direction: 'south' as const },
+      { x: 0, y: 1, direction: 'north' as const },
+    ];
+    const mountainAndStart = Array.from({ length: 129 }, (_, index) => index - 64)
+      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
+      .flatMap((position) => offsets
+        .filter((offset) => (
+          tileAt(state.seed, position) === 'mountain'
+          && isTerrainWalkable(tileAt(state.seed, { x: position.x + offset.x, y: position.y + offset.y }))
+        ))
+        .map((offset) => ({ mountain: position, start: { x: position.x + offset.x, y: position.y + offset.y }, direction: offset.direction }))
+      )[0];
+
+    expect(mountainAndStart).toBeDefined();
+    const { start, direction } = mountainAndStart!;
+    state.hero.position = start;
+    const result = applyCommand(state, { type: 'move', direction });
+
+    expect(result.accepted).toBe(false);
+    expect(result.state.hero.position).toEqual(start);
+    expect(result.events.some((event) => event.type === 'blocked' && event.reason.includes('mountain'))).toBe(true);
   });
 
   it('resolves cardinal movement as one action and lets a hostile enemy respond', () => {
@@ -118,11 +175,12 @@ describe('Torch simulation', () => {
 
   it('resolves an explicit typed action through the same validation path', () => {
     const state = createInitialGameState(1234);
-    state.hero.position = { x: -2, y: 2 };
+    const orePosition = state.entities['resource-ore'].position;
+    state.hero.position = { x: orePosition.x + 1, y: orePosition.y };
 
     const result = applyCommand(state, {
       type: 'action',
-      action: { kind: 'mine', entityId: 'resource-ore', target: { x: -3, y: 2 } },
+      action: { kind: 'mine', entityId: 'resource-ore', target: { ...orePosition } },
     });
 
     expect(result.accepted).toBe(true);

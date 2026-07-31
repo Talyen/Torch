@@ -11,6 +11,7 @@ import {
   ListFilter,
   Menu as MenuIcon,
   PackageOpen,
+  Shield,
   Sparkles,
   Sword,
   TreePine,
@@ -34,7 +35,7 @@ type MenuItem = {
 };
 
 type InventorySort = 'category' | 'name' | 'quantity';
-type HeroLoadoutView = 'equipment' | 'abilities';
+type Screen = 'menu' | 'hero' | 'inventory' | 'equipment' | 'abilities' | 'settings';
 
 const menuItems: MenuItem[] = [
   { label: 'Crafting', detail: 'Coming soon' },
@@ -70,7 +71,7 @@ const inventoryIcons: Record<InventoryIconId, LucideIcon> = {
 
 export function MenuOverlay(): ReactElement {
   const [open, setOpen] = useState(false);
-  const [screen, setScreen] = useState<'menu' | 'hero' | 'inventory' | 'settings'>('menu');
+  const [screen, setScreen] = useState<Screen>('menu');
   const [heroStatus, setHeroStatus] = useState(() => ({
     health: gameSession.state.hero.health,
     maxHealth: gameSession.state.hero.maxHealth,
@@ -114,7 +115,7 @@ export function MenuOverlay(): ReactElement {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
-  const openMenu = (nextScreen: 'menu' | 'hero' | 'inventory' | 'settings' = 'menu'): void => {
+  const openMenu = (nextScreen: Screen = 'menu'): void => {
     setScreen(nextScreen);
     setOpen(true);
   };
@@ -162,6 +163,28 @@ export function MenuOverlay(): ReactElement {
           <button
             className="hud-icon-button"
             type="button"
+            aria-label="Open equipment"
+            aria-controls="torch-menu"
+            data-testid="hud-equipment-button"
+            onClick={() => openMenu('equipment')}
+          >
+            <Shield aria-hidden="true" />
+          </button>
+
+          <button
+            className="hud-icon-button"
+            type="button"
+            aria-label="Open abilities"
+            aria-controls="torch-menu"
+            data-testid="hud-abilities-button"
+            onClick={() => openMenu('abilities')}
+          >
+            <Sparkles aria-hidden="true" />
+          </button>
+
+          <button
+            className="hud-icon-button"
+            type="button"
             aria-label="Open menu"
             aria-controls="torch-menu"
             aria-expanded={open}
@@ -194,7 +217,7 @@ export function MenuOverlay(): ReactElement {
               <div>
                 <p className="menu-kicker">Torch</p>
                 <h1 id="menu-title">
-                  {screen === 'menu' ? 'Menu' : screen === 'hero' ? 'Hero' : screen === 'inventory' ? 'Inventory' : 'Settings'}
+                  {screen === 'menu' ? 'Menu' : screen === 'hero' ? 'Hero' : screen === 'inventory' ? 'Inventory' : screen === 'equipment' ? 'Equipment' : screen === 'abilities' ? 'Abilities' : 'Settings'}
                 </h1>
               </div>
               <button
@@ -229,6 +252,10 @@ export function MenuOverlay(): ReactElement {
               <HeroScreen />
             ) : screen === 'inventory' ? (
               <InventoryScreen />
+            ) : screen === 'equipment' ? (
+              <EquipmentScreen />
+            ) : screen === 'abilities' ? (
+              <AbilitiesScreen />
             ) : (
               <SettingsScreen />
             )}
@@ -378,45 +405,6 @@ function InventoryScreen(): ReactElement {
 }
 
 function HeroScreen(): ReactElement {
-  const [loadoutView, setLoadoutView] = useState<HeroLoadoutView>('equipment');
-  const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlotId>();
-  const [activeAbilitySlot, setActiveAbilitySlot] = useState<AbilitySlotId>();
-  const [pendingEquipmentId, setPendingEquipmentId] = useState<string>();
-  const [pendingAbilityId, setPendingAbilityId] = useState<string>();
-  const [equippedEquipment, setEquippedEquipment] = useState<Partial<Record<EquipmentSlotId, string>>>({});
-  const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({});
-
-  const equipmentItems = inventoryItems.filter((item) => item.category === 'equipment');
-  const equipmentForSlot = activeEquipmentSlot === 'main-hand' ? equipmentItems : [];
-  const activeEquipmentLabel = equipmentSlots.find((slot) => slot.id === activeEquipmentSlot)?.label;
-  const activeAbilityLabel = abilitySlots.find((slot) => slot.id === activeAbilitySlot)?.label;
-
-  const openEquipmentSlot = (slot: EquipmentSlotId): void => {
-    setLoadoutView('equipment');
-    setActiveEquipmentSlot(slot);
-    setActiveAbilitySlot(undefined);
-    setPendingEquipmentId(equippedEquipment[slot]);
-  };
-
-  const openAbilitySlot = (slot: AbilitySlotId): void => {
-    setLoadoutView('abilities');
-    setActiveAbilitySlot(slot);
-    setActiveEquipmentSlot(undefined);
-    setPendingAbilityId(equippedAbilities[slot]);
-  };
-
-  const equipItem = (): void => {
-    if (!activeEquipmentSlot || !pendingEquipmentId) return;
-    setEquippedEquipment((current) => ({ ...current, [activeEquipmentSlot]: pendingEquipmentId }));
-    setActiveEquipmentSlot(undefined);
-  };
-
-  const assignAbility = (): void => {
-    if (!activeAbilitySlot || !pendingAbilityId) return;
-    setEquippedAbilities((current) => ({ ...current, [activeAbilitySlot]: pendingAbilityId }));
-    setActiveAbilitySlot(undefined);
-  };
-
   return (
     <div className="hero-screen">
       <div className="hero-details">
@@ -427,129 +415,256 @@ function HeroScreen(): ReactElement {
           data-testid="hero-art-full"
         />
 
-        <div className="hero-side">
-          <section className="stats-panel" aria-labelledby="hero-stats-title">
-            <div className="stats-panel-header">
-              <p className="stats-kicker">{heroDefinitions.knight.name}</p>
-              <h2 id="hero-stats-title">Stats</h2>
-            </div>
-            <dl className="stats-list">
-              {heroStats.map(([label, value]) => (
-                <div className="stat-row" key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-
-          <section className="loadout-panel" data-testid="hero-loadout-panel" aria-labelledby="hero-loadout-title">
-            <div className="loadout-section-header">
-              <div>
-                <p className="stats-kicker">Loadout</p>
-                <h2 id="hero-loadout-title">{loadoutView === 'equipment' ? 'Equipment' : 'Abilities'}</h2>
+        <section className="stats-panel hero-stats-panel" aria-labelledby="hero-stats-title">
+          <div className="stats-panel-header">
+            <p className="stats-kicker">{heroDefinitions.knight.name}</p>
+            <h2 id="hero-stats-title">Stats</h2>
+          </div>
+          <dl className="stats-list">
+            {heroStats.map(([label, value]) => (
+              <div className="stat-row" key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
               </div>
-              <span className="loadout-count">{loadoutView === 'equipment' ? `${Object.keys(equippedEquipment).length}/10` : `${Object.keys(equippedAbilities).length}/3`}</span>
-            </div>
-            <div className="loadout-tabs" role="tablist" aria-label="Hero loadout sections">
-              <button className={`loadout-tab${loadoutView === 'equipment' ? ' is-active' : ''}`} type="button" role="tab" aria-selected={loadoutView === 'equipment'} data-testid="hero-loadout-equipment-tab" onClick={() => { setLoadoutView('equipment'); setActiveEquipmentSlot(undefined); setActiveAbilitySlot(undefined); }}>Equipment</button>
-              <button className={`loadout-tab${loadoutView === 'abilities' ? ' is-active' : ''}`} type="button" role="tab" aria-selected={loadoutView === 'abilities'} data-testid="hero-loadout-abilities-tab" onClick={() => { setLoadoutView('abilities'); setActiveEquipmentSlot(undefined); setActiveAbilitySlot(undefined); }}>Abilities</button>
-            </div>
-            {activeEquipmentSlot ? (
-              <section className="loadout-picker" data-testid="equipment-picker" aria-label={`Choose ${activeEquipmentLabel}`}>
-                <div className="loadout-picker-header">
-                  <h3>Choose {activeEquipmentLabel}</h3>
-                  <button type="button" className="loadout-picker-close" aria-label="Close equipment picker" onClick={() => setActiveEquipmentSlot(undefined)}><CloseIcon aria-hidden="true" /></button>
-                </div>
-                {equipmentForSlot.length ? (
-                  <div className="loadout-choice-list">
-                    {equipmentForSlot.map((item) => (
-                      <button
-                        className={`loadout-choice${pendingEquipmentId === item.id ? ' is-selected' : ''}`}
-                        type="button"
-                        key={item.id}
-                        aria-pressed={pendingEquipmentId === item.id}
-                        onClick={() => setPendingEquipmentId(item.id)}
-                      >
-                        <Sword aria-hidden="true" />
-                        <span>{item.name}</span>
-                        {pendingEquipmentId === item.id ? <Check aria-hidden="true" /> : null}
-                      </button>
-                    ))}
-                  </div>
-                ) : <p className="loadout-empty">No compatible items yet.</p>}
-                <button className="loadout-confirm" type="button" disabled={!pendingEquipmentId} onClick={equipItem}>Equip</button>
-              </section>
-            ) : activeAbilitySlot ? (
-              <section className="loadout-picker" data-testid="ability-picker" aria-label={`Choose ${activeAbilityLabel} ability`}>
-                <div className="loadout-picker-header">
-                  <h3>Choose {activeAbilityLabel}</h3>
-                  <button type="button" className="loadout-picker-close" aria-label="Close ability picker" onClick={() => setActiveAbilitySlot(undefined)}><CloseIcon aria-hidden="true" /></button>
-                </div>
-                <div className="ability-choice-list">
-                  {abilities.filter((ability) => ability.slot === activeAbilitySlot).map((ability) => (
-                    <button
-                      className={`ability-choice${pendingAbilityId === ability.id ? ' is-selected' : ''}`}
-                      type="button"
-                      key={ability.id}
-                      data-testid={`ability-choice-${ability.id.replace('ability.', '')}`}
-                      aria-pressed={pendingAbilityId === ability.id}
-                      onClick={() => setPendingAbilityId(ability.id)}
-                    >
-                      <img src={ability.assetPath} alt={ability.assetAlt} />
-                      <span><strong>{ability.name}</strong><small>{ability.description}</small></span>
-                      {pendingAbilityId === ability.id ? <Check aria-hidden="true" /> : null}
-                    </button>
-                  ))}
-                </div>
-                <button className="loadout-confirm" type="button" disabled={!pendingAbilityId} onClick={assignAbility}>Assign</button>
-              </section>
-            ) : loadoutView === 'equipment' ? (
-              <div className="equipment-slot-grid" role="tabpanel" aria-label="Equipment slots">
-                {equipmentSlots.map((slot) => {
-                  const equippedId = equippedEquipment[slot.id];
-                  const equippedItem = inventoryItems.find((item) => item.id === equippedId);
-                  return (
-                    <button
-                      className="loadout-slot"
-                      type="button"
-                      key={slot.id}
-                      data-testid={`equipment-slot-${slot.id}`}
-                      aria-label={`${slot.label}: ${equippedItem?.name ?? 'Empty'}`}
-                      onClick={() => openEquipmentSlot(slot.id)}
-                    >
-                      <span className="loadout-slot-label">{slot.label}</span>
-                      <span className="loadout-slot-value">{equippedItem?.name ?? 'Empty'}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="ability-slot-list" role="tabpanel" aria-label="Ability slots">
-                {abilitySlots.map((slot) => {
-                  const equipped = abilities.find((ability) => ability.id === equippedAbilities[slot.id]);
-                  return (
-                    <button
-                      className="ability-slot"
-                      type="button"
-                      key={slot.id}
-                      data-testid={`ability-slot-${slot.id}`}
-                      aria-label={`${slot.label} ability: ${equipped?.name ?? 'Empty'}`}
-                      onClick={() => openAbilitySlot(slot.id)}
-                    >
-                      {equipped ? <img src={equipped.assetPath} alt="" /> : <span className="ability-slot-placeholder">+</span>}
-                      <span>
-                        <strong>{slot.label}</strong>
-                        <small>{equipped?.name ?? 'Empty'}</small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+            ))}
+          </dl>
+        </section>
       </div>
+    </div>
+  );
+}
+
+function EquipmentScreen(): ReactElement {
+  const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlotId>();
+  const [pendingEquipmentId, setPendingEquipmentId] = useState<string>();
+  const [equippedEquipment, setEquippedEquipment] = useState<Partial<Record<EquipmentSlotId, string>>>({});
+
+  const equipmentItems = inventoryItems.filter((item) => item.category === 'equipment');
+  const equipmentForSlot = activeEquipmentSlot === 'main-hand' ? equipmentItems : [];
+  const activeEquipmentLabel = equipmentSlots.find((slot) => slot.id === activeEquipmentSlot)?.label;
+
+  const openEquipmentSlot = (slot: EquipmentSlotId): void => {
+    setActiveEquipmentSlot(slot);
+    setPendingEquipmentId(equippedEquipment[slot]);
+  };
+
+  const equipItem = (): void => {
+    if (!activeEquipmentSlot || !pendingEquipmentId) return;
+    setEquippedEquipment((current) => ({ ...current, [activeEquipmentSlot]: pendingEquipmentId }));
+    setActiveEquipmentSlot(undefined);
+  };
+
+  return (
+    <div className="loadout-screen">
+      <section className="loadout-panel dedicated-loadout" data-testid="equipment-screen" aria-labelledby="equipment-screen-title">
+        <div className="loadout-section-header">
+          <div>
+            <p className="stats-kicker">Hero Loadout</p>
+            <h2 id="equipment-screen-title">Equipment Slots</h2>
+          </div>
+          <span className="loadout-count">{Object.keys(equippedEquipment).length}/10</span>
+        </div>
+        {activeEquipmentSlot ? (
+          <section className="loadout-picker" data-testid="equipment-picker" aria-label={`Choose ${activeEquipmentLabel}`}>
+            <div className="loadout-picker-header">
+              <h3>Choose {activeEquipmentLabel}</h3>
+              <button type="button" className="loadout-picker-close" aria-label="Close equipment picker" onClick={() => setActiveEquipmentSlot(undefined)}><CloseIcon aria-hidden="true" /></button>
+            </div>
+            {equipmentForSlot.length ? (
+              <div className="loadout-choice-list">
+                {equipmentForSlot.map((item) => (
+                  <button
+                    className={`loadout-choice${pendingEquipmentId === item.id ? ' is-selected' : ''}`}
+                    type="button"
+                    key={item.id}
+                    aria-pressed={pendingEquipmentId === item.id}
+                    onClick={() => setPendingEquipmentId(item.id)}
+                  >
+                    <Sword aria-hidden="true" />
+                    <span>{item.name}</span>
+                    {pendingEquipmentId === item.id ? <Check aria-hidden="true" /> : null}
+                  </button>
+                ))}
+              </div>
+            ) : <p className="loadout-empty">No compatible items yet.</p>}
+            <button className="loadout-confirm" type="button" disabled={!pendingEquipmentId} onClick={equipItem}>Equip</button>
+          </section>
+        ) : (
+          <div className="equipment-slot-grid" role="list" aria-label="Equipment slots">
+            {equipmentSlots.map((slot) => {
+              const equippedId = equippedEquipment[slot.id];
+              const equippedItem = inventoryItems.find((item) => item.id === equippedId);
+              return (
+                <button
+                  className="loadout-slot"
+                  type="button"
+                  key={slot.id}
+                  data-testid={`equipment-slot-${slot.id}`}
+                  aria-label={`${slot.label}: ${equippedItem?.name ?? 'Empty'}`}
+                  onClick={() => openEquipmentSlot(slot.id)}
+                >
+                  <span className="loadout-slot-label">{slot.label}</span>
+                  <span className="loadout-slot-value">{equippedItem?.name ?? 'Empty'}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AbilitiesScreen(): ReactElement {
+  const [activeAbilitySlot, setActiveAbilitySlot] = useState<AbilitySlotId>();
+  const [pendingAbilityId, setPendingAbilityId] = useState<string>();
+  const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({});
+  const activeAbilityLabel = abilitySlots.find((slot) => slot.id === activeAbilitySlot)?.label;
+
+  const openAbilitySlot = (slot: AbilitySlotId): void => {
+    setActiveAbilitySlot(slot);
+    setPendingAbilityId(equippedAbilities[slot]);
+  };
+
+  const assignAbility = (): void => {
+    if (!activeAbilitySlot || !pendingAbilityId) return;
+    setEquippedAbilities((current) => ({ ...current, [activeAbilitySlot]: pendingAbilityId }));
+    setActiveAbilitySlot(undefined);
+  };
+
+  return (
+    <div className="loadout-screen">
+      <section className="loadout-panel dedicated-loadout" data-testid="abilities-screen" aria-labelledby="abilities-screen-title">
+        <div className="loadout-section-header">
+          <div>
+            <p className="stats-kicker">Hero Loadout</p>
+            <h2 id="abilities-screen-title">Ability Slots</h2>
+          </div>
+          <span className="loadout-count">{Object.keys(equippedAbilities).length}/3</span>
+        </div>
+        {activeAbilitySlot ? (
+          <section className="loadout-picker" data-testid="ability-picker" aria-label={`Choose ${activeAbilityLabel} ability`}>
+            <div className="loadout-picker-header">
+              <h3>Choose {activeAbilityLabel}</h3>
+              <button type="button" className="loadout-picker-close" aria-label="Close ability picker" onClick={() => setActiveAbilitySlot(undefined)}><CloseIcon aria-hidden="true" /></button>
+            </div>
+            <div className="ability-choice-list">
+              {abilities.filter((ability) => ability.slot === activeAbilitySlot).map((ability) => (
+                <button
+                  className={`ability-choice${pendingAbilityId === ability.id ? ' is-selected' : ''}`}
+                  type="button"
+                  key={ability.id}
+                  data-testid={`ability-choice-${ability.id.replace('ability.', '')}`}
+                  aria-pressed={pendingAbilityId === ability.id}
+                  onClick={() => setPendingAbilityId(ability.id)}
+                >
+                  <img src={ability.assetPath} alt={ability.assetAlt} />
+                  <span><strong>{ability.name}</strong><small>{ability.description}</small></span>
+                  {pendingAbilityId === ability.id ? <Check aria-hidden="true" /> : null}
+                </button>
+              ))}
+            </div>
+            <button className="loadout-confirm" type="button" disabled={!pendingAbilityId} onClick={assignAbility}>Assign</button>
+          </section>
+        ) : (
+          <div className="ability-slot-list" role="list" aria-label="Ability slots">
+            {abilitySlots.map((slot) => {
+              const equipped = abilities.find((ability) => ability.id === equippedAbilities[slot.id]);
+              return (
+                <button
+                  className="ability-slot"
+                  type="button"
+                  key={slot.id}
+                  data-testid={`ability-slot-${slot.id}`}
+                  aria-label={`${slot.label} ability: ${equipped?.name ?? 'Empty'}`}
+                  onClick={() => openAbilitySlot(slot.id)}
+                >
+                  {equipped ? <img src={equipped.assetPath} alt="" /> : <span className="ability-slot-placeholder">+</span>}
+                  <span>
+                    <strong>{slot.label}</strong>
+                    <small>{equipped?.name ?? 'Empty'}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+type TorchSelectOption = {
+  value: string;
+  label: string;
+};
+
+type TorchSelectProps = {
+  value: string;
+  options: readonly TorchSelectOption[];
+  onChange: (value: string) => void;
+  ariaLabel: string;
+  testId: string;
+};
+
+function TorchSelect({ value, options, onChange, ariaLabel, testId }: TorchSelectProps): ReactElement {
+  const [open, setOpen] = useState(false);
+  const selectRef = useRef<HTMLDivElement>(null);
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (!selectRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className={`torch-select${open ? ' is-open' : ''}`} ref={selectRef}>
+      <button
+        className="torch-select-trigger"
+        type="button"
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-controls={`${testId}-options`}
+        aria-expanded={open}
+        data-testid={testId}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selectedOption?.label}</span>
+        <ChevronDown aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="torch-select-menu" id={`${testId}-options`} role="listbox" aria-label={ariaLabel}>
+          {options.map((option) => (
+            <button
+              className="torch-select-option"
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              <span>{option.label}</span>
+              {option.value === value ? <Check aria-hidden="true" /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -584,7 +699,7 @@ function SettingsScreen(): ReactElement {
       <section className="settings-group" aria-labelledby="settings-display-title">
         <div className="settings-group-heading"><p className="stats-kicker">Presentation</p><h2 id="settings-display-title">Display</h2></div>
         <div className="settings-row"><div><strong>Fullscreen</strong><small>Use the whole display for Torch.</small></div><button className="settings-action" type="button" onClick={toggleFullscreen}>{fullscreen ? 'On' : 'Off'}</button></div>
-        <label className="settings-row"><span><strong>UI Scale</strong><small>Adjust interface density independently of the board.</small></span><select className="settings-select" value={uiScale} onChange={(event) => setUiScale(event.target.value)}><option value="auto">Auto</option><option value="compact">Compact</option><option value="large">Large</option></select></label>
+        <div className="settings-row"><span><strong>UI Scale</strong><small>Adjust interface density independently of the board.</small></span><TorchSelect value={uiScale} options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compact' }, { value: 'large', label: 'Large' }]} onChange={setUiScale} ariaLabel="UI Scale" testId="settings-ui-scale" /></div>
         <div className="settings-row"><div><strong>Reduce Motion</strong><small>Use shorter transitions and less camera movement.</small></div><button className="settings-toggle" type="button" aria-pressed={reduceMotion} onClick={() => setReduceMotion((value) => !value)}>{reduceMotion ? 'On' : 'Off'}</button></div>
       </section>
       <section className="settings-group" aria-labelledby="settings-audio-title">

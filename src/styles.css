@@ -132,7 +132,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(100% - 24px, 440px);
+  width: min(100% - 24px, 560px);
   min-height: 64px;
   gap: var(--ui-space-2);
   padding: var(--ui-space-2) var(--ui-space-3);
@@ -710,8 +710,7 @@ button:disabled {
 }
 
 .settings-action,
-.settings-toggle,
-.settings-select {
+.settings-toggle {
   flex: 0 0 auto;
   min-width: 64px;
   min-height: 36px;
@@ -732,10 +731,95 @@ button:disabled {
   background: rgb(242 196 99 / 10%);
 }
 
-.settings-select {
-  appearance: none;
-  min-width: 96px;
+.torch-select {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 112px;
+}
+
+.torch-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 112px;
+  min-height: 36px;
+  gap: 10px;
+  padding: 6px 10px;
+  border-color: var(--ui-border-subtle);
+  border-radius: 9px;
+  color: var(--ui-color-text);
+  background: linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%));
+  font-size: 0.74rem;
   text-align: left;
+}
+
+.torch-select-trigger svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 120ms ease, color 120ms ease;
+}
+
+.torch-select.is-open .torch-select-trigger,
+.torch-select-trigger:hover,
+.torch-select-trigger:focus-visible {
+  border-color: rgb(242 196 99 / 58%);
+  color: var(--gold);
+  background: rgb(242 196 99 / 10%);
+}
+
+.torch-select.is-open .torch-select-trigger svg {
+  color: var(--gold);
+  transform: rotate(180deg);
+}
+
+.torch-select-menu {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(220px, 60vw);
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid rgb(206 169 88 / 26%);
+  border-radius: 10px;
+  background: rgb(12 17 24 / 98%);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(12px);
+}
+
+.torch-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 32px;
+  gap: 14px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.torch-select-option:hover,
+.torch-select-option[aria-selected="true"] {
+  border-color: rgb(242 196 99 / 30%);
+  color: var(--gold);
+  background: rgb(242 196 99 / 10%);
+}
+
+.torch-select-option svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .settings-range-row {
@@ -760,6 +844,20 @@ button:disabled {
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
+}
+
+.loadout-screen {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.dedicated-loadout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  min-height: 0;
 }
 
 .hero-details {
@@ -1141,7 +1239,7 @@ button:disabled {
 
 @media (orientation: portrait), (max-width: 520px) {
   .hud-rail {
-    width: min(100% - 16px, 440px);
+    width: min(100% - 16px, 560px);
     gap: 7px;
     padding: 7px;
   }

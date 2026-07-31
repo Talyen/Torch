@@ -4,22 +4,122 @@ import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
 import { heroDefinitions } from '../content/heroes';
 
-export const GENERATION_VERSION = 1;
+export const GENERATION_VERSION = 2;
 export const CHUNK_SIZE = 16;
 export const TORCH_RADIUS = 3;
+
+const CARDINAL_OFFSETS = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+] as const;
 
 export interface GeneratedTile {
   position: Position;
   kind: TileKind;
 }
 
-export function tileAt(seed: number, position: Position): TileKind {
-  const sample = unitRandom(seed, position.x, position.y, 11);
+function smoothStep(value: number): number {
+  return value * value * (3 - 2 * value);
+}
 
-  if (sample < 0.08) return 'water';
-  if (sample < 0.22) return 'stone-floor';
-  if (sample < 0.42) return 'forest-floor';
+function lerp(from: number, to: number, amount: number): number {
+  return from + (to - from) * amount;
+}
+
+/** Smooth value noise keeps adjacent tiles in the same biome instead of scattering colors. */
+function valueNoise(seed: number, position: Position, scale: number, salt: number): number {
+  const cellX = floorDiv(position.x, scale);
+  const cellY = floorDiv(position.y, scale);
+  const localX = smoothStep((position.x - cellX * scale) / scale);
+  const localY = smoothStep((position.y - cellY * scale) / scale);
+  const top = lerp(
+    unitRandom(seed, cellX, cellY, salt),
+    unitRandom(seed, cellX + 1, cellY, salt),
+    localX,
+  );
+  const bottom = lerp(
+    unitRandom(seed, cellX, cellY + 1, salt),
+    unitRandom(seed, cellX + 1, cellY + 1, salt),
+    localX,
+  );
+  return lerp(top, bottom, localY);
+}
+
+function safeSpawnArea(position: Position): boolean {
+  return Math.abs(position.x) <= 4 && Math.abs(position.y - 2) <= 4;
+}
+
+function riverDistance(seed: number, position: Position): number {
+  const horizontal = unitRandom(seed, 0, 0, 91) >= 0.5;
+  const axis = horizontal ? position.x : position.y;
+  const crossAxis = horizontal ? position.y : position.x;
+  const phase = unitRandom(seed, 0, 0, 92) * 40;
+  const offset = (unitRandom(seed, 0, 0, 93) - 0.5) * 12;
+  const meander = Math.sin((axis + phase) / 21) * 5
+    + Math.sin((axis + phase) / 49) * 3
+    + offset;
+  return Math.abs(crossAxis - meander);
+}
+
+function trailSignal(seed: number, position: Position): number {
+  const phaseX = unitRandom(seed, 0, 0, 94) * Math.PI * 2;
+  const phaseY = unitRandom(seed, 0, 0, 95) * Math.PI * 2;
+  const vertical = Math.abs(Math.sin(position.x / 17 + Math.sin(position.y / 23 + phaseX)));
+  const horizontal = Math.abs(Math.sin(position.y / 21 + Math.sin(position.x / 29 + phaseY)));
+  return Math.min(vertical, horizontal);
+}
+
+export function tileAt(seed: number, position: Position): TileKind {
+  if (safeSpawnArea(position)) return 'grass';
+
+  const elevation = valueNoise(seed, position, 14, 11) * 0.72
+    + valueNoise(seed, position, 6, 12) * 0.28;
+  const moisture = valueNoise(seed, position, 12, 21) * 0.7
+    + valueNoise(seed, position, 5, 22) * 0.3;
+
+  if (elevation < 0.25) return 'water';
+  if (riverDistance(seed, position) < 0.9 && elevation < 0.77) return 'water';
+  if (elevation > 0.79) return 'mountain';
+  if (moisture > 0.58) {
+    return trailSignal(seed, position) < 0.08 ? 'trail' : 'forest';
+  }
+  if (moisture > 0.45 && trailSignal(seed, position) < 0.08) return 'trail';
   return 'grass';
+}
+
+export function isTerrainWalkable(kind: TileKind): boolean {
+  return kind !== 'water' && kind !== 'mountain';
+}
+
+export type GeneratedResourceKind = 'ore';
+
+/** Ore nodes are seeded on walkable tiles directly beside mountain terrain. */
+export function generatedResourceAt(seed: number, position: Position): GeneratedResourceKind | undefined {
+  if (!isTerrainWalkable(tileAt(seed, position))) return undefined;
+  const besideMountain = CARDINAL_OFFSETS.some((offset) => (
+    tileAt(seed, { x: position.x + offset.x, y: position.y + offset.y }) === 'mountain'
+  ));
+  return besideMountain && unitRandom(seed, position.x, position.y, 120) > 0.58 ? 'ore' : undefined;
+}
+
+export function findGeneratedResourcePosition(
+  seed: number,
+  origin: Position,
+  resource: GeneratedResourceKind,
+  searchRadius = 10,
+): Position | undefined {
+  for (let distance = 2; distance <= searchRadius; distance += 1) {
+    for (let y = origin.y - distance; y <= origin.y + distance; y += 1) {
+      for (let x = origin.x - distance; x <= origin.x + distance; x += 1) {
+        if (Math.max(Math.abs(x - origin.x), Math.abs(y - origin.y)) !== distance) continue;
+        const position = { x, y };
+        if (resource === 'ore' && generatedResourceAt(seed, position)) return position;
+      }
+    }
+  }
+  return undefined;
 }
 
 export function generateChunk(
@@ -49,6 +149,7 @@ export function chunkForPosition(position: Position, chunkSize = CHUNK_SIZE): { 
 export function createInitialGameState(seed = 20260730): GameState {
   const homestead = { x: 0, y: 0 };
   const heroPosition = { x: 0, y: 2 };
+  const orePosition = findGeneratedResourcePosition(seed, heroPosition, 'ore') ?? { x: -3, y: 2 };
 
   const state: GameState = {
     seed,
@@ -86,7 +187,7 @@ export function createInitialGameState(seed = 20260730): GameState {
         id: 'resource-ore',
         kind: 'ore',
         name: 'Copper Vein',
-        position: { x: -3, y: 2 },
+        position: orePosition,
         blocksMovement: true,
         resourceType: 'ore',
         actions: ['mine'],

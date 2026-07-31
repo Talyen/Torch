@@ -8,7 +8,7 @@ import {
 } from './coords';
 import { defaultActionForEntity, resolveAction } from './actions';
 import { entityOccupiesPosition } from './footprint';
-import { revealAround } from './world';
+import { isTerrainWalkable, revealAround, tileAt } from './world';
 import type { Command, CommandResult, Direction, EntityState, GameState, Position, SimEvent } from './types';
 
 function cloneState(state: GameState): GameState {
@@ -68,6 +68,7 @@ function advanceEnemies(state: GameState, events: SimEvent[]): void {
     if (!direction) continue;
 
     const destination = addPosition(enemy.position, directionDelta(direction));
+    if (!isTerrainWalkable(tileAt(state.seed, destination))) continue;
     const blocker = blockingEntityAt(state, destination);
     if (blocker && blocker.id !== enemy.id) continue;
     if (samePosition(destination, state.hero.position)) continue;
@@ -100,27 +101,35 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
 
   if (command.type === 'move') {
     const destination = addPosition(next.hero.position, directionDelta(command.direction));
-    const blocker = blockingEntityAt(next, destination);
+    const destinationTerrain = tileAt(next.seed, destination);
 
-    if (blocker) {
-      const action = defaultActionForEntity(blocker);
-      if (action) {
-        accepted = resolveAction(next, {
-          kind: action,
-          entityId: blocker.id,
-          target: { ...destination },
-        }, events);
-      } else {
-        events.push({ type: 'blocked', reason: `${blocker.name} blocks the way.` });
-        events.push({ type: 'message', text: `${blocker.name} blocks the way.` });
-      }
+    if (!isTerrainWalkable(destinationTerrain)) {
+      const terrainName = destinationTerrain === 'mountain' ? 'A mountain' : 'Deep water';
+      events.push({ type: 'blocked', reason: `${terrainName} blocks the way.` });
+      events.push({ type: 'message', text: `${terrainName} blocks the way.` });
     } else {
-      const from = { ...next.hero.position };
-      next.hero.position = destination;
-      revealAround(next, destination);
-      events.push({ type: 'hero-moved', from, to: { ...destination } });
-      events.push({ type: 'message', text: `Moved to ${destination.x}, ${destination.y}.` });
-      accepted = true;
+      const blocker = blockingEntityAt(next, destination);
+
+      if (blocker) {
+        const action = defaultActionForEntity(blocker);
+        if (action) {
+          accepted = resolveAction(next, {
+            kind: action,
+            entityId: blocker.id,
+            target: { ...destination },
+          }, events);
+        } else {
+          events.push({ type: 'blocked', reason: `${blocker.name} blocks the way.` });
+          events.push({ type: 'message', text: `${blocker.name} blocks the way.` });
+        }
+      } else {
+        const from = { ...next.hero.position };
+        next.hero.position = destination;
+        revealAround(next, destination);
+        events.push({ type: 'hero-moved', from, to: { ...destination } });
+        events.push({ type: 'message', text: `Moved to ${destination.x}, ${destination.y}.` });
+        accepted = true;
+      }
     }
   }
 

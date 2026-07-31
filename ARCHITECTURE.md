@@ -97,18 +97,18 @@ changes.
 
 The game board is a full-screen Phaser canvas. Application UI mounts in a sibling `#ui-root` overlay owned by React. This keeps inventory, settings, quest journals, crafting, talents, equipment, and modal flows in semantic DOM while Phaser owns world-space presentation and effects. A component source system such as shadcn/ui may be added selectively for those screens, but it must not become the simulation authority.
 
-The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, and Main Menu action. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
+The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Equipment action, Abilities action, and Main Menu action. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
 
 The main menu is intentionally reserved for secondary destinations such as
-Crafting, Journal, Talents, and Settings; Hero and Inventory are opened from
-their dedicated HUD actions. Hero details keep native-ratio art and Stats side
+Crafting, Journal, Talents, and Settings; Hero, Inventory, Equipment, and
+Abilities are opened from their dedicated HUD actions. Hero details keep native-ratio art and Stats side
 by side at every orientation and target no scrolling in normal device
-viewports. Equipment and Abilities are mutually exclusive compact tabs in the
-right column. Slot selection replaces the active tab's slot view with an inline
-compatible-item or ability picker, so the player does not lose Hero context by
-being sent to a separate inventory flow. The three starter ability definitions
-use stable IDs and native 3:4 art variants; gameplay effects and durable
-loadout state remain simulation/save work.
+viewports. Equipment and Abilities each have a dedicated centered screen with
+compact slots. Slot selection replaces that screen's slot view with an inline
+compatible-item or ability picker, so the player does not lose context by being
+sent to a separate inventory flow. The three starter ability definitions use
+stable IDs and native 3:4 art variants; gameplay effects and durable loadout
+state remain simulation/save work.
 
 ## Input
 
@@ -162,6 +162,14 @@ The current UI-only Inventory fixtures follow the same boundary in
 `src/content/inventory.ts`: content stores stable IDs, category IDs, quantities,
 descriptions, and presentation icon IDs, while React maps those icon IDs to
 Lucide components. Content definitions do not import React or Lucide.
+
+Terrain generation uses smooth seeded value fields for broad elevation and
+moisture regions, then derives clustered lakes/rivers, mountain ranges,
+forest/grassland biomes, and sparse trail bands. Water and mountains are
+impassable terrain. Ore candidates are deterministic walkable tiles adjacent to
+mountains; the initial ore node is materialized from that rule while broader
+chunk/entity materialization remains future work. The spawn area is an authored
+grassland safety ring so the first few actions remain readable.
 
 Content definitions should be validated at load time. Procedural systems should compose authored definitions rather than hide important game rules in opaque generator logic. Generated output must record the seed and relevant version so failures can be reproduced.
 

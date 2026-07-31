@@ -25,6 +25,10 @@ test('loads the first-light vertical slice with a minimal menu overlay', async (
   await expect(page.getByTestId('hero-hp')).toHaveAttribute('aria-label', 'Hero HP 10 of 10');
   await expect(page.getByTestId('hud-inventory-button')).toBeVisible();
   await expect(page.getByTestId('hud-inventory-button').locator('svg.lucide-backpack')).toBeVisible();
+  await expect(page.getByTestId('hud-equipment-button')).toBeVisible();
+  await expect(page.getByTestId('hud-equipment-button').locator('svg.lucide-shield')).toBeVisible();
+  await expect(page.getByTestId('hud-abilities-button')).toBeVisible();
+  await expect(page.getByTestId('hud-abilities-button').locator('svg.lucide-sparkles')).toBeVisible();
   await expect(page.getByTestId('menu-button')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Torch' })).toHaveCount(0);
   await expect(page.getByTestId('seed')).toHaveCount(0);
@@ -44,6 +48,10 @@ test('loads the first-light vertical slice with a minimal menu overlay', async (
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
   await expect(page.getByTestId('settings-screen')).toBeVisible();
   await expect(page.getByTestId('settings-master-volume')).toBeVisible();
+  await page.getByTestId('settings-ui-scale').click();
+  await expect(page.getByRole('option', { name: 'Large' })).toBeVisible();
+  await page.getByRole('option', { name: 'Large' }).click();
+  await expect(page.getByTestId('settings-ui-scale')).toContainText('Large');
   await page.getByTestId('close-menu').click();
 
   await page.getByTestId('hud-inventory-button').click();
@@ -97,13 +105,21 @@ test('loads the first-light vertical slice with a minimal menu overlay', async (
   for (const stat of ['Strength', 'Agility', 'Toughness', 'Wisdom', 'Intellect']) {
     await expect(page.getByText(stat, { exact: true })).toBeVisible();
   }
+  await expect(page.getByTestId('equipment-slot-main-hand')).toHaveCount(0);
+  await page.getByTestId('close-menu').click();
+  await page.getByTestId('hud-equipment-button').click();
+  await expect(page.getByRole('dialog', { name: 'Equipment' })).toBeVisible();
+  await expect(page.getByTestId('equipment-screen')).toBeVisible();
   await expect(page.getByTestId('equipment-slot-main-hand')).toBeVisible();
   await page.getByTestId('equipment-slot-main-hand').click();
   await expect(page.getByTestId('equipment-picker')).toBeVisible();
   await page.getByRole('button', { name: 'Iron Sword', exact: true }).click();
   await page.getByRole('button', { name: 'Equip', exact: true }).click();
   await expect(page.getByTestId('equipment-slot-main-hand')).toHaveAttribute('aria-label', 'Main Hand: Iron Sword');
-  await page.getByTestId('hero-loadout-abilities-tab').click();
+  await page.getByTestId('close-menu').click();
+  await page.getByTestId('hud-abilities-button').click();
+  await expect(page.getByRole('dialog', { name: 'Abilities' })).toBeVisible();
+  await expect(page.getByTestId('abilities-screen')).toBeVisible();
   await expect(page.getByTestId('ability-slot-basic')).toBeVisible();
   await page.getByTestId('ability-slot-basic').click();
   await expect(page.getByTestId('ability-picker')).toBeVisible();
@@ -154,8 +170,6 @@ test('fits the Hero detail content within landscape and portrait viewports', asy
         statsWidth: statsRect?.width ?? 0,
         renderedRatio: imageRect ? imageRect.width / imageRect.height : 0,
         nativeRatio: image && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0,
-        loadoutScrollHeight: document.querySelector<HTMLElement>('[data-testid="hero-loadout-panel"]')?.scrollHeight ?? 0,
-        loadoutClientHeight: document.querySelector<HTMLElement>('[data-testid="hero-loadout-panel"]')?.clientHeight ?? 0,
       };
     });
     expect(layout.panelBottom).toBeLessThanOrEqual(viewport.height + 1);
@@ -167,6 +181,5 @@ test('fits the Hero detail content within landscape and portrait viewports', asy
     expect(layout.artWidth).toBeGreaterThan(0);
     expect(layout.statsWidth).toBeGreaterThan(0);
     expect(layout.artRight).toBeLessThanOrEqual(layout.statsLeft + 1);
-    expect(layout.loadoutScrollHeight).toBe(layout.loadoutClientHeight);
   }
 });

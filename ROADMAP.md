@@ -21,7 +21,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Establish browser smoke testing with Playwright.
 - [x] Add a responsive React UI overlay shell with a minimal menu.
 - [x] Add a UI-only Inventory prototype with category tabs, sorting, square item cells, and Item Detail.
-- [x] Add first-pass Settings, Hero equipment-slot, and Ability-slot UI prototypes.
+- [x] Add first-pass Settings plus dedicated Hero, Equipment, and Ability screens.
 - [x] Add native-ratio Bash, Sunder, and Avatar ability artwork to the asset pipeline.
 - [x] Add a minimal asset/content manifest convention.
 - [x] Document the development verification workflow and deterministic replay contract.
@@ -37,6 +37,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add one tree, one ore node, and basic gathering actions.
 - [x] Resolve context actions for blocked movement (attack, chop, and mine).
 - [x] Add a simple homestead location and bound respawn point.
+- [x] Add clustered water, forest, trail, mountain, and grassland terrain with seeded mountain-adjacent ore placement.
 - [ ] Save, reload, die, and respawn deterministically.
 - [ ] Run the same seed and command transcript in automated tests.
 

@@ -23,6 +23,8 @@ Core color tokens include:
 | `--ui-color-background` | `#080b10` | board/page background |
 | `--ui-color-surface` | `rgb(12 17 24 / 92%)` | centered menu surfaces |
 | `--ui-color-surface-panel` | `rgb(12 17 24 / 88%)` | controlled glass surface for menu panes and popovers |
+| `--ui-color-surface-content` | `#111a24` | opaque content panels inside menus |
+| `--ui-color-surface-content-raised` | `#172231` | opaque cards, slots, and selectable content inside panels |
 | `--ui-color-surface-hud` | `rgb(12 17 24 / 84%)` | bottom HUD rail, including the Hero HP area |
 | `--ui-color-accent` | `#f2c463` | gold headings, labels, values, and emphasis |
 | `--ui-color-text` | `#f5ead4` | primary body text |
@@ -49,6 +51,9 @@ The current spacing scale is 4 px based:
   controlled by `--ui-color-surface-panel` and
   `--ui-panel-backdrop-filter`; keep the opacity and blur moderate so the map
   adds atmosphere without reducing content legibility.
+- Inner content surfaces use the opaque `--ui-color-surface-content` and
+  `--ui-color-surface-content-raised` tokens. Keep blur and alpha on the menu
+  shell, not behind text, artwork, or interactive cards.
 - `.menu-panel-wide` is the responsive detail surface for screens such as Hero and Inventory.
 - `.hero-details` owns responsive art/stat composition; full artwork and the stats card remain side by side in both landscape and portrait layouts, shrinking their columns as needed.
 - In every Hero layout, full artwork and the stats card share the details region's left/right content edges while the artwork preserves its native aspect ratio.
@@ -56,10 +61,14 @@ The current spacing scale is 4 px based:
 - A full artwork surface should be a direct layout child when no visual card is intended. Do not add decorative wrapper panels around it.
 - Inventory uses a square responsive grid. It defaults to all items; clicking the active category tab toggles back to all items. Cells show an icon and quantity only; item names and descriptions belong in the selected Item Detail surface.
 - Inventory category tabs are icon-first and always carry an accessible label. Sorting is a compact custom popover control aligned with the tab row. Drag-and-drop and manual reordering are intentionally out of scope.
-- The main menu contains secondary destinations only. Hero, Inventory, Equipment, and Abilities are dedicated HUD actions.
-- Hero details keep only the native-ratio Hero art beside Stats at every orientation and target a no-scroll experience in normal device viewports. Equipment and Abilities each have a dedicated centered screen: Equipment uses a human-centric paper-doll slot layout, while Abilities uses a readable slot list. Clicking a slot opens an inline picker without leaving the loadout context, and both screens reserve larger art surfaces for future authored assets. Ability art is always rendered with its native 3:4 ratio, including previews and picker cards.
+- The main menu contains secondary destinations only. Hero, Gear, Abilities, Inventory, and Map are dedicated HUD actions; the Gear shortcut deep-links into the shared Inventory surface, whose top-level categories are Inventory, Gear, and Tools. The HUD keeps Gear and Abilities immediately to the right of the Hero portrait and before the HP bar, with Inventory after HP and Map following the inventory action.
+- Map is a centered overlay screen whose map grid is the dominant content surface. It fits explored terrain into square cells, expands the rendered bounds with unexplored charcoal cells to use spare width/height, and keeps a minimum-size Hero token for world-relative position even when the cells become tiny. It is read-only presentation over `GameState.revealedTiles`; toolbar copy and legends stay out of the map screen.
+- Hero details keep native-ratio Hero art beside a single-column Stats list at every orientation and target a no-scroll experience in normal device viewports. Equipment uses a square human-centric paper-doll layout with Amulet to the right of Helm, Body at center, rings flanking Belt, and Boots below. Abilities presents three large native-ratio artwork cards for Basic, Skill, and Ultimate.
+- Equipment and Abilities use dedicated selector submenus rather than inline pickers. Selecting a loadout card transitions to a focused artwork grid; choosing an item immediately returns to the loadout. Keep selector copy minimal and let artwork, slot labels, and selected states carry the hierarchy. Ability art is always rendered with its native 3:4 ratio, including loadout cards and selector cards.
+- The shared Inventory surface is split into Inventory, Gear, and Tools tabs. Inventory keeps the square item grid and sorting controls; Gear uses the paper-doll slots; Tools uses square action slots for Axe, Pickaxe, and future gathering tools. Gear and Tools keep the dedicated selector-submenu flow. Use Backpack/Shield/Wrench-style Lucide icons for the tabs and reserve authored art for actual item visuals.
 - `.torch-select` is the shared dark/gold select primitive for settings and other small option lists. It uses a semantic combobox/listbox, a compact popover, visible selected state, Escape dismissal, and outside-click dismissal instead of browser-native select styling.
 - Settings uses the same centered wide panel and groups controls by Display, Audio, and Gameplay. Prototype controls should clearly indicate when persistence or platform adapters are not yet connected.
+- Display includes a Show Grid toggle, off by default. It is a client-side presentation preference only; the simulation and saves must not depend on it.
 
 ## Component and accessibility rules
 

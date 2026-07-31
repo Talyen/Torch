@@ -1,4 +1,5 @@
 import { abilityAssets } from './ability-assets';
+import type { AbilitySlotId } from '../sim/types';
 
 export const abilitySlots = [
   { id: 'basic', label: 'Basic' },
@@ -6,7 +7,7 @@ export const abilitySlots = [
   { id: 'ultimate', label: 'Ultimate' },
 ] as const;
 
-export type AbilitySlotId = (typeof abilitySlots)[number]['id'];
+export type { AbilitySlotId } from '../sim/types';
 
 export interface AbilityDefinition {
   id: string;
@@ -22,7 +23,7 @@ export const abilities: AbilityDefinition[] = [
     id: 'ability.bash',
     name: 'Bash',
     slot: 'basic',
-    description: 'A dependable strike that staggers a nearby foe.',
+    description: 'Deal 2 Stun damage.',
     assetPath: abilityAssets.bash.full,
     assetAlt: abilityAssets.bash.fullAlt,
   },
@@ -30,7 +31,7 @@ export const abilities: AbilityDefinition[] = [
     id: 'ability.sunder',
     name: 'Sunder',
     slot: 'skill',
-    description: 'Break through a target’s defenses with a crushing blow.',
+    description: 'Deal 3 Physical damage and Halve the enemy’s Block.',
     assetPath: abilityAssets.sunder.full,
     assetAlt: abilityAssets.sunder.fullAlt,
   },
@@ -38,7 +39,7 @@ export const abilities: AbilityDefinition[] = [
     id: 'ability.avatar',
     name: 'Avatar',
     slot: 'ultimate',
-    description: 'Become an unstoppable champion for a short time.',
+    description: 'Gain Holy damage equal to your Block for 2 turns.',
     assetPath: abilityAssets.avatar.full,
     assetAlt: abilityAssets.avatar.fullAlt,
   },

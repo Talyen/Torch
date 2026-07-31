@@ -39,6 +39,37 @@ export function visibilityLevel(snapshot: VisibilitySnapshot, position: Position
   return distanceSquared <= TORCH_RADIUS ** 2 ? 2 : 1;
 }
 
+/**
+ * Returns the same per-tile visibility interpolation used by the fog layer.
+ * Keeping entity presentation on this value prevents a newly revealed object
+ * from appearing before the fog has reached its tile.
+ */
+export function interpolatedVisibilityLevel(
+  previous: VisibilitySnapshot,
+  current: VisibilitySnapshot,
+  position: Position,
+  progress: number,
+): number {
+  const from = visibilityLevel(previous, position);
+  const to = visibilityLevel(current, position);
+  const tileProgress = directionalVisibilityProgress(previous.hero, current.hero, position, progress);
+  return from + (to - from) * tileProgress;
+}
+
+/** Maps a visibility level to the alpha used for world-space entities. */
+export function entityVisibilityAlpha(level: number): number {
+  if (level <= 1) return 0;
+  const normalized = Math.max(0, Math.min(1, level - 1));
+  return smoothStep(normalized);
+}
+
+/** Converts a visibility level to the charcoal overlay alpha used by the fog layer. */
+export function fogAlphaForVisibility(visibility: number): number {
+  if (visibility <= 0) return 0.96;
+  if (visibility >= 2) return 0;
+  return 0.72 * (2 - visibility);
+}
+
 export function visibilityColor(
   baseColor: number,
   visibility: number,
@@ -58,8 +89,7 @@ export function visibilityColor(
  * Staggers a visibility transition along the Hero's movement direction. The
  * leading edge reveals after the tiles behind it, which makes fog changes feel
  * like a moving Torch sweep instead of a simultaneous recolor. The delayed
- * portion is intentionally long enough to read at the game's short movement
- * duration; the renderer adds a brief edge highlight while a tile is changing.
+ * portion is intentionally long enough to read at the game's movement speed.
  */
 export function directionalVisibilityProgress(
   previousHero: Position,
@@ -84,6 +114,10 @@ export function directionalVisibilityProgress(
   const delay = normalizedProjection * 0.72;
   const localProgress = Math.max(0, Math.min(1, (clampedProgress - delay) / (1 - delay)));
   return localProgress * localProgress * (3 - 2 * localProgress);
+}
+
+function smoothStep(value: number): number {
+  return value * value * (3 - 2 * value);
 }
 
 export function mixColor(from: number, to: number, progress: number): number {

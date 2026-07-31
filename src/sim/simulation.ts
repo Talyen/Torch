@@ -6,25 +6,12 @@ import {
   positionKey,
   samePosition,
 } from './coords';
-import { defaultActionForEntity, resolveAction } from './actions';
-import { entityOccupiesPosition } from './footprint';
+import { defaultActionForEnemy, defaultActionForEntity, resolveAction } from './actions';
+import { blockingEntityAt, entityAt } from './entities';
+import { abilityActionDefinition, canEquipAbility } from './ability-rules';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
-import type { Command, CommandResult, Direction, EntityState, GameState, Position, SimEvent } from './types';
-
-function cloneState(state: GameState): GameState {
-  return structuredClone(state) as GameState;
-}
-
-function entityAt(state: GameState, position: Position): EntityState | undefined {
-  return Object.values(state.entities).find(
-    (entity) => entity.health !== 0 && entityOccupiesPosition(entity, position),
-  );
-}
-
-function blockingEntityAt(state: GameState, position: Position): EntityState | undefined {
-  const entity = entityAt(state, position);
-  return entity?.blocksMovement ? entity : undefined;
-}
+import { cloneGameState } from './state';
+import type { Command, CommandResult, Direction, GameState, Position, SimEvent } from './types';
 
 function directionToward(from: Position, to: Position): Direction | undefined {
   const dx = to.x - from.x;
@@ -53,6 +40,11 @@ function advanceEnemies(state: GameState, events: SimEvent[]): void {
   for (const enemy of enemies) {
     if (enemy.disposition === 'neutral' && !enemy.alerted) continue;
 
+    if ((enemy.stunnedActions ?? 0) > 0) {
+      enemy.stunnedActions = Math.max(0, (enemy.stunnedActions ?? 0) - 1);
+      continue;
+    }
+
     const distance = manhattanDistance(enemy.position, state.hero.position);
     if (distance > 7) continue;
 
@@ -80,93 +72,124 @@ function advanceEnemies(state: GameState, events: SimEvent[]): void {
   }
 }
 
-function advanceTurn(state: GameState, events: SimEvent[]): void {
+function advanceAbilityCooldowns(state: GameState, consumedAbilityIds: Set<string>): void {
+  for (const [abilityId, remaining] of Object.entries(state.hero.abilityCooldowns)) {
+    if (consumedAbilityIds.has(abilityId)) continue;
+    if (remaining <= 0) continue;
+    state.hero.abilityCooldowns[abilityId] = remaining - 1;
+  }
+}
+
+function advanceAbilityEffects(state: GameState, consumedAbilityIds: Set<string>): void {
+  state.hero.activeAbilityEffects = state.hero.activeAbilityEffects.flatMap((effect) => {
+    if (consumedAbilityIds.has(effect.abilityId)) return [effect];
+    const remainingActions = effect.remainingActions - 1;
+    return remainingActions > 0 ? [{ ...effect, remainingActions }] : [];
+  });
+}
+
+function advanceTurn(state: GameState, events: SimEvent[], consumedAbilityIds: Set<string>): void {
   state.turn += 1;
+  advanceAbilityCooldowns(state, consumedAbilityIds);
   advanceEnemies(state, events);
+  advanceAbilityEffects(state, consumedAbilityIds);
   events.push({ type: 'turn-advanced', turn: state.turn });
 }
 
-export function findAdjacentResource(state: GameState): Position | undefined {
-  const adjacent = Object.values(state.entities).find(
-    (entity) =>
-      (entity.kind === 'tree' || entity.kind === 'ore') &&
-      isCardinallyAdjacent(entity.position, state.hero.position),
-  );
-  return adjacent ? { ...adjacent.position } : undefined;
-}
-
 export function applyCommand(state: GameState, command: Command): CommandResult {
-  const next = cloneState(state);
+  const next = cloneGameState(state);
   const events: SimEvent[] = [];
+  const consumedAbilityIds = new Set<string>();
   let accepted = false;
 
-  materializeGeneratedTrees(next, next.hero.position);
-
-  if (command.type === 'move') {
-    const destination = addPosition(next.hero.position, directionDelta(command.direction));
-    const destinationTerrain = tileAt(next.seed, destination);
-
-    if (!isTerrainWalkable(destinationTerrain)) {
-      const terrainName = 'A mountain';
-      events.push({ type: 'blocked', reason: `${terrainName} blocks the way.` });
-      events.push({ type: 'message', text: `${terrainName} blocks the way.` });
+  // Equipment changes are state commands but not turn-consuming actions.
+  // They still go through this resolver so replays and UI callbacks share one
+  // validation path.
+  if (command.type === 'equip-ability') {
+    const ability = abilityActionDefinition(command.abilityId);
+    if (!ability || !canEquipAbility(command.slot, command.abilityId)) {
+      events.push({ type: 'blocked', reason: 'That ability cannot be equipped in this slot.' });
+      events.push({ type: 'message', text: 'That ability cannot be equipped in this slot.' });
     } else {
-      const blocker = blockingEntityAt(next, destination);
+      next.hero.equippedAbilities[command.slot] = command.abilityId;
+      next.hero.abilityCooldowns[command.abilityId] = 0;
+      events.push({ type: 'ability-equipped', slot: command.slot, abilityId: command.abilityId });
+      accepted = true;
+    }
+  } else {
+    materializeGeneratedTrees(next, next.hero.position);
 
-      if (blocker) {
-        const action = defaultActionForEntity(blocker);
-        if (action) {
-          accepted = resolveAction(next, {
-            kind: action,
-            entityId: blocker.id,
-            target: { ...destination },
-          }, events);
+    switch (command.type) {
+      case 'move': {
+        const destination = addPosition(next.hero.position, directionDelta(command.direction));
+        const destinationTerrain = tileAt(next.seed, destination);
+
+        if (!isTerrainWalkable(destinationTerrain)) {
+          const terrainName = 'A mountain';
+          events.push({ type: 'blocked', reason: `${terrainName} blocks the way.` });
+          events.push({ type: 'message', text: `${terrainName} blocks the way.` });
         } else {
-          events.push({ type: 'blocked', reason: `${blocker.name} blocks the way.` });
-          events.push({ type: 'message', text: `${blocker.name} blocks the way.` });
+          const blocker = blockingEntityAt(next, destination);
+
+          if (blocker) {
+            const action = blocker.kind === 'enemy'
+              ? defaultActionForEnemy(next, blocker, destination)
+              : defaultActionForEntity(blocker);
+            if (action) {
+              accepted = resolveAction(next, typeof action === 'string'
+                ? {
+                    kind: action,
+                    entityId: blocker.id,
+                    target: { ...destination },
+                  }
+                : action, events, consumedAbilityIds);
+            } else {
+              events.push({ type: 'blocked', reason: `${blocker.name} blocks the way.` });
+              events.push({ type: 'message', text: `${blocker.name} blocks the way.` });
+            }
+          } else {
+            const from = { ...next.hero.position };
+            next.hero.position = destination;
+            revealAround(next, destination);
+            materializeGeneratedTrees(next, destination);
+            events.push({ type: 'hero-moved', from, to: { ...destination } });
+            events.push({ type: 'message', text: `Moved to ${destination.x}, ${destination.y}.` });
+            accepted = true;
+          }
         }
-      } else {
-        const from = { ...next.hero.position };
-        next.hero.position = destination;
-        revealAround(next, destination);
-        materializeGeneratedTrees(next, destination);
-        events.push({ type: 'hero-moved', from, to: { ...destination } });
-        events.push({ type: 'message', text: `Moved to ${destination.x}, ${destination.y}.` });
+        break;
+      }
+      case 'interact': {
+        if (!isCardinallyAdjacent(next.hero.position, command.target)) {
+          events.push({ type: 'blocked', reason: 'That is too far away.' });
+          events.push({ type: 'message', text: 'You need to stand beside that resource.' });
+        } else {
+          const target = entityAt(next, command.target);
+          const action = target ? defaultActionForEntity(target) : undefined;
+          if (!target || !action) {
+            events.push({ type: 'blocked', reason: 'There is nothing useful there.' });
+            events.push({ type: 'message', text: 'There is no action available there.' });
+          } else {
+            accepted = resolveAction(next, {
+              kind: action,
+              entityId: target.id,
+              target: { ...command.target },
+            }, events, consumedAbilityIds);
+          }
+        }
+        break;
+      }
+      case 'action':
+        accepted = resolveAction(next, command.action, events, consumedAbilityIds);
+        break;
+      case 'wait':
+        events.push({ type: 'message', text: 'You wait and listen to the dark.' });
         accepted = true;
-      }
+        break;
     }
   }
 
-  if (command.type === 'interact') {
-    if (!isCardinallyAdjacent(next.hero.position, command.target)) {
-      events.push({ type: 'blocked', reason: 'That is too far away.' });
-      events.push({ type: 'message', text: 'You need to stand beside that resource.' });
-    } else {
-      const target = entityAt(next, command.target);
-      const action = target ? defaultActionForEntity(target) : undefined;
-      if (!target || !action) {
-        events.push({ type: 'blocked', reason: 'There is nothing useful there.' });
-        events.push({ type: 'message', text: 'There is no action available there.' });
-      } else {
-        accepted = resolveAction(next, {
-          kind: action,
-          entityId: target.id,
-          target: { ...command.target },
-        }, events);
-      }
-    }
-  }
-
-  if (command.type === 'action') {
-    accepted = resolveAction(next, command.action, events);
-  }
-
-  if (command.type === 'wait') {
-    events.push({ type: 'message', text: 'You wait and listen to the dark.' });
-    accepted = true;
-  }
-
-  if (accepted) advanceTurn(next, events);
+  if (accepted && command.type !== 'equip-ability') advanceTurn(next, events, consumedAbilityIds);
 
   return { state: next, events, accepted };
 }

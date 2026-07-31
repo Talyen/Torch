@@ -2,6 +2,7 @@ import { floorDiv, positionKey, samePosition } from './coords';
 import { unitRandom } from './rng';
 import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
+import { GATHERING_ACTION_COSTS } from './actions';
 import { heroDefinitions } from '../content/heroes';
 
 export const GENERATION_VERSION = 6;
@@ -123,6 +124,8 @@ export function materializeGeneratedTrees(state: GameState, center: Position, ra
         position,
         blocksMovement: true,
         resourceType: 'wood',
+        gatheringActionCost: GATHERING_ACTION_COSTS.chop,
+        remainingGatheringActions: state.gatheringProgress?.[id] ?? GATHERING_ACTION_COSTS.chop,
         actions: ['chop'],
       };
     }
@@ -195,13 +198,25 @@ export function createInitialGameState(seed = 20260730): GameState {
       maxHealth: 10,
       deaths: 0,
       inventory: {},
+      block: 0,
       primaryStats: { ...heroDefinitions.knight.primaryStats },
+      equippedAbilities: {
+        basic: 'ability.bash',
+        skill: 'ability.sunder',
+        ultimate: 'ability.avatar',
+      },
+      abilityCooldowns: {
+        'ability.bash': 0,
+        'ability.sunder': 0,
+        'ability.avatar': 0,
+      },
+      activeAbilityEffects: [],
     },
     entities: {
       homestead: {
         id: 'homestead',
         kind: 'homestead',
-        name: 'First Light Homestead',
+        name: 'Bound Homestead',
         position: homestead,
         blocksMovement: false,
       },
@@ -212,6 +227,8 @@ export function createInitialGameState(seed = 20260730): GameState {
         position: { x: 3, y: 2 },
         blocksMovement: true,
         resourceType: 'wood',
+        gatheringActionCost: GATHERING_ACTION_COSTS.chop,
+        remainingGatheringActions: GATHERING_ACTION_COSTS.chop,
         actions: ['chop'],
       },
       'resource-ore': {
@@ -221,6 +238,8 @@ export function createInitialGameState(seed = 20260730): GameState {
         position: orePosition,
         blocksMovement: true,
         resourceType: 'ore',
+        gatheringActionCost: GATHERING_ACTION_COSTS.mine,
+        remainingGatheringActions: GATHERING_ACTION_COSTS.mine,
         actions: ['mine'],
       },
       slime: {
@@ -241,6 +260,7 @@ export function createInitialGameState(seed = 20260730): GameState {
       },
     },
     removedGeneratedEntities: {},
+    gatheringProgress: {},
     revealedTiles: {},
   };
 

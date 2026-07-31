@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
   availableActionsAt,
+  availableContextActionsAt,
+  contextActionCardKey,
   createInitialGameState,
   generateChunk,
   generatedResourceAt,
@@ -67,6 +69,7 @@ describe('Torch simulation', () => {
     materializeGeneratedTrees(state, position!);
     const treeId = generatedTreeId(position!);
     expect(state.entities[treeId]?.actions).toEqual(['chop']);
+    expect(state.entities[treeId]?.gatheringActionCost).toBe(1);
 
     state.hero.position = { x: position!.x - 1, y: position!.y };
     const result = applyCommand(state, { type: 'interact', target: position! });
@@ -168,7 +171,7 @@ describe('Torch simulation', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 2, y: 2 };
 
-    const result = applyCommand(state, {
+    let result = applyCommand(state, {
       type: 'interact',
       target: { x: 3, y: 2 },
     });
@@ -183,7 +186,7 @@ describe('Torch simulation', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 2, y: 2 };
 
-    const result = applyCommand(state, { type: 'move', direction: 'east' });
+    let result = applyCommand(state, { type: 'move', direction: 'east' });
 
     expect(result.accepted).toBe(true);
     expect(result.state.hero.position).toEqual({ x: 2, y: 2 });
@@ -192,7 +195,7 @@ describe('Torch simulation', () => {
     expect(result.events.some((event) => event.type === 'action-resolved' && event.action === 'chop')).toBe(true);
   });
 
-  it('defaults a blocked move into an enemy to attack and exposes the action option', () => {
+  it('defaults a blocked move into an enemy to the strongest ready ability', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 4, y: 2 };
 
@@ -204,10 +207,10 @@ describe('Torch simulation', () => {
 
     expect(result.accepted).toBe(true);
     expect(result.state.hero.position).toEqual({ x: 4, y: 2 });
-    expect(result.state.entities.slime.health).toBe(3);
+    expect(result.state.entities.slime.health).toBe(4);
     expect(result.state.entities.slime.alerted).toBe(true);
     expect(result.state.hero.health).toBe(9);
-    expect(result.events.some((event) => event.type === 'enemy-damaged')).toBe(true);
+    expect(result.events.some((event) => event.type === 'ability-used' && event.abilityId === 'ability.avatar')).toBe(true);
   });
 
   it('resolves an explicit typed action through the same validation path', () => {
@@ -223,6 +226,155 @@ describe('Torch simulation', () => {
     expect(result.accepted).toBe(true);
     expect(result.state.hero.inventory.ore).toBe(1);
     expect(result.state.entities['resource-ore']).toBeUndefined();
+  });
+
+  it('projects gathering context into a single-action card', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 2, y: 2 };
+
+    const cards = availableContextActionsAt(state, { x: 3, y: 2 });
+
+    expect(cards).toEqual([
+      expect.objectContaining({
+        id: 'context:entity:resource-tree:chop',
+        label: 'Chop',
+        source: 'entity',
+        action: { kind: 'chop', entityId: 'resource-tree', target: { x: 3, y: 2 } },
+      }),
+    ]);
+  });
+
+  it('projects equipped abilities into combat cards and marks cooldowns', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    state.hero.abilityCooldowns['ability.sunder'] = 2;
+
+    const cards = availableContextActionsAt(state, { x: 5, y: 2 });
+
+    expect(cards.map((card) => card.abilityId)).toEqual([
+      'ability.bash',
+      'ability.sunder',
+      'ability.avatar',
+    ]);
+    expect(cards[1]).toEqual(expect.objectContaining({
+      disabledReason: 'Ready in 2 actions.',
+      cooldownRemaining: 2,
+    }));
+    expect(cards[0]?.action).toEqual({
+      kind: 'ability',
+      abilityId: 'ability.bash',
+      entityId: 'slime',
+      target: { x: 5, y: 2 },
+    });
+  });
+
+  it('keeps ability card identity stable when the adjacent enemy target changes', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    state.entities['second-slime'] = {
+      ...state.entities.slime,
+      id: 'second-slime',
+      name: 'Second Slime',
+      position: { x: 4, y: 3 },
+    };
+
+    const firstTargetCards = availableContextActionsAt(state, { x: 5, y: 2 });
+    const secondTargetCards = availableContextActionsAt(state, { x: 4, y: 3 });
+
+    expect(firstTargetCards.map(contextActionCardKey)).toEqual(secondTargetCards.map(contextActionCardKey));
+    expect(firstTargetCards[0]?.action.target).not.toEqual(secondTargetCards[0]?.action.target);
+  });
+
+  it('resolves an equipped ability and advances its cooldown deterministically', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    const result = applyCommand(state, {
+      type: 'action',
+      action: {
+        kind: 'ability',
+        abilityId: 'ability.sunder',
+        entityId: 'slime',
+        target: { x: 5, y: 2 },
+      },
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.entities.slime.health).toBe(1);
+    expect(result.state.hero.abilityCooldowns['ability.sunder']).toBe(3);
+    expect(result.events.some((event) => event.type === 'ability-used' && event.abilityId === 'ability.sunder')).toBe(true);
+
+    const afterOneTurn = applyCommand(result.state, { type: 'wait' });
+    expect(afterOneTurn.state.hero.abilityCooldowns['ability.sunder']).toBe(2);
+    const afterTwoTurns = applyCommand(afterOneTurn.state, { type: 'wait' });
+    expect(afterTwoTurns.state.hero.abilityCooldowns['ability.sunder']).toBe(1);
+    const afterThreeTurns = applyCommand(afterTwoTurns.state, { type: 'wait' });
+    expect(afterThreeTurns.state.hero.abilityCooldowns['ability.sunder']).toBe(0);
+  });
+
+  it('applies the Knight ability effects from the Trinket rules', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    state.entities.slime.health = 8;
+    state.entities.slime.block = 5;
+
+    const bash = applyCommand(state, {
+      type: 'action',
+      action: { kind: 'ability', abilityId: 'ability.bash', entityId: 'slime', target: { x: 5, y: 2 } },
+    });
+    expect(bash.state.entities.slime.health).toBe(6);
+    expect(bash.state.entities.slime.stunnedActions).toBe(0);
+    expect(bash.state.hero.health).toBe(10);
+
+    const sunder = applyCommand(bash.state, {
+      type: 'action',
+      action: { kind: 'ability', abilityId: 'ability.sunder', entityId: 'slime', target: { x: 5, y: 2 } },
+    });
+    expect(sunder.state.entities.slime.health).toBe(3);
+    expect(sunder.state.entities.slime.block).toBe(2);
+
+    const avatarState = createInitialGameState(1234);
+    avatarState.hero.position = { x: 4, y: 2 };
+    avatarState.hero.block = 3;
+    const avatar = applyCommand(avatarState, {
+      type: 'action',
+      action: { kind: 'ability', abilityId: 'ability.avatar', entityId: 'slime', target: { x: 5, y: 2 } },
+    });
+    expect(avatar.state.hero.activeAbilityEffects).toEqual([
+      expect.objectContaining({
+        abilityId: 'ability.avatar',
+        kind: 'holy-damage-from-block',
+        amount: 3,
+        remainingActions: 2,
+      }),
+    ]);
+  });
+
+  it('routes ability loadout changes through a non-turn simulation command', () => {
+    const state = createInitialGameState(1234);
+    const result = applyCommand(state, {
+      type: 'equip-ability',
+      slot: 'basic',
+      abilityId: 'ability.bash',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.state.turn).toBe(state.turn);
+    expect(result.state.hero.equippedAbilities.basic).toBe('ability.bash');
+    expect(result.state.hero.abilityCooldowns['ability.bash']).toBe(0);
+    expect(result.events).toContainEqual({
+      type: 'ability-equipped',
+      slot: 'basic',
+      abilityId: 'ability.bash',
+    });
+
+    const invalid = applyCommand(result.state, {
+      type: 'equip-ability',
+      slot: 'basic',
+      abilityId: 'ability.avatar',
+    });
+    expect(invalid.accepted).toBe(false);
+    expect(invalid.state.hero.equippedAbilities.basic).toBe('ability.bash');
+    expect(invalid.state.turn).toBe(result.state.turn);
   });
 
   it('returns the Hero to the bound location after death without clearing inventory', () => {

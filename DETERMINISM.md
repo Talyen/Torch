@@ -17,7 +17,7 @@ Example:
 ```json
 {
   "seed": 1234,
-  "generationVersion": 1,
+  "generationVersion": 6,
   "commands": [
     { "type": "move", "direction": "east" },
     { "type": "move", "direction": "east" },
@@ -35,6 +35,9 @@ Example:
   world seed and coordinates. Never use `Math.random()` for a game outcome.
 - Commands are resolved in order. A rejected command still produces a
   deterministic result and must not advance the turn.
+- Loadout changes are also typed commands. Equipping an ability is validated by
+  the simulation and changes the replayed state without consuming a turn or
+  running enemy responses.
 - A blocked cardinal move into an adjacent actionable entity resolves that
   entity's default action. The explicit `action` command and
   `availableActionsAt()` use the same validation path, so future action-choice

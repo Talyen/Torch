@@ -16,11 +16,11 @@ generated asset paths rely on the development server.
 
 ## Publishing
 
-Torch uses a solo-developer, direct-to-`main` workflow by default. After
-reviewing the intended diff and running `npm run verify`, commit the change on
-`main` and push it with `git push origin main`. GitHub Actions is the hosted
-safety gate. Use a branch or pull request only for an explicitly requested
-review boundary, risky experiment, or outside collaboration.
+The default handoff is a verified working tree for the user to review. Agents
+must not stage, commit, push, create branches, or open pull requests unless the
+user explicitly requests that publishing action. When publishing is requested,
+the solo-developer default is a direct push to `main`; GitHub Actions remains
+the hosted safety gate.
 
 ## Verification
 

@@ -4,7 +4,7 @@ import {
   findAdjacentResource,
   latestMessage,
 } from '../sim';
-import type { ActionRequest, Command, Direction, GameState, SimEvent } from '../sim';
+import type { AbilitySlotId, ActionRequest, Command, Direction, GameState, SimEvent } from '../sim';
 import { devFrameMonitor } from '../dev/frame-monitor';
 
 export type SessionListener = (state: GameState, events: SimEvent[]) => void;
@@ -46,7 +46,7 @@ export class GameSession {
     const result = devFrameMonitor.measure('simulation', () => applyCommand(this._state, command));
     this._state = result.state;
     this.lastEvents = result.events;
-    this.listeners.forEach((listener) => listener(this._state, this.lastEvents));
+    this.notifyListeners();
   }
 
   public move(direction: Direction): void {
@@ -68,6 +68,14 @@ export class GameSession {
 
   public performAction(action: ActionRequest): void {
     this.dispatch({ type: 'action', action });
+  }
+
+  public equipAbility(slot: AbilitySlotId, abilityId: string): void {
+    this.dispatch({ type: 'equip-ability', slot, abilityId });
+  }
+
+  private notifyListeners(): void {
+    this.listeners.forEach((listener) => listener(this._state, this.lastEvents));
   }
 }
 

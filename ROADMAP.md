@@ -21,7 +21,8 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Establish browser smoke testing with Playwright.
 - [x] Add a responsive React UI overlay shell with a minimal menu.
 - [x] Add a UI-only Inventory prototype with category tabs, sorting, square item cells, and Item Detail.
-- [x] Add first-pass Settings plus dedicated Hero, Equipment, and Ability screens.
+- [x] Add first-pass Settings plus dedicated Hero, consolidated Inventory/Gear/Tools, and Ability screens.
+- [x] Add a read-only explored-terrain Map screen with a relative Hero marker.
 - [x] Add native-ratio Bash, Sunder, and Avatar ability artwork to the asset pipeline.
 - [x] Add a minimal asset/content manifest convention.
 - [x] Document the development verification workflow and deterministic replay contract.
@@ -36,6 +37,9 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add disposition-driven enemy response after the Hero.
 - [x] Add one tree, one ore node, and basic gathering actions.
 - [x] Resolve context actions for blocked movement (attack, chop, and mine).
+- [x] Make resource gathering a single Chop/Mine action (with a configurable cost field retained for future work actions).
+- [x] Add a contextual Action Hand with responsive 3:4 cards for gathering and combat.
+- [x] Add typed starter ability actions with cooldowns and deterministic combat resolution.
 - [x] Add a simple homestead location and bound respawn point.
 - [x] Add seeded grassland with interactive tree groves, clear traversal corridors, bright mountain regions, and ore on every walkable mountain neighbor.
 - [ ] Save, reload, die, and respawn deterministically.
@@ -54,7 +58,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 ## Phase 3 — RPG depth
 
 - [ ] Hero classes and class-specific starting choices.
-- [ ] Experience, levels, attributes, spells, and abilities (starter slot UI exists; simulation effects and persistence remain).
+- [ ] Experience, levels, attributes, spells, and expanded abilities (starter ability effects and cooldowns exist; progression and durable loadout saves remain).
 - [ ] Equipment progression, enchantments, and item identification where appropriate.
 - [ ] More enemies, hazards, resources, and environmental interactions.
 - [ ] Hand-authored quests and mystery content.

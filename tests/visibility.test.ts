@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   captureVisibilitySnapshot,
   directionalVisibilityProgress,
+  entityVisibilityAlpha,
+  fogAlphaForVisibility,
   REMEMBERED_TILE_MIX,
+  interpolatedVisibilityLevel,
   visibilityChanged,
   visibilityColor,
   visibilityLevel,
@@ -44,5 +47,23 @@ describe('visibility presentation helpers', () => {
     expect(trailingTile).toBeGreaterThan(leadingTile);
     expect(leadingTile).toBe(0);
     expect(directionalVisibilityProgress(previousHero, currentHero, { x: 4, y: 2 }, 1)).toBe(1);
+  });
+
+  it('keeps newly revealed entities hidden until the fog reaches their tile', () => {
+    const beforeState = createInitialGameState(1234);
+    const afterState = applyCommand(beforeState, { type: 'move', direction: 'east' }).state;
+    const before = captureVisibilitySnapshot(beforeState);
+    const after = captureVisibilitySnapshot(afterState);
+    const newlyRevealed = { x: 4, y: 2 };
+
+    expect(interpolatedVisibilityLevel(before, after, newlyRevealed, 0)).toBe(0);
+    expect(entityVisibilityAlpha(interpolatedVisibilityLevel(before, after, newlyRevealed, 0))).toBe(0);
+    expect(entityVisibilityAlpha(interpolatedVisibilityLevel(before, after, newlyRevealed, 1))).toBe(1);
+  });
+
+  it('maps the three visibility states to stable fog alpha values', () => {
+    expect(fogAlphaForVisibility(0)).toBeGreaterThan(fogAlphaForVisibility(1));
+    expect(fogAlphaForVisibility(1)).toBeGreaterThan(fogAlphaForVisibility(2));
+    expect(fogAlphaForVisibility(2)).toBe(0);
   });
 });

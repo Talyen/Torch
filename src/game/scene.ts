@@ -2,11 +2,9 @@ import Phaser from 'phaser';
 import {
   entityFootprint,
   footprintPositions,
-  isTileRevealed,
   positionKey,
   samePosition,
   tileAt,
-  TORCH_RADIUS,
 } from '../sim';
 import type { GameState, Position, SimEvent } from '../sim';
 import { heroAssets } from '../content/hero-assets';
@@ -16,24 +14,25 @@ import { tileSizeForViewport, viewRadiusForViewport } from './layout';
 import { gameSession } from './session';
 import {
   captureVisibilitySnapshot,
-  directionalVisibilityProgress,
+  entityVisibilityAlpha,
+  fogAlphaForVisibility,
+  interpolatedVisibilityLevel,
   visibilityChanged,
-  visibilityColor,
-  visibilityLevel,
 } from './visibility';
 import type { VisibilitySnapshot } from './visibility';
+import {
+  SHOW_GRID_EVENT,
+  readShowGridPreference,
+} from './presentation-settings';
 
 const COLORS = {
-  grass: 0x345f3b,
-  mountain: 0x66717d,
+  grass: 0x789f55,
+  mountain: 0x7c8992,
   grid: 0x3a4a48,
-  visibilitySweep: 0xf2c463,
-  unseen: 0x151719,
-  remembered: 0x111722,
+  fog: 0x151719,
   enemy: 0xe86a67,
   tree: 0x79bd70,
   ore: 0xb8c9d4,
-  homestead: 0xf2a85c,
 };
 
 interface EntityMotion {
@@ -45,6 +44,8 @@ type EntityToken = Phaser.GameObjects.Graphics | Phaser.GameObjects.Image;
 
 export class TorchScene extends Phaser.Scene {
   private board!: Phaser.GameObjects.Graphics;
+  private fogLayer!: Phaser.GameObjects.Container;
+  private fogTiles: Phaser.GameObjects.Rectangle[] = [];
   private heroImage!: Phaser.GameObjects.Image;
   private entityTokens = new Map<string, EntityToken>();
   private visualEntityPositions = new Map<string, Position>();
@@ -64,6 +65,9 @@ export class TorchScene extends Phaser.Scene {
   private tileCache = new Map<string, ReturnType<typeof tileAt>>();
   private tileCacheSeed?: number;
   private entityTokenTileSize?: number;
+  private showGrid = false;
+  private terrainDrawKey?: string;
+  private fogDrawKey?: string;
 
   public constructor() {
     super('torch-world');
@@ -76,6 +80,11 @@ export class TorchScene extends Phaser.Scene {
 
   public create(): void {
     this.board = this.add.graphics();
+    // Fog tiles are mounted once and updated in place. Clearing and redrawing
+    // one large Graphics object during a reveal was the source of the WebGL
+    // one-frame pops we saw around newly revealed trees and terrain.
+    this.fogLayer = this.add.container(0, 0).setDepth(0.5);
+    this.showGrid = readShowGridPreference();
     this.textures.get('hero-knight-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.textures.get('enemy-slime-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.heroImage = this.add
@@ -90,6 +99,7 @@ export class TorchScene extends Phaser.Scene {
       : new ResizeObserver(() => this.resizeToViewport());
     this.resizeObserver?.observe(this.game.canvas.parentElement ?? this.game.canvas);
     window.addEventListener('resize', this.resizeToViewport);
+    window.addEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer.x, pointer.y);
@@ -117,6 +127,7 @@ export class TorchScene extends Phaser.Scene {
       this.heroTween?.stop();
       this.resizeObserver?.disconnect();
       window.removeEventListener('resize', this.resizeToViewport);
+      window.removeEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
     });
 
     this.resizeToViewport();
@@ -124,6 +135,12 @@ export class TorchScene extends Phaser.Scene {
   }
 
   private handleScaleResize = (): void => {
+    this.redraw(false);
+  };
+
+  private handleShowGridChange = (event: Event): void => {
+    const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+    this.showGrid = enabled ?? readShowGridPreference();
     this.redraw(false);
   };
 
@@ -238,7 +255,9 @@ export class TorchScene extends Phaser.Scene {
     this.heroTween = this.tweens.add({
       targets: [this.movementProgress, this.visibilityProgress],
       value: 1,
-      duration: 180,
+      // Keep the action boundary discrete while giving the Torch reveal a
+      // little more time to breathe between tiles.
+      duration: 240,
       ease: 'Linear',
       onUpdate: () => this.renderMovementFrame(previousHero ?? hero, hero, previousVisibility, currentVisibility),
       onComplete: () => {
@@ -266,15 +285,25 @@ export class TorchScene extends Phaser.Scene {
     devFrameMonitor.measure('scene.render', () => {
       const tileSize = this.tileSize();
       const baseCamera = this.boardBaseCamera ?? previousHero;
-      if (forceBoardRedraw || this.visibilityProgress.value < 1) {
-        this.drawBoardFrame(previousVisibility, currentVisibility, this.visibilityProgress.value, baseCamera, tileSize);
-      } else {
-        this.positionBoard(baseCamera, tileSize);
-      }
+      this.renderBoardLayers(
+        previousVisibility,
+        currentVisibility,
+        this.visibilityProgress.value,
+        baseCamera,
+        tileSize,
+        forceBoardRedraw,
+      );
       for (const [entityId, motion] of this.entityMotions) {
         this.visualEntityPositions.set(entityId, interpolatePosition(motion.from, motion.to, progress));
       }
-      this.positionEntityTokens(gameSession.state, tileSize, false);
+      this.positionEntityTokens(
+        gameSession.state,
+        tileSize,
+        false,
+        previousVisibility,
+        currentVisibility,
+        this.visibilityProgress.value,
+      );
       this.positionHeroImage(tileSize);
     });
   }
@@ -301,60 +330,142 @@ export class TorchScene extends Phaser.Scene {
     this.boardBaseCamera = { ...baseCamera };
     const sourceVisibility = previousVisibility ?? captureVisibilitySnapshot(state);
     const targetVisibility = currentVisibility ?? captureVisibilitySnapshot(state);
-    this.drawBoardFrame(sourceVisibility, targetVisibility, visibilityProgress, baseCamera, tileSize);
-    this.positionEntityTokens(state, tileSize, true);
+    this.renderBoardLayers(sourceVisibility, targetVisibility, visibilityProgress, baseCamera, tileSize, false);
+    this.positionEntityTokens(state, tileSize, true, sourceVisibility, targetVisibility, visibilityProgress);
     this.positionHeroImage(tileSize);
   }
 
-  private drawBoardFrame(
+  private renderBoardLayers(
+    previousVisibility: VisibilitySnapshot,
+    currentVisibility: VisibilitySnapshot,
+    progress: number,
+    baseCamera: Position,
+    tileSize: number,
+    forceRedraw: boolean,
+  ): void {
+    const terrainKey = this.terrainFrameKey(baseCamera, tileSize);
+    if (forceRedraw || this.terrainDrawKey !== terrainKey) {
+      this.drawTerrainFrame(baseCamera, tileSize);
+      this.terrainDrawKey = terrainKey;
+    }
+
+    const fogKey = this.fogFrameKey(previousVisibility, currentVisibility, progress, baseCamera, tileSize);
+    if (forceRedraw || progress < 1 || this.fogDrawKey !== fogKey) {
+      this.drawFogFrame(previousVisibility, currentVisibility, progress, baseCamera, tileSize);
+      this.fogDrawKey = fogKey;
+    } else {
+      this.positionBoard(baseCamera, tileSize);
+    }
+  }
+
+  private drawTerrainFrame(baseCamera: Position, tileSize: number): void {
+    const state = gameSession.state;
+    const viewRadius = viewRadiusForViewport(this.scale.width, this.scale.height, tileSize);
+    this.positionBoard(baseCamera, tileSize);
+    this.board.clear();
+
+    for (let y = baseCamera.y - viewRadius.y - 1; y <= baseCamera.y + viewRadius.y + 1; y += 1) {
+      for (let x = baseCamera.x - viewRadius.x - 1; x <= baseCamera.x + viewRadius.x + 1; x += 1) {
+        const position = { x, y };
+        const screen = this.tileScreenPosition(position, tileSize, baseCamera);
+        const baseColor = this.tileColor(this.cachedTileAt(state.seed, position));
+        this.board.fillStyle(baseColor, 1);
+        this.board.fillRect(screen.x, screen.y, tileSize, tileSize);
+      }
+    }
+  }
+
+  private drawFogFrame(
     previousVisibility: VisibilitySnapshot,
     currentVisibility: VisibilitySnapshot,
     progress: number,
     baseCamera: Position,
     tileSize: number,
   ): void {
-    const state = gameSession.state;
-    const hero = state.hero.position;
     const viewRadius = viewRadiusForViewport(this.scale.width, this.scale.height, tileSize);
     this.positionBoard(baseCamera, tileSize);
-    this.board.clear();
+    let tileIndex = 0;
 
-    for (let y = hero.y - viewRadius.y; y <= hero.y + viewRadius.y; y += 1) {
-      for (let x = hero.x - viewRadius.x; x <= hero.x + viewRadius.x; x += 1) {
+    for (let y = baseCamera.y - viewRadius.y - 1; y <= baseCamera.y + viewRadius.y + 1; y += 1) {
+      for (let x = baseCamera.x - viewRadius.x - 1; x <= baseCamera.x + viewRadius.x + 1; x += 1) {
         const position = { x, y };
         const screen = this.tileScreenPosition(position, tileSize, baseCamera);
-        const baseColor = this.tileColor(this.cachedTileAt(state.seed, position));
-        const fromVisibility = visibilityLevel(previousVisibility, position);
-        const toVisibility = visibilityLevel(currentVisibility, position);
-        const tileProgress = directionalVisibilityProgress(
-          previousVisibility.hero,
-          currentVisibility.hero,
-          position,
-          progress,
-        );
-        const visibility = fromVisibility + (toVisibility - fromVisibility) * tileProgress;
-        this.board.fillStyle(visibilityColor(baseColor, visibility, COLORS.unseen, COLORS.remembered), 1);
-        this.board.fillRect(screen.x, screen.y, tileSize - 1, tileSize - 1);
-
-        const gridAlpha = Math.max(0, Math.min(1, (visibility - 1.25) / 0.75)) * 0.32;
-        if (gridAlpha > 0) {
-          this.board.lineStyle(1, COLORS.grid, gridAlpha);
-          this.board.strokeRect(screen.x, screen.y, tileSize - 1, tileSize - 1);
-        }
-
-        const visibilityDelta = Math.abs(toVisibility - fromVisibility);
-        const sweepEdgeAlpha = visibilityDelta * Math.sin(Math.PI * tileProgress) * 0.42;
-        if (sweepEdgeAlpha > 0.015) {
-          this.board.lineStyle(2, COLORS.visibilitySweep, sweepEdgeAlpha);
-          this.board.strokeRect(screen.x + 1, screen.y + 1, tileSize - 3, tileSize - 3);
-        }
+        const visibility = interpolatedVisibilityLevel(previousVisibility, currentVisibility, position, progress);
+        const fogAlpha = fogAlphaForVisibility(visibility);
+        const gridAlpha = this.showGrid
+          ? Math.max(0, Math.min(1, (visibility - 1.25) / 0.75)) * 0.32
+          : 0;
+        const fogTile = this.fogTileAt(tileIndex, tileSize);
+        fogTile
+          .setPosition(screen.x + tileSize / 2, screen.y + tileSize / 2)
+          .setAlpha(fogAlpha)
+          .setVisible(fogAlpha > 0.005 || gridAlpha > 0);
+        fogTile.setStrokeStyle(1, COLORS.grid, gridAlpha);
+        tileIndex += 1;
       }
     }
+
+    for (let index = tileIndex; index < this.fogTiles.length; index += 1) {
+      this.fogTiles[index].setVisible(false);
+    }
+  }
+
+  private fogTileAt(index: number, tileSize: number): Phaser.GameObjects.Rectangle {
+    const existing = this.fogTiles[index];
+    if (existing) {
+      existing.setSize(tileSize, tileSize).setDisplaySize(tileSize, tileSize);
+      return existing;
+    }
+
+    const tile = this.add.rectangle(0, 0, tileSize, tileSize, COLORS.fog, 1);
+    this.fogLayer.add(tile);
+    this.fogTiles.push(tile);
+    return tile;
+  }
+
+  private terrainFrameKey(baseCamera: Position, tileSize: number): string {
+    const viewRadius = viewRadiusForViewport(this.scale.width, this.scale.height, tileSize);
+    return [
+      gameSession.state.seed,
+      gameSession.state.generationVersion,
+      baseCamera.x,
+      baseCamera.y,
+      tileSize,
+      viewRadius.x,
+      viewRadius.y,
+      this.showGrid,
+    ].join(':');
+  }
+
+  private fogFrameKey(
+    previousVisibility: VisibilitySnapshot,
+    currentVisibility: VisibilitySnapshot,
+    progress: number,
+    baseCamera: Position,
+    tileSize: number,
+  ): string {
+    return [
+      previousVisibility.hero.x,
+      previousVisibility.hero.y,
+      currentVisibility.hero.x,
+      currentVisibility.hero.y,
+      previousVisibility.revealedTiles.size,
+      currentVisibility.revealedTiles.size,
+      progress >= 1 ? 1 : 0,
+      baseCamera.x,
+      baseCamera.y,
+      tileSize,
+      this.showGrid,
+    ].join(':');
   }
 
   private positionBoard(baseCamera: Position, tileSize: number): void {
     const camera = this.cameraPosition ?? baseCamera;
     this.board.setPosition(
+      (baseCamera.x - camera.x) * tileSize,
+      (baseCamera.y - camera.y) * tileSize,
+    );
+    this.fogLayer.setPosition(
       (baseCamera.x - camera.x) * tileSize,
       (baseCamera.y - camera.y) * tileSize,
     );
@@ -394,7 +505,14 @@ export class TorchScene extends Phaser.Scene {
     return this.entityMotions.size > 0;
   }
 
-  private positionEntityTokens(state: GameState, tileSize: number, redrawTokens = false): void {
+  private positionEntityTokens(
+    state: GameState,
+    tileSize: number,
+    redrawTokens = false,
+    previousVisibility = captureVisibilitySnapshot(state),
+    currentVisibility = previousVisibility,
+    visibilityProgress = 1,
+  ): void {
     const visibleEntityIds = new Set<string>();
 
     for (const [entityId, entity] of Object.entries(state.entities)) {
@@ -423,7 +541,17 @@ export class TorchScene extends Phaser.Scene {
       } else {
         token.setPosition(screen.x, screen.y);
       }
-      token.setVisible(this.shouldShowEntity(state, entity, entityId));
+      const alpha = this.calculateEntityVisibilityAlpha(
+        entity,
+        previousVisibility,
+        currentVisibility,
+        visibilityProgress,
+      );
+      token.setAlpha(alpha);
+      // Keep the token mounted while it dissolves. Toggling the display-list
+      // visibility at the reveal threshold can produce a one-frame pop in
+      // WebGL, especially while the fog Graphics layer is being rebuilt.
+      token.setVisible(true);
     }
 
     for (const [entityId, token] of this.entityTokens) {
@@ -444,14 +572,23 @@ export class TorchScene extends Phaser.Scene {
     return this.add.graphics().setDepth(1);
   }
 
-  private shouldShowEntity(state: GameState, entity: GameState['entities'][string], entityId: string): boolean {
-    const motion = this.entityMotions.get(entityId);
+  private calculateEntityVisibilityAlpha(
+    entity: GameState['entities'][string],
+    previousVisibility: VisibilitySnapshot,
+    currentVisibility: VisibilitySnapshot,
+    visibilityProgress: number,
+  ): number {
+    if (entity.kind === 'homestead') return 0;
+
+    const motion = this.entityMotions.get(entity.id);
     const positions = motion ? [entity.position, motion.from] : [entity.position];
-    return positions.some((position) => footprintPositions(position, entityFootprint(entity)).some((tile) => {
-      if (!isTileRevealed(state, tile)) return false;
-      const distanceSquared = (tile.x - state.hero.position.x) ** 2 + (tile.y - state.hero.position.y) ** 2;
-      return distanceSquared <= TORCH_RADIUS ** 2 || samePosition(tile, state.hero.position);
-    }));
+    const level = positions
+      .flatMap((position) => footprintPositions(position, entityFootprint(entity)))
+      .reduce((highest, tile) => Math.max(
+        highest,
+        interpolatedVisibilityLevel(previousVisibility, currentVisibility, tile, visibilityProgress),
+      ), 0);
+    return entityVisibilityAlpha(level);
   }
 
   private positionHeroImage(tileSize: number, visualHero = this.visualHeroPosition ?? gameSession.state.hero.position): void {
@@ -527,8 +664,8 @@ export class TorchScene extends Phaser.Scene {
       return;
     }
 
-    target.lineStyle(2, COLORS.homestead, 1);
-    target.strokeRoundedRect(0, 0, width, height, cornerRadius);
+    // The homestead remains in simulation state for respawn and persistence,
+    // but it is intentionally not rendered as a world-space marker yet.
   }
 }
 

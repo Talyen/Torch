@@ -40,10 +40,14 @@ The simulation core must not import Phaser, browser APIs, Electron, Capacitor, o
 
 The game is discrete even when presentation includes movement or spell animations.
 
-1. An input adapter produces a command such as `MoveNorth`, `Chop`, or `CastSpell`.
+1. An input adapter produces a typed command such as movement, gathering, an
+   explicit action, waiting, or an out-of-turn loadout change.
 2. The simulation validates the command against the current state.
-3. The command consumes one or more action units.
-4. The Hero, nearby enemies, hazards, and other active actors resolve in deterministic order.
+3. Turn-consuming commands consume one or more action units; state commands
+   such as equipping an ability update the cloned state without advancing the
+   turn or running enemy responses.
+4. The Hero, nearby enemies, hazards, and other active actors resolve in
+   deterministic order for turn-consuming commands.
 5. The simulation emits state changes and presentation events.
 6. The client animates the result and accepts the next command.
 
@@ -87,28 +91,42 @@ The simulation decides what is visible and lit. Phaser decides how that informat
 
 Visibility transition math is kept in the renderer-facing pure module
 `src/game/visibility.ts`: it snapshots action-boundary visibility, compares
-snapshots, and interpolates fog colors without importing Phaser. The scene owns
+snapshots, and interpolates fog levels without importing Phaser. The scene owns
 only the bounded draw and tween orchestration. A visibility-changing move first
 renders the previous mask, then interpolates toward the new mask; it never
-briefly draws the destination mask before the tween starts. When visibility is
-unchanged, movement translates the existing board surface instead of rebuilding
-its Graphics geometry; entity token geometry is rebuilt only when the tile scale
-changes.
+briefly draws the destination mask before the tween starts. Terrain is rendered
+as a cached base layer and a dedicated Phaser fog container holds a small pool
+of stable rectangle tiles for the charcoal overlay. The pool updates position,
+alpha, and optional grid stroke in place; it does not clear and rebuild display
+list geometry during a reveal. This deliberately favors a readable, tile-aligned
+edge over unstable sub-tile gradients or a WebGL-only filter. Terrain geometry
+is rebuilt only when the camera tile, viewport, tile size, seed, or grid
+preference changes; the fog tile pool is reused for every frame. Both layers
+cover only the viewport plus a one-tile margin, so the fixed-size generated-
+entity ring is not mistaken for a second visibility or world-streaming
+authority. The optional Show Grid presentation preference is a browser-side
+setting and never enters simulation
+state.
 
 The game board is a full-screen Phaser canvas. Application UI mounts in a sibling `#ui-root` overlay owned by React. This keeps inventory, settings, quest journals, crafting, talents, equipment, and modal flows in semantic DOM while Phaser owns world-space presentation and effects. A component source system such as shadcn/ui may be added selectively for those screens, but it must not become the simulation authority.
 
-The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Equipment action, Abilities action, and Main Menu action. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
+The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Abilities action, Map action, and Main Menu action. Inventory opens one shared surface with Inventory, Gear, and Tools categories; Gear uses paper-doll slots and Tools uses dedicated square loadout slots with selector submenus. The Map screen fills its dominant viewport with a responsive grid of square cells, expanding the rendered bounds with unexplored cells whenever the explored bounds do not match the viewport aspect ratio, and keeps a minimum-size Hero token at the Hero's world-relative position; it is a presentation surface over `GameState.revealedTiles`, not a second map authority. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
+
+The gameplay HUD also exposes a contextual Action Hand above the HP rail. `src/sim/context-actions.ts` projects one focused adjacent target into stable, typed cards: equipped abilities for enemies and entity actions such as Chop or Mine for gatherables. `src/ui/context-action-hand.tsx` owns only the responsive DOM presentation: 3:4 artwork, dynamic fan geometry, hover/focus states, cooldown badges, a short card-play animation, and action callbacks. Card identity is keyed to the ability or action type rather than the current target, so retargeting an unchanged ability card does not replay its entrance animation; genuinely new cards animate as a reflow. The hand is hidden while menus are open and never replaces the simulation's blocked-movement default action.
 
 The main menu is intentionally reserved for secondary destinations such as
-Crafting, Journal, Talents, and Settings; Hero, Inventory, Equipment, and
-Abilities are opened from their dedicated HUD actions. Hero details keep native-ratio art and Stats side
-by side at every orientation and target no scrolling in normal device
-viewports. Equipment and Abilities each have a dedicated centered screen with
-compact slots. Slot selection replaces that screen's slot view with an inline
-compatible-item or ability picker, so the player does not lose context by being
-sent to a separate inventory flow. The three starter ability definitions use
-stable IDs and native 3:4 art variants; gameplay effects and durable loadout
-state remain simulation/save work.
+Crafting, Journal, Talents, and Settings; Hero, the shared Inventory/Gear/Tools
+surface, and Abilities are opened from their dedicated HUD actions. Hero details
+keep native-ratio art and a single-column Stats list beside it at every
+orientation and target no scrolling in normal device viewports. Gear presents a
+square-slot paper doll with Helm/Amulet, hands/Body, rings/Belt, and Boots
+arranged around the Hero silhouette. Tools presents square Axe/Pickaxe slots.
+Clicking a gear or tool slot or an ability card transitions to a dedicated
+selector submenu with a grid of compatible artwork; choosing an item immediately
+returns to the loadout. The three starter ability definitions use stable IDs and
+native 3:4 art variants; their effects and loadout changes resolve through typed
+simulation commands. Durable save serialization for that state remains future
+work.
 
 ## Input
 
@@ -148,10 +166,22 @@ Enemy combat stance is modeled as an `EnemyDisposition`: `neutral` entities
 remain passive until an action alerts them, while `hostile` entities can chase
 and attack during the enemy response phase. The current slice includes a
 neutral Forest Slime near the starting area. Context actions live in
-`src/sim/actions.ts`: moving into a blocked adjacent entity resolves its
-default action (attack, chop, or mine), while `availableActionsAt()` exposes a
-typed list for future multi-action choice UI. Attacking sets an enemy's
-`alerted` flag so a neutral enemy can respond on later action boundaries.
+`src/sim/actions.ts` and `src/sim/context-actions.ts`: moving into a blocked
+adjacent entity resolves its default action (attack, chop, or mine), while the
+context projection exposes a typed list for the React Action Hand. Abilities
+are also typed simulation actions with stable IDs, data-driven damage, effect,
+and cooldown rules in `src/sim/ability-rules.ts`, and Hero loadout / cooldown
+state. Basic abilities have no cooldown, Skills have a three-action cooldown,
+and Ultimates have a six-action cooldown. When a blocked move targets an enemy,
+the default shortcut chooses the strongest ready equipped ability in Ultimate >
+Skill > Basic order before falling back to Attack. Bash applies a one-action
+stun, Sunder halves the target's Block pool after dealing damage, and Avatar
+records Holy damage equal to the Hero's current Block for two actions. The
+session routes loadout changes through the same command resolver without
+consuming a turn. Attacking or using an ability sets an enemy's `alerted` flag so
+a neutral enemy can respond on later action boundaries. The React Abilities
+screen keeps click as loadout selection and uses a 520 ms pointer hold to open
+an accessible full-art detail dialog.
 Primary attributes are typed in `src/sim/stats.ts` and use a shared
 `PRIMARY_STAT_BUDGET` of 60 for Heroes and enemies.
 The starting Knight definition is `14 / 10 / 14 / 12 / 10`; the Forest Slime
@@ -176,8 +206,21 @@ authored grassland safety ring so the first few actions remain readable.
 Visibility transitions are rendered from immutable action-boundary snapshots. The
 Torch level is interpolated per tile and staggered along the Hero's movement
 vector, producing a directional reveal sweep for newly visible and remembered
-tiles rather than recoloring the entire board at once. Transitioning tiles get a
-brief gold edge highlight so the sweep is legible at normal movement speed.
+tiles rather than recoloring the entire board at once. The scene gives the
+movement-linked sweep a slightly longer presentation window and updates the
+pooled fog rectangles in place. Entity tokens derive eased alpha from that same
+interpolated level and remain mounted while transparent, so a newly revealed
+tree or ore node dissolves in without display-list visibility churn or a
+one-frame pop. The homestead remains in simulation state as the
+bind/respawn location but is intentionally not rendered as a world-space marker
+until a player-facing indicator is designed.
+
+Gathering is also action-economy state, not a rendering shortcut. Trees and ore
+carry a configurable `gatheringActionCost` plus mutable
+`remainingGatheringActions`; the current defaults resolve Chop and Mine in one
+turn and immediately grant the resource. The fields remain in the state shape
+so a future work action can add staged gathering without changing command or
+save contracts.
 
 Content definitions should be validated at load time. Procedural systems should compose authored definitions rather than hide important game rules in opaque generator logic. Generated output must record the seed and relevant version so failures can be reproduced.
 
@@ -207,7 +250,7 @@ The on-screen development affordance is intentionally only the current FPS numbe
 
 ### Asset and nearby-content warmup
 
-The prototype does not currently stream or unload nearby art: the Knight texture is loaded during Phaser preload, and terrain plus simple entities are generated/drawn synchronously. Therefore a movement hitch at this stage is more likely to come from the immediate-mode Graphics redraw, browser scheduling/GC, renderer uploads, or development tooling than from an asset being fetched as it enters the view. The render loop now prewarms a one-ring margin of deterministic terrain and keeps entity tokens in their own presentation layer. During a tile tween, the board is translated as one surface and every entity token is repositioned from its previous tile to its new tile. When Torch visibility changes, the board performs a bounded redraw for the same 180 ms movement window so unexplored, remembered, and fully lit tile colors interpolate instead of snapping; when visibility is unchanged, no per-frame board redraw is needed.
+The prototype does not currently stream or unload nearby art: the Knight texture is loaded during Phaser preload, and terrain plus simple entities are generated/drawn synchronously. Therefore a movement hitch at this stage is more likely to come from the immediate-mode Graphics redraw, browser scheduling/GC, renderer uploads, or development tooling than from an asset being fetched as it enters the view. The render loop prewarms a one-ring margin of deterministic terrain and keeps entity tokens in their own presentation layer. During a tile tween, the cached board and fog surfaces are translated as one bounded viewport while every entity token is repositioned from its previous tile to its new tile. Terrain geometry is redrawn once when the camera tile changes; fog geometry is redrawn only for the visibility transition or a changed presentation key. A full RenderTexture or custom shader mask is intentionally deferred: the active presentation ring is fixed and small, so a GPU mask would add a WebGL-only path without reducing the current bounded work.
 
 As content grows, movement must never be the first place an asset is requested. The loading flow should build a manifest for all static art, fonts, audio, and UI textures needed for the first playable area and warm those assets behind an explicit loading screen. Deterministic terrain/chunk data should be memoized by `seed + generationVersion + chunkKey`; a small ring of chunks around the Hero should be generated and validated ahead of the active view, with the next ring expanded during idle time. Rendering should reuse pooled sprites/graphics objects and update visibility rather than create/destroy objects during a tile move. This preserves the user's preferred one-time startup cost while keeping future streaming bounded and deterministic.
 

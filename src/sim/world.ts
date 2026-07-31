@@ -4,7 +4,7 @@ import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
 import { heroDefinitions } from '../content/heroes';
 
-export const GENERATION_VERSION = 3;
+export const GENERATION_VERSION = 4;
 export const CHUNK_SIZE = 16;
 export const TORCH_RADIUS = 3;
 
@@ -51,7 +51,7 @@ function safeSpawnArea(position: Position): boolean {
   return Math.abs(position.x) <= 4 && Math.abs(position.y - 2) <= 4;
 }
 
-/** Broad seeded bands stay grass so forests and mountains leave routes around them. */
+/** Broad seeded bands stay grass so mountain regions leave routes around them. */
 function pathSignal(seed: number, position: Position): number {
   const phaseX = unitRandom(seed, 0, 0, 94) * Math.PI * 2;
   const phaseY = unitRandom(seed, 0, 0, 95) * Math.PI * 2;
@@ -65,12 +65,9 @@ export function tileAt(seed: number, position: Position): TileKind {
 
   const elevation = valueNoise(seed, position, 14, 11) * 0.72
     + valueNoise(seed, position, 6, 12) * 0.28;
-  const moisture = valueNoise(seed, position, 12, 21) * 0.7
-    + valueNoise(seed, position, 5, 22) * 0.3;
   const path = pathSignal(seed, position) < 0.14;
 
   if (!path && elevation > 0.76) return 'mountain';
-  if (!path && moisture > 0.39) return 'forest';
   return 'grass';
 }
 

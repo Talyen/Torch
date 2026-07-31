@@ -163,11 +163,10 @@ The current UI-only Inventory fixtures follow the same boundary in
 descriptions, and presentation icon IDs, while React maps those icon IDs to
 Lucide components. Content definitions do not import React or Lucide.
 
-Terrain generation uses smooth seeded value fields for broad elevation and
-moisture regions, then derives dense forest and mountain regions over a single
-grassland base. Seeded path bands keep grass corridors open so the larger biomes
-do not form traversal walls. Mountains are impassable terrain; grass and forest
-are walkable. Ore candidates are deterministic walkable tiles adjacent to
+Terrain generation uses smooth seeded elevation fields and derives mountain
+regions over a single vibrant grassland base. Seeded path bands keep grass
+corridors open so mountain regions do not form traversal walls. Mountains are
+impassable terrain and grass is walkable. Ore candidates are deterministic walkable tiles adjacent to
 mountains; the initial ore node is materialized from that rule while broader
 chunk/entity materialization remains future work. The spawn area is an authored
 grassland safety ring so the first few actions remain readable.

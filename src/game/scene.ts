@@ -24,8 +24,7 @@ import {
 import type { VisibilitySnapshot } from './visibility';
 
 const COLORS = {
-  grass: 0x263c2a,
-  forest: 0x183b2f,
+  grass: 0x345f3b,
   mountain: 0x414751,
   grid: 0x3a4a48,
   unseen: 0x151719,
@@ -482,8 +481,6 @@ export class TorchScene extends Phaser.Scene {
 
   private tileColor(kind: ReturnType<typeof tileAt>): number {
     switch (kind) {
-      case 'forest':
-        return COLORS.forest;
       case 'mountain':
         return COLORS.mountain;
       case 'grass':

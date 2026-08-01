@@ -38,10 +38,6 @@ export function positionKey(position: Position): string {
   return `${position.x},${position.y}`;
 }
 
-export function chunkKey(chunkX: number, chunkY: number): string {
-  return `${chunkX},${chunkY}`;
-}
-
 export function floorDiv(value: number, divisor: number): number {
   return Math.floor(value / divisor);
 }

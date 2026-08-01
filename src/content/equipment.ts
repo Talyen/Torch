@@ -12,11 +12,3 @@ export const equipmentSlots = [
 ] as const;
 
 export type EquipmentSlotId = (typeof equipmentSlots)[number]['id'];
-
-export function equipmentSlotLabel(slotId: EquipmentSlotId): string {
-  return equipmentSlots.find((slot) => slot.id === slotId)?.label ?? slotId;
-}
-
-export function isEquipmentSlot(slotId: string): slotId is EquipmentSlotId {
-  return equipmentSlots.some((slot) => slot.id === slotId);
-}

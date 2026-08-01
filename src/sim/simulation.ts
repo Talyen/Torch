@@ -1,11 +1,4 @@
-import {
-  addPosition,
-  directionDelta,
-  isCardinallyAdjacent,
-  manhattanDistance,
-  positionKey,
-  samePosition,
-} from './coords';
+import { addPosition, directionDelta, isCardinallyAdjacent, manhattanDistance, samePosition } from './coords';
 import { defaultActionForEnemy, defaultActionForEntity, resolveAction, type CombatEventContext } from './actions';
 import { blockingEntityAt, entityAt } from './entities';
 import { abilityActionDefinition, canEquipAbility } from './ability-rules';
@@ -14,7 +7,7 @@ import { applyLoadoutCommand } from './loadout';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
 import { advanceWorldJournal, claimWorldJournalReward, resolveWaypointPosition } from './journal';
 import { cloneSerializable } from './state';
-import type { Command, CommandResult, Direction, GameState, Position, SimEvent, WaypointStatus } from './types';
+import type { Command, CommandResult, Direction, GameState, Position, SimEvent, WaypointTarget } from './types';
 
 function directionToward(from: Position, to: Position): Direction | undefined {
   const dx = to.x - from.x;
@@ -42,16 +35,15 @@ function revealAroundWithEvent(state: GameState, center: Position, events: SimEv
   if (count > 0) events.push({ type: 'tiles-revealed', count });
 }
 
-function waypointStatusFor(state: GameState, target: Extract<Command, { type: 'set-waypoint' }>): WaypointStatus {
-  if (resolveWaypointPosition(state, target.target)) return 'active';
-  return target.target.kind === 'entity' ? 'removed' : 'unresolved';
+function waypointStatusFor(state: GameState, target: WaypointTarget) {
+  if (resolveWaypointPosition(state, target)) return 'active';
+  return target.kind === 'entity' ? 'removed' : 'unresolved';
 }
 
 function refreshWaypointStatus(state: GameState, events: SimEvent[]): void {
   const waypoint = state.journal.waypoint;
   if (!waypoint) return;
-  const position = resolveWaypointPosition(state, waypoint.target);
-  const nextStatus: WaypointStatus = position ? 'active' : waypoint.target.kind === 'entity' ? 'removed' : 'unresolved';
+  const nextStatus = waypointStatusFor(state, waypoint.target);
   if (nextStatus === waypoint.status) return;
   waypoint.status = nextStatus;
   events.push({ type: 'waypoint-changed', entryId: waypoint.entryId, status: nextStatus });
@@ -185,7 +177,7 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
       events.push({ type: 'blocked', reason: 'That Journal entry is not available yet.' });
       events.push({ type: 'message', text: 'That Journal entry is not available yet.' });
     } else {
-      const status = waypointStatusFor(next, command);
+      const status = waypointStatusFor(next, command.target);
       next.journal.waypoint = { entryId: command.entryId, target: command.target, status };
       events.push({ type: 'waypoint-changed', entryId: command.entryId, status });
       accepted = true;
@@ -319,8 +311,4 @@ function isStateOnlyCommand(command: Command): boolean {
 
 export function latestMessage(events: SimEvent[]): string | undefined {
   return [...events].reverse().find((event) => event.type === 'message')?.text;
-}
-
-export function isTileRevealed(state: GameState, position: Position): boolean {
-  return state.revealedTiles[positionKey(position)] === true;
 }

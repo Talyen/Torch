@@ -21,8 +21,6 @@ export type CraftBlockedReason =
 
 export type LoadoutSlotId = EquipmentSlotId | ToolSlotId;
 
-export type JournalEntryKind = 'quest' | 'mystery' | 'milestone';
-export type JournalScope = 'profile' | 'world';
 export type JournalEntryStatus =
   'locked' | 'active' | 'complete' | 'reward-ready' | 'claimed' | 'failed' | 'expired' | 'abandoned';
 

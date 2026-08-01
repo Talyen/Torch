@@ -6,8 +6,6 @@ export const stations = [
   },
 ] as const;
 
-export type StationId = (typeof stations)[number]['id'];
-
 export function stationDefinition(stationId: string): (typeof stations)[number] | undefined {
   return stations.find((station) => station.id === stationId);
 }

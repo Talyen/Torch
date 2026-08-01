@@ -9,7 +9,6 @@ import {
   stringAt,
 } from './save-validation';
 import { cloneSerializable } from './state';
-import { createInitialProfileJournalState } from './journal';
 import type { JournalEntryRuntime, JournalEntryStatus, ProfileJournalState } from './types';
 
 export const PROFILE_SAVE_SCHEMA_VERSION = 1 as const;
@@ -85,26 +84,12 @@ function journalAt(value: unknown, path: string): ProfileJournalState {
   };
 }
 
-export function createInitialProfileSave(profileId = 'profile:primary'): ProfileSaveV1 {
-  return { schemaVersion: PROFILE_SAVE_SCHEMA_VERSION, profileId, journal: createInitialProfileJournalState() };
-}
-
 export function createProfileSave(journal: ProfileJournalState, profileId = 'profile:primary'): ProfileSaveV1 {
   return { schemaVersion: PROFILE_SAVE_SCHEMA_VERSION, profileId, journal: cloneSerializable(journal) };
 }
 
 export function encodeProfileSave(save: ProfileSaveV1): string {
   return JSON.stringify(save);
-}
-
-export function decodeProfileSaveJson(serialized: string): ProfileSaveV1 {
-  let value: unknown;
-  try {
-    value = JSON.parse(serialized) as unknown;
-  } catch {
-    fail('profileSave', 'contains invalid JSON');
-  }
-  return decodeProfileSave(value);
 }
 
 export function decodeProfileSave(value: unknown): ProfileSaveV1 {

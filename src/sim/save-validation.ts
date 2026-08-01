@@ -22,7 +22,7 @@ export class SimulationDataValidationError extends Error {
   }
 }
 
-export type UnknownRecord = Record<string, unknown>;
+type UnknownRecord = Record<string, unknown>;
 
 const RESERVED_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const ABILITY_SLOTS = new Set<AbilitySlotId>(['basic', 'skill', 'ultimate']);

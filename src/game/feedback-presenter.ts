@@ -1,5 +1,5 @@
 import type { ActionBatch } from './session';
-import type { Position, SimEvent } from '../sim';
+import type { Position } from '../sim';
 import { ATTACK_MOTION } from './attack-motion';
 
 export type FeedbackKind = 'damage' | 'resource' | 'defeat';
@@ -70,8 +70,4 @@ export function feedbackRequestsForBatch(batch: ActionBatch): FeedbackRequest[] 
 export function feedbackAnnouncementForBatch(batch: ActionBatch): string | undefined {
   const announcements = feedbackRequestsForBatch(batch).map((request) => request.announcement);
   return announcements.length > 0 ? announcements.join(' ') : undefined;
-}
-
-export function isFeedbackEvent(event: SimEvent): boolean {
-  return event.type === 'attack-resolved' || event.type === 'resource-gathered';
 }

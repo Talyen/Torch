@@ -293,10 +293,6 @@ export function claimProfileJournalReward(
   return { state: next, accepted: true, unlockIds };
 }
 
-export function waypointTargetForEntry(entryId: string): WaypointTarget | undefined {
-  return journalEntryDefinition(entryId)?.location;
-}
-
 export function resolveWaypointPosition(
   state: GameState,
   target: WaypointTarget,

@@ -1,19 +1,12 @@
 import { equipmentSlots } from '../content/equipment';
 import { itemDefinition } from '../content/items';
-import { toolSlots } from '../content/tools';
 import type { EquipmentSlotId } from '../content/equipment';
-import type { ToolSlotId } from '../content/tools';
 import type { GameState, LoadoutCommand, LoadoutSlotId, SimEvent } from './types';
 
 const equipmentSlotIds = new Set<string>(equipmentSlots.map((slot) => slot.id));
-const toolSlotIds = new Set<string>(toolSlots.map((slot) => slot.id));
 
-export function isEquipmentLoadoutSlot(slot: string): slot is EquipmentSlotId {
+function isEquipmentLoadoutSlot(slot: string): slot is EquipmentSlotId {
   return equipmentSlotIds.has(slot);
-}
-
-export function isToolLoadoutSlot(slot: string): slot is ToolSlotId {
-  return toolSlotIds.has(slot);
 }
 
 export function equippedItemForSlot(state: GameState, slot: LoadoutSlotId): string | undefined {

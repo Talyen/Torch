@@ -305,7 +305,11 @@ function isStateOnlyCommand(command: Command): boolean {
     command.type === 'equip-ability' ||
     command.type === 'equip-item' ||
     command.type === 'unequip-item' ||
-    command.type === 'craft'
+    command.type === 'craft' ||
+    command.type === 'set-journal-focus' ||
+    command.type === 'set-waypoint' ||
+    command.type === 'clear-waypoint' ||
+    command.type === 'claim-journal-reward'
   );
 }
 

@@ -8,10 +8,12 @@ export function entityFootprint(entity: EntityState): Footprint {
 
 export function entityOccupiesPosition(entity: EntityState, position: Position): boolean {
   const footprint = entityFootprint(entity);
-  return position.x >= entity.position.x
-    && position.x < entity.position.x + footprint.width
-    && position.y >= entity.position.y
-    && position.y < entity.position.y + footprint.height;
+  return (
+    position.x >= entity.position.x &&
+    position.x < entity.position.x + footprint.width &&
+    position.y >= entity.position.y &&
+    position.y < entity.position.y + footprint.height
+  );
 }
 
 export function footprintPositions(origin: Position, footprint: Footprint): Position[] {

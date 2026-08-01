@@ -9,6 +9,10 @@ export const GENERATION_VERSION = 6;
 export const CHUNK_SIZE = 16;
 export const TORCH_RADIUS = 3;
 
+export function worldIdForSeed(seed: number): string {
+  return `world:${seed}`;
+}
+
 export interface GeneratedTile {
   position: Position;
   kind: TileKind;
@@ -28,16 +32,8 @@ function valueNoise(seed: number, position: Position, scale: number, salt: numbe
   const cellY = floorDiv(position.y, scale);
   const localX = smoothStep((position.x - cellX * scale) / scale);
   const localY = smoothStep((position.y - cellY * scale) / scale);
-  const top = lerp(
-    unitRandom(seed, cellX, cellY, salt),
-    unitRandom(seed, cellX + 1, cellY, salt),
-    localX,
-  );
-  const bottom = lerp(
-    unitRandom(seed, cellX, cellY + 1, salt),
-    unitRandom(seed, cellX + 1, cellY + 1, salt),
-    localX,
-  );
+  const top = lerp(unitRandom(seed, cellX, cellY, salt), unitRandom(seed, cellX + 1, cellY, salt), localX);
+  const bottom = lerp(unitRandom(seed, cellX, cellY + 1, salt), unitRandom(seed, cellX + 1, cellY + 1, salt), localX);
   return lerp(top, bottom, localY);
 }
 
@@ -57,8 +53,7 @@ function pathSignal(seed: number, position: Position): number {
 export function tileAt(seed: number, position: Position): TileKind {
   if (safeSpawnArea(position)) return 'grass';
 
-  const elevation = valueNoise(seed, position, 14, 11) * 0.72
-    + valueNoise(seed, position, 6, 12) * 0.28;
+  const elevation = valueNoise(seed, position, 14, 11) * 0.72 + valueNoise(seed, position, 6, 12) * 0.28;
   const path = pathSignal(seed, position) < 0.18;
 
   if (!path && elevation > 0.76) return 'mountain';
@@ -74,15 +69,14 @@ export type GeneratedResourceKind = 'ore';
 /** Every walkable tile directly beside mountain terrain contains ore by default. */
 export function generatedResourceAt(seed: number, position: Position): GeneratedResourceKind | undefined {
   if (!isTerrainWalkable(tileAt(seed, position))) return undefined;
-  const besideMountain = CARDINAL_OFFSETS.some((offset) => (
-    tileAt(seed, { x: position.x + offset.x, y: position.y + offset.y }) === 'mountain'
-  ));
+  const besideMountain = CARDINAL_OFFSETS.some(
+    (offset) => tileAt(seed, { x: position.x + offset.x, y: position.y + offset.y }) === 'mountain',
+  );
   return besideMountain ? 'ore' : undefined;
 }
 
 function groveSignal(seed: number, position: Position): number {
-  return valueNoise(seed, position, 16, 21) * 0.7
-    + valueNoise(seed, position, 8, 22) * 0.3;
+  return valueNoise(seed, position, 16, 21) * 0.7 + valueNoise(seed, position, 8, 22) * 0.3;
 }
 
 /** Forests are interactive tree entities layered over grass, never terrain kinds. */
@@ -149,12 +143,7 @@ export function findGeneratedResourcePosition(
   return undefined;
 }
 
-export function generateChunk(
-  seed: number,
-  chunkX: number,
-  chunkY: number,
-  chunkSize = CHUNK_SIZE,
-): GeneratedTile[] {
+export function generateChunk(seed: number, chunkX: number, chunkY: number, chunkSize = CHUNK_SIZE): GeneratedTile[] {
   const tiles: GeneratedTile[] = [];
   const startX = chunkX * chunkSize;
   const startY = chunkY * chunkSize;
@@ -179,6 +168,7 @@ export function createInitialGameState(seed = 20260730): GameState {
   const orePosition = findGeneratedResourcePosition(seed, heroPosition, 'ore') ?? { x: -3, y: 2 };
 
   const state: GameState = {
+    worldId: worldIdForSeed(seed),
     seed,
     generationVersion: GENERATION_VERSION,
     turn: 0,
@@ -254,6 +244,7 @@ export function createInitialGameState(seed = 20260730): GameState {
     },
     removedGeneratedEntities: {},
     gatheringProgress: {},
+    discoveries: {},
     revealedTiles: {},
   };
 

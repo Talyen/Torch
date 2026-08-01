@@ -33,9 +33,7 @@ function respawnHero(state: GameState, events: SimEvent[]): void {
 }
 
 function advanceEnemies(state: GameState, events: SimEvent[]): void {
-  const enemies = Object.values(state.entities).filter(
-    (entity) => entity.kind === 'enemy' && (entity.health ?? 0) > 0,
-  );
+  const enemies = Object.values(state.entities).filter((entity) => entity.kind === 'enemy' && (entity.health ?? 0) > 0);
 
   for (const enemy of enemies) {
     if (enemy.disposition === 'neutral' && !enemy.alerted) continue;
@@ -132,17 +130,23 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
           const blocker = blockingEntityAt(next, destination);
 
           if (blocker) {
-            const action = blocker.kind === 'enemy'
-              ? defaultActionForEnemy(next, blocker, destination)
-              : defaultActionForEntity(blocker);
+            const action =
+              blocker.kind === 'enemy'
+                ? defaultActionForEnemy(next, blocker, destination)
+                : defaultActionForEntity(blocker);
             if (action) {
-              accepted = resolveAction(next, typeof action === 'string'
-                ? {
-                    kind: action,
-                    entityId: blocker.id,
-                    target: { ...destination },
-                  }
-                : action, events, consumedAbilityIds);
+              accepted = resolveAction(
+                next,
+                typeof action === 'string'
+                  ? {
+                      kind: action,
+                      entityId: blocker.id,
+                      target: { ...destination },
+                    }
+                  : action,
+                events,
+                consumedAbilityIds,
+              );
             } else {
               events.push({ type: 'blocked', reason: `${blocker.name} blocks the way.` });
               events.push({ type: 'message', text: `${blocker.name} blocks the way.` });
@@ -170,11 +174,16 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
             events.push({ type: 'blocked', reason: 'There is nothing useful there.' });
             events.push({ type: 'message', text: 'There is no action available there.' });
           } else {
-            accepted = resolveAction(next, {
-              kind: action,
-              entityId: target.id,
-              target: { ...command.target },
-            }, events, consumedAbilityIds);
+            accepted = resolveAction(
+              next,
+              {
+                kind: action,
+                entityId: target.id,
+                target: { ...command.target },
+              },
+              events,
+              consumedAbilityIds,
+            );
           }
         }
         break;

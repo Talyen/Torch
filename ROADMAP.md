@@ -27,12 +27,16 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add a minimal asset/content manifest convention.
 - [x] Document the development verification workflow and deterministic replay contract.
 
+> Foundation work is complete; the remaining work below is the active Phase 1
+> vertical slice. The heading is retained so the historical foundation scope
+> remains visible while the roadmap wording is consolidated.
+
 ## Phase 1 — First playable vertical slice
 
 - [x] Generate a deterministic world around a Hero spawn point.
 - [x] Render an orthographic grid with responsive resizing.
 - [x] Reveal a Torch-centered visibility radius through fog of war.
-- [ ] Move cardinally by mouse, touch, keyboard, and a basic controller mapping.
+- [x] Move cardinally by mouse, touch, keyboard, and a basic controller mapping.
 - [x] Resolve one action per tile and pause after every tile.
 - [x] Add disposition-driven enemy response after the Hero.
 - [x] Add one tree, one ore node, and basic gathering actions.
@@ -42,8 +46,8 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add typed starter ability actions with cooldowns and deterministic combat resolution.
 - [x] Add a simple homestead location and bound respawn point.
 - [x] Add seeded grassland with interactive tree groves, clear traversal corridors, bright mountain regions, and ore on every walkable mountain neighbor.
-- [ ] Save, reload, die, and respawn deterministically.
-- [ ] Run the same seed and command transcript in automated tests.
+- [x] Save, reload, die, and respawn deterministically.
+- [x] Run the same seed and command transcript in automated tests.
 
 ## Phase 2 — Core survival and homestead loop
 

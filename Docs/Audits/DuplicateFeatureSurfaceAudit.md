@@ -29,13 +29,13 @@ overlay and Phaser scene as separate presentation owners.
 
 ## What counts as a duplicate here
 
-| Signal | Likely owner |
-| --- | --- |
-| Repeated menu/dialog shell, title/close/focus plumbing, or selector back path | `TorchDialog`/`TorchButton` via `src/ui/primitives.tsx`, with composition in `menu-overlay.tsx` |
-| Repeated inventory/equipment/ability choice grid scaffolding | A small local helper in `menu-overlay.tsx`, only after structural twinship and semantic differences are mapped |
-| Repeated empty/detail panel chrome | Existing semantic panel/card styles in `src/styles.css`/`src/index.css`; token-only work belongs in `DesignSystemConsistencyAudit.md` |
-| Repeated HUD action button markup | A typed local composition in `menu-overlay.tsx` if at least three actions truly share behavior and labels |
-| Repeated Action Hand card presentation | Keep in `context-action-hand.tsx`; combat/gathering card semantics and 3:4 art are intentionally distinct from collection grids |
+| Signal                                                                        | Likely owner                                                                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Repeated menu/dialog shell, title/close/focus plumbing, or selector back path | `TorchDialog`/`TorchButton` via `src/ui/primitives.tsx`, with composition in `menu-overlay.tsx`                                       |
+| Repeated inventory/equipment/ability choice grid scaffolding                  | A small local helper in `menu-overlay.tsx`, only after structural twinship and semantic differences are mapped                        |
+| Repeated empty/detail panel chrome                                            | Existing semantic panel/card styles in `src/styles.css`/`src/index.css`; token-only work belongs in `DesignSystemConsistencyAudit.md` |
+| Repeated HUD action button markup                                             | A typed local composition in `menu-overlay.tsx` if at least three actions truly share behavior and labels                             |
+| Repeated Action Hand card presentation                                        | Keep in `context-action-hand.tsx`; combat/gathering card semantics and 3:4 art are intentionally distinct from collection grids       |
 
 ## Not this audit
 

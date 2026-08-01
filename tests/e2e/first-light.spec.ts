@@ -16,8 +16,13 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   }
 
   await expect(page.locator('#game canvas')).toBeVisible();
-  await expect(page.getByTestId('dev-performance')).toBeVisible();
-  await expect(page.getByTestId('dev-performance')).toHaveText(/^\d+ FPS$/);
+  // The performance panel is intentionally development-only; production
+  // preview smoke proves the playable surface without relying on diagnostics.
+  const performancePanel = page.getByTestId('dev-performance');
+  if (await performancePanel.count()) {
+    await expect(performancePanel).toBeVisible();
+    await expect(performancePanel).toHaveText(/^\d+ FPS$/);
+  }
   await expect(page.getByTestId('hud-hero-button')).toBeVisible();
   await expect(page.getByTestId('hud-hero-button').locator('img')).toBeVisible();
   await expect(page.getByTestId('hud-hero-button').locator('img')).toHaveAttribute('src', /knight-hud\.png/);
@@ -31,14 +36,10 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('hud-abilities-button').locator('svg.lucide-sparkles')).toBeVisible();
   await expect(page.getByTestId('hud-map-button')).toHaveCount(0);
   await expect(page.getByTestId('menu-button')).toBeVisible();
-  const hudOrder = await page.locator('.hud-rail > button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')));
-  expect(hudOrder).toEqual([
-    'Open hero',
-    'Open inventory',
-    'Open gear',
-    'Open abilities',
-    'Open menu',
-  ]);
+  const hudOrder = await page
+    .locator('.hud-rail > button')
+    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')));
+  expect(hudOrder).toEqual(['Open hero', 'Open inventory', 'Open gear', 'Open abilities', 'Open menu']);
   await expect(page.getByRole('heading', { name: 'Torch' })).toHaveCount(0);
   await expect(page.getByTestId('seed')).toHaveCount(0);
   await expect(page.getByText('Latest', { exact: true })).toHaveCount(0);
@@ -180,7 +181,8 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   const equipmentFit = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('#torch-menu');
     const screen = document.querySelector<HTMLElement>('.gear-screen')?.getBoundingClientRect();
-    const slot = (id: string): DOMRect | undefined => document.querySelector<HTMLElement>(`[data-testid="equipment-slot-${id}"]`)?.getBoundingClientRect();
+    const slot = (id: string): DOMRect | undefined =>
+      document.querySelector<HTMLElement>(`[data-testid="equipment-slot-${id}"]`)?.getBoundingClientRect();
     const helm = slot('helm');
     const mainHand = slot('main-hand');
     const body = slot('body');
@@ -192,22 +194,34 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
     const ringLeft = slot('ring-1');
     const ringRight = slot('ring-2');
     const belt = slot('belt');
-    const slots = [...document.querySelectorAll<HTMLElement>('.equipment-slot')].map((item) => item.getBoundingClientRect());
-    const toolRects = [...document.querySelectorAll<HTMLElement>('.tool-slot')].map((item) => item.getBoundingClientRect());
+    const slots = [...document.querySelectorAll<HTMLElement>('.equipment-slot')].map((item) =>
+      item.getBoundingClientRect(),
+    );
+    const toolRects = [...document.querySelectorAll<HTMLElement>('.tool-slot')].map((item) =>
+      item.getBoundingClientRect(),
+    );
     const paperGrid = document.querySelector<HTMLElement>('.paper-doll-grid')?.getBoundingClientRect();
     const jewelryGrid = document.querySelector<HTMLElement>('.jewelry-grid')?.getBoundingClientRect();
     const toolsGrid = document.querySelector<HTMLElement>('.tool-loadout-grid')?.getBoundingClientRect();
     const heroArt = document.querySelector<HTMLElement>('.gear-hero-art');
     const heroStyle = heroArt ? getComputedStyle(heroArt) : undefined;
-    const sameRow = (left?: DOMRect, right?: DOMRect): boolean => Boolean(left && right && Math.abs(left.top - right.top) <= 1);
+    const sameRow = (left?: DOMRect, right?: DOMRect): boolean =>
+      Boolean(left && right && Math.abs(left.top - right.top) <= 1);
     return {
       panelFits: panel ? panel.scrollHeight === panel.clientHeight : false,
-      nestedContainersRemoved: !document.querySelector('.equipment-paper-doll, .equipment-primary-grid, .equipment-accessory-cluster'),
+      nestedContainersRemoved: !document.querySelector(
+        '.equipment-paper-doll, .equipment-primary-grid, .equipment-accessory-cluster',
+      ),
       slotsAreSquare: slots.every((item) => Math.abs(item.width - item.height) <= 1),
-      slotsFitScreen: screen ? slots.every((item) => (
-        item.left >= screen.left && item.right <= screen.right
-        && item.top >= screen.top && item.bottom <= screen.bottom
-      )) : false,
+      slotsFitScreen: screen
+        ? slots.every(
+            (item) =>
+              item.left >= screen.left &&
+              item.right <= screen.right &&
+              item.top >= screen.top &&
+              item.bottom <= screen.bottom,
+          )
+        : false,
       helmAboveHands: helm && mainHand ? helm.bottom <= mainHand.top + 1 : false,
       handsAreAligned: sameRow(mainHand, body) && sameRow(body, offHand),
       glovesAndBeltAreAligned: sameRow(gloves, belt),
@@ -216,17 +230,26 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
       accessoryRowsAreAligned: sameRow(amulet, trinket) && sameRow(ringLeft, ringRight),
       jewelryOnOneRow: amulet && ringRight ? sameRow(amulet, ringRight) : false,
       toolsOnOneRow: toolRects.length === 4 && toolRects.every((item) => Math.abs(item.top - toolRects[0].top) <= 1),
-      allSlotsSameSize: [...slots, ...toolRects].every((item) => Math.abs(item.width - slots[0].width) <= 1 && Math.abs(item.height - slots[0].height) <= 1),
-      sharedGridWidth: paperGrid && jewelryGrid && toolsGrid
-        ? Math.abs(paperGrid.width - jewelryGrid.width) <= 1 && Math.abs(jewelryGrid.width - toolsGrid.width) <= 1
-        : false,
-      sharedGridCenter: paperGrid && jewelryGrid && toolsGrid
-        ? Math.abs((paperGrid.left + paperGrid.width / 2) - (jewelryGrid.left + jewelryGrid.width / 2)) <= 1
-          && Math.abs((jewelryGrid.left + jewelryGrid.width / 2) - (toolsGrid.left + toolsGrid.width / 2)) <= 1
-        : false,
-      labelsReadable: [...document.querySelectorAll<HTMLElement>('.gear-screen .loadout-slot-label, .gear-screen .loadout-slot-value, .gear-screen .loadout-slot-empty')]
-        .every((item) => getComputedStyle(item).textOverflow !== 'ellipsis' && item.getBoundingClientRect().height > 0),
-      heroArtSubtle: Boolean(heroStyle && heroStyle.filter.includes('blur(1.5px)') && Number.parseFloat(heroStyle.opacity) <= 0.35),
+      allSlotsSameSize: [...slots, ...toolRects].every(
+        (item) => Math.abs(item.width - slots[0].width) <= 1 && Math.abs(item.height - slots[0].height) <= 1,
+      ),
+      sharedGridWidth:
+        paperGrid && jewelryGrid && toolsGrid
+          ? Math.abs(paperGrid.width - jewelryGrid.width) <= 1 && Math.abs(jewelryGrid.width - toolsGrid.width) <= 1
+          : false,
+      sharedGridCenter:
+        paperGrid && jewelryGrid && toolsGrid
+          ? Math.abs(paperGrid.left + paperGrid.width / 2 - (jewelryGrid.left + jewelryGrid.width / 2)) <= 1 &&
+            Math.abs(jewelryGrid.left + jewelryGrid.width / 2 - (toolsGrid.left + toolsGrid.width / 2)) <= 1
+          : false,
+      labelsReadable: [
+        ...document.querySelectorAll<HTMLElement>(
+          '.gear-screen .loadout-slot-label, .gear-screen .loadout-slot-value, .gear-screen .loadout-slot-empty',
+        ),
+      ].every((item) => getComputedStyle(item).textOverflow !== 'ellipsis' && item.getBoundingClientRect().height > 0),
+      heroArtSubtle: Boolean(
+        heroStyle && heroStyle.filter.includes('blur(1.5px)') && Number.parseFloat(heroStyle.opacity) <= 0.35,
+      ),
       toolGroupSemantics: document.querySelector('.tool-loadout-grid')?.getAttribute('role') === 'group',
     };
   });
@@ -271,11 +294,16 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('ability-slot-basic')).toBeVisible();
   const abilitiesFit = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('#torch-menu');
-    const cards = [...document.querySelectorAll<HTMLElement>('.ability-loadout-card')].map((card) => card.getBoundingClientRect());
-    const images = [...document.querySelectorAll<HTMLImageElement>('.ability-loadout-card img')].map((image) => image.getBoundingClientRect());
+    const cards = [...document.querySelectorAll<HTMLElement>('.ability-loadout-card')].map((card) =>
+      card.getBoundingClientRect(),
+    );
+    const images = [...document.querySelectorAll<HTMLImageElement>('.ability-loadout-card img')].map((image) =>
+      image.getBoundingClientRect(),
+    );
     return {
       panelFits: panel ? panel.scrollHeight === panel.clientHeight : false,
-      cardsAreSideBySide: cards.length === 3 && cards[0].right <= cards[1].left + 1 && cards[1].right <= cards[2].left + 1,
+      cardsAreSideBySide:
+        cards.length === 3 && cards[0].right <= cards[1].left + 1 && cards[1].right <= cards[2].left + 1,
       artKeepsRatio: images.every((image) => Math.abs(image.width / image.height - 3 / 4) <= 0.02),
     };
   });
@@ -296,7 +324,10 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
     const image = document.querySelector<HTMLImageElement>('[data-testid="ability-choice-bash"] img');
     return Boolean(image?.naturalWidth && image?.naturalHeight);
   });
-  const abilityRatio = await page.getByTestId('ability-choice-bash').locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight);
+  const abilityRatio = await page
+    .getByTestId('ability-choice-bash')
+    .locator('img')
+    .evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight);
   expect(abilityRatio).toBeCloseTo(3 / 4, 2);
   await page.getByTestId('ability-choice-bash').click();
   await expect(page.getByTestId('ability-picker')).toHaveCount(0);
@@ -313,7 +344,10 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('map-screen').locator('.map-toolbar')).toHaveCount(0);
   await expect(page.getByTestId('map-screen').locator('.map-legend')).toHaveCount(0);
   await expect(page.getByTestId('map-grid').locator('.map-hero-token')).toHaveCount(1);
-  await expect(page.getByTestId('map-grid').locator('.map-hero-token img')).toHaveAttribute('src', /knight-marker\.png/);
+  await expect(page.getByTestId('map-grid').locator('.map-hero-token img')).toHaveAttribute(
+    'src',
+    /knight-marker\.png/,
+  );
   const mapGeometry = await page.getByTestId('map-grid').evaluate((grid) => {
     const tile = grid.querySelector<HTMLElement>('.map-tile');
     const heroToken = grid.querySelector<HTMLElement>('.map-hero-token');
@@ -370,10 +404,13 @@ test('keeps Inventory contained without scroll regions across supported viewport
     await expect(page.getByRole('dialog', { name: 'Inventory' })).toBeVisible();
 
     const geometry = await page.evaluate(() => {
-      const rect = (selector: string): DOMRect | undefined => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect();
+      const rect = (selector: string): DOMRect | undefined =>
+        document.querySelector<HTMLElement>(selector)?.getBoundingClientRect();
       const noScroll = (selector: string): boolean => {
         const element = document.querySelector<HTMLElement>(selector);
-        return element ? element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1 : false;
+        return element
+          ? element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1
+          : false;
       };
       const tabs = [...document.querySelectorAll<HTMLElement>('.inventory-tab')].map((tab) => {
         const tabRect = tab.getBoundingClientRect();
@@ -390,7 +427,15 @@ test('keeps Inventory contained without scroll regions across supported viewport
         noGridScroll: noScroll('.inventory-grid'),
         noDetailScroll: noScroll('.inventory-detail'),
         noPaginationScroll: noScroll('.inventory-pagination'),
-        tabsInside: tabsList ? tabs.every((tab) => tab.left >= tabsList.left - 1 && tab.right <= tabsList.right + 1 && tab.top >= tabsList.top - 1 && tab.bottom <= tabsList.bottom + 1) : false,
+        tabsInside: tabsList
+          ? tabs.every(
+              (tab) =>
+                tab.left >= tabsList.left - 1 &&
+                tab.right <= tabsList.right + 1 &&
+                tab.top >= tabsList.top - 1 &&
+                tab.bottom <= tabsList.bottom + 1,
+            )
+          : false,
       };
     });
 
@@ -410,7 +455,9 @@ test('keeps Inventory contained without scroll regions across supported viewport
       const detailGeometry = await page.evaluate(() => {
         const noScroll = (selector: string): boolean => {
           const element = document.querySelector<HTMLElement>(selector);
-          return element ? element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1 : false;
+          return element
+            ? element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1
+            : false;
         };
         const panel = document.querySelector<HTMLElement>('#torch-menu')?.getBoundingClientRect();
         const screen = document.querySelector<HTMLElement>('.inventory-screen')?.getBoundingClientRect();
@@ -449,11 +496,14 @@ test('keeps Options navigable across supported viewports', async ({ page }) => {
     await expect(page.getByRole('dialog', { name: 'Options' })).toBeVisible();
 
     const layout = await page.evaluate(() => {
-      const rect = (selector: string): DOMRect | undefined => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect();
+      const rect = (selector: string): DOMRect | undefined =>
+        document.querySelector<HTMLElement>(selector)?.getBoundingClientRect();
       const panel = rect('#torch-menu');
       const screen = rect('.options-screen');
       const footer = rect('.options-footer');
-      const tabs = [...document.querySelectorAll<HTMLElement>('.options-nav [role="tab"]')].map((tab) => tab.getBoundingClientRect());
+      const tabs = [...document.querySelectorAll<HTMLElement>('.options-nav [role="tab"]')].map((tab) =>
+        tab.getBoundingClientRect(),
+      );
       const options = document.querySelector<HTMLElement>('.options-screen');
       return {
         panel,
@@ -484,8 +534,11 @@ test('keeps the Ability workspace readable across supported viewports', async ({
     await page.goto('/');
     await page.getByTestId('hud-abilities-button').click();
     await expect(page.getByTestId('abilities-screen')).toBeVisible({ timeout: 15_000 });
-    await page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>('.ability-loadout-card img')]
-      .every((image) => image.naturalWidth > 0 && image.naturalHeight > 0));
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll<HTMLImageElement>('.ability-loadout-card img')].every(
+        (image) => image.naturalWidth > 0 && image.naturalHeight > 0,
+      ),
+    );
 
     const layout = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>('#torch-menu');
@@ -500,17 +553,39 @@ test('keeps the Ability workspace readable across supported viewports', async ({
       const surfaceRect = surface?.getBoundingClientRect();
       const inspectorRect = inspector?.getBoundingClientRect();
       return {
-        panelInsideViewport: Boolean(panelRect && panelRect.left >= 0 && panelRect.top >= 0
-          && panelRect.right <= window.innerWidth + 1 && panelRect.bottom <= window.innerHeight + 1),
-        screenInsidePanel: Boolean(panelRect && screenRect && screenRect.left >= panelRect.left
-          && screenRect.right <= panelRect.right + 1 && screenRect.bottom <= panelRect.bottom + 1),
+        panelInsideViewport: Boolean(
+          panelRect &&
+          panelRect.left >= 0 &&
+          panelRect.top >= 0 &&
+          panelRect.right <= window.innerWidth + 1 &&
+          panelRect.bottom <= window.innerHeight + 1,
+        ),
+        screenInsidePanel: Boolean(
+          panelRect &&
+          screenRect &&
+          screenRect.left >= panelRect.left &&
+          screenRect.right <= panelRect.right + 1 &&
+          screenRect.bottom <= panelRect.bottom + 1,
+        ),
         inspectorVisible: Boolean(inspectorRect && inspectorRect.width > 0 && inspectorRect.height > 0),
-        loadoutAndInspectorDoNotOverlap: Boolean(surfaceRect && inspectorRect
-          && (surfaceRect.right <= inspectorRect.left + 1 || inspectorRect.right <= surfaceRect.left + 1
-            || surfaceRect.bottom <= inspectorRect.top + 1 || inspectorRect.bottom <= surfaceRect.top + 1)),
+        loadoutAndInspectorDoNotOverlap: Boolean(
+          surfaceRect &&
+          inspectorRect &&
+          (surfaceRect.right <= inspectorRect.left + 1 ||
+            inspectorRect.right <= surfaceRect.left + 1 ||
+            surfaceRect.bottom <= inspectorRect.top + 1 ||
+            inspectorRect.bottom <= surfaceRect.top + 1),
+        ),
         cardsHaveReadableWidth: cards.length === 3 && cards.every((card) => card.getBoundingClientRect().width >= 42),
-        artKeepsRatio: images.length === 3 && images.every((image) => Math.abs(image.getBoundingClientRect().width / image.getBoundingClientRect().height - 3 / 4) <= 0.02),
-        controlsHaveHitArea: controls.every((control) => control.getBoundingClientRect().width >= 42 && control.getBoundingClientRect().height >= 42),
+        artKeepsRatio:
+          images.length === 3 &&
+          images.every(
+            (image) =>
+              Math.abs(image.getBoundingClientRect().width / image.getBoundingClientRect().height - 3 / 4) <= 0.02,
+          ),
+        controlsHaveHitArea: controls.every(
+          (control) => control.getBoundingClientRect().width >= 42 && control.getBoundingClientRect().height >= 42,
+        ),
       };
     });
 
@@ -528,7 +603,10 @@ test('keeps the Ability workspace readable across supported viewports', async ({
   await page.getByTestId('hud-abilities-button').click();
   await page.getByTestId('ability-slot-skill').locator('.ability-art-button').click();
   await expect(page.getByTestId('ability-inspector')).toContainText('Sunder');
-  await expect(page.getByTestId('ability-slot-skill').locator('.ability-art-button')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('ability-slot-skill').locator('.ability-art-button')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await page.getByTestId('ability-change').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('ability-picker')).toBeVisible();
@@ -572,7 +650,9 @@ test('keeps the fixed Hero shell contained across landscape and portrait viewpor
         statsTop: statsRect?.top ?? 0,
         artWidth: imageRect?.width ?? 0,
         statsWidth: statsRect?.width ?? 0,
-        statColumns: [...document.querySelectorAll<HTMLElement>('.stat-row')].map((row) => Math.round(row.getBoundingClientRect().left)),
+        statColumns: [...document.querySelectorAll<HTMLElement>('.stat-row')].map((row) =>
+          Math.round(row.getBoundingClientRect().left),
+        ),
         renderedRatio: imageRect ? imageRect.width / imageRect.height : 0,
         nativeRatio: image && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0,
       };
@@ -650,4 +730,19 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   const defaultAbilityCard = page.getByTestId('context-action-card-context-ability-ability.avatar');
   await expect(defaultAbilityCard).toHaveClass(/is-playing/);
   await expect(defaultAbilityCard).toHaveCount(0);
+});
+
+test('persists an action-boundary world and restores it after reload', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('hud-hero-button')).toBeVisible();
+
+  await page.waitForTimeout(350);
+  await page.keyboard.press('d');
+  await page.waitForTimeout(350);
+  await page.reload();
+  await expect(page.getByTestId('hud-hero-button')).toBeVisible();
+
+  await page.getByTestId('menu-button').click();
+  await page.getByTestId('menu-map').click();
+  await expect(page.getByTestId('map-grid')).toHaveAttribute('aria-label', 'Explored terrain map with Hero at 1, 2');
 });

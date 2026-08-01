@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TorchScene } from './game/scene';
+import { gameSession } from './game/session';
 import { MenuOverlay } from './ui/menu-overlay';
+import { LocalStorageSaveProvider } from './platform/local-save-provider';
 import { devFrameMonitor } from './dev/frame-monitor';
 import { applyReduceMotionPreference, applyUiScalePreference } from './game/presentation-settings';
 import './index.css';
@@ -13,6 +15,7 @@ if (!uiRoot) throw new Error('Torch UI root is missing.');
 
 applyUiScalePreference();
 applyReduceMotionPreference();
+gameSession.attachSaveProvider(new LocalStorageSaveProvider());
 
 createRoot(uiRoot).render(createElement(MenuOverlay));
 

@@ -3,14 +3,7 @@ import { entityAt } from './entities';
 import { entityOccupiesPosition } from './footprint';
 import { abilityActionDefinition, DEFAULT_ABILITY_PRIORITY } from './ability-rules';
 import { GATHERING_ACTION_COSTS } from './gathering';
-import type {
-  ActionKind,
-  ActionRequest,
-  EntityState,
-  GameState,
-  Position,
-  SimEvent,
-} from './types';
+import type { ActionKind, ActionRequest, EntityState, GameState, Position, SimEvent } from './types';
 
 export interface ActionOption extends ActionRequest {
   label: string;
@@ -175,18 +168,10 @@ function resolveAbilityAction(
   consumedAbilityIds: Set<string>,
 ): boolean {
   const ability = abilityActionDefinition(action.abilityId);
-  const equipped = action.abilityId
-    ? Object.values(state.hero.equippedAbilities).includes(action.abilityId)
-    : false;
+  const equipped = action.abilityId ? Object.values(state.hero.equippedAbilities).includes(action.abilityId) : false;
   const cooldown = action.abilityId ? (state.hero.abilityCooldowns[action.abilityId] ?? 0) : 0;
 
-  if (
-    !ability
-    || !action.abilityId
-    || !equipped
-    || entity.kind !== 'enemy'
-    || cooldown > 0
-  ) {
+  if (!ability || !action.abilityId || !equipped || entity.kind !== 'enemy' || cooldown > 0) {
     events.push({ type: 'blocked', reason: 'That ability is not available.' });
     events.push({ type: 'message', text: 'That ability is not available.' });
     return false;
@@ -225,9 +210,7 @@ function resolveAbilityAction(
   } else {
     events.push({
       type: 'message',
-      text: amount > 0
-        ? `You use ${ability.name} on ${entity.name} for ${amount}.`
-        : `You use ${ability.name}.`,
+      text: amount > 0 ? `You use ${ability.name} on ${entity.name} for ${amount}.` : `You use ${ability.name}.`,
     });
   }
   return true;

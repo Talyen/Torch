@@ -40,14 +40,14 @@ documented exceptions.
 
 ## Triage
 
-| Priority | Cluster | Torch signal | Preferred remediation |
-| --- | --- | --- | --- |
-| 1 | Token bypass | Raw hex/rgb, spacing, radius, shadow, or type values in `src/ui/`, `src/index.css`, or feature CSS | Map to a canonical token or add one semantic token in `src/styles.css` first |
-| 1 | Behavior bypass | A screen imports Base UI or a vendor component directly, or hand-rolls dialog/tabs/select/menu behavior | Route through `src/ui/primitives.tsx` and the existing `src/components/ui/*` wrapper |
-| 1 | Responsive contract drift | Controls below 42 px, clipped panels, native-ratio art stretched, or unsafe HUD/menu bounds | Fix the owning layout and verify the four design-system viewports |
-| 2 | Duplicated chrome | Repeated button, panel, card, selector, or focus styles in two or more screens | Extend the existing primitive or token; use `DuplicateFeatureSurfaceAudit.md` when whole surfaces are twins |
-| 2 | Motion drift | `transition: all`, layout animation, missing reduced-motion handling, or timing that changes meaning | Name transform/opacity properties and honor `data-reduce-motion` plus `prefers-reduced-motion` |
-| 3 | Justified custom layout | Action Hand fan, ability artwork, equipment rows, Hero art, map cells, Phaser terrain/entity colors | Keep behavior; extract only repeated constants or document the exception |
+| Priority | Cluster                   | Torch signal                                                                                            | Preferred remediation                                                                                       |
+| -------- | ------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1        | Token bypass              | Raw hex/rgb, spacing, radius, shadow, or type values in `src/ui/`, `src/index.css`, or feature CSS      | Map to a canonical token or add one semantic token in `src/styles.css` first                                |
+| 1        | Behavior bypass           | A screen imports Base UI or a vendor component directly, or hand-rolls dialog/tabs/select/menu behavior | Route through `src/ui/primitives.tsx` and the existing `src/components/ui/*` wrapper                        |
+| 1        | Responsive contract drift | Controls below 42 px, clipped panels, native-ratio art stretched, or unsafe HUD/menu bounds             | Fix the owning layout and verify the four design-system viewports                                           |
+| 2        | Duplicated chrome         | Repeated button, panel, card, selector, or focus styles in two or more screens                          | Extend the existing primitive or token; use `DuplicateFeatureSurfaceAudit.md` when whole surfaces are twins |
+| 2        | Motion drift              | `transition: all`, layout animation, missing reduced-motion handling, or timing that changes meaning    | Name transform/opacity properties and honor `data-reduce-motion` plus `prefers-reduced-motion`              |
+| 3        | Justified custom layout   | Action Hand fan, ability artwork, equipment rows, Hero art, map cells, Phaser terrain/entity colors     | Keep behavior; extract only repeated constants or document the exception                                    |
 
 ## Domain rules
 

@@ -16,12 +16,12 @@ Find unsafe escapes and fix them at the narrowest owner. Prefer discriminated un
 
 ## Triage
 
-| Priority | Examples |
-| --- | --- |
-| P0 | An assertion can route an invalid command, target, entity, content ID, or decoded value into simulation mutation |
-| P1 | A non-null assertion or unchecked lookup can throw on an empty/corrupt state, scene lifecycle edge, or missing asset |
-| P2 | `@ts-ignore`, broad suppression, double assertion, or `any` hides a real mismatch at a module boundary |
-| P3 | Style-only assertion churn with a proven invariant and no correctness or maintenance impact |
+| Priority | Examples                                                                                                             |
+| -------- | -------------------------------------------------------------------------------------------------------------------- |
+| P0       | An assertion can route an invalid command, target, entity, content ID, or decoded value into simulation mutation     |
+| P1       | A non-null assertion or unchecked lookup can throw on an empty/corrupt state, scene lifecycle edge, or missing asset |
+| P2       | `@ts-ignore`, broad suppression, double assertion, or `any` hides a real mismatch at a module boundary               |
+| P3       | Style-only assertion churn with a proven invariant and no correctness or maintenance impact                          |
 
 Prioritize escapes on command resolution, generated-state mutation, browser input decoding, and asset/content registration.
 

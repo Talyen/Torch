@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import {
   Axe,
@@ -59,12 +59,11 @@ import { abilityActionDefinition, positionKey, tileAt } from '../sim';
 import type { GameState, Position, SimEvent } from '../sim';
 import {
   PRESENTATION_SETTINGS_EVENT,
-  PresentationSettings,
-  PresentationSettingKey,
   readPresentationSettings,
   resetPresentationSettings,
   setPresentationSetting,
 } from '../game/presentation-settings';
+import type { PresentationSettings, PresentationSettingKey } from '../game/presentation-settings';
 import { ContextActionHand } from './context-action-hand';
 import {
   TorchButton,
@@ -225,22 +224,25 @@ export function MenuOverlay(): ReactElement {
   const openMenu = (nextScreen: Screen = 'menu', invoker?: HTMLElement | null): void => {
     const triggerTestId = invoker?.dataset.testid ?? SCREEN_TRIGGER_TEST_IDS[nextScreen] ?? null;
     returnFocusTestIdRef.current = triggerTestId;
-    returnFocusRef.current = invoker
-      ?? (triggerTestId ? document.querySelector<HTMLElement>(`[data-testid="${triggerTestId}"]`) : null)
-      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    returnFocusRef.current =
+      invoker ??
+      (triggerTestId ? document.querySelector<HTMLElement>(`[data-testid="${triggerTestId}"]`) : null) ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setScreen(nextScreen);
     setOpen(true);
   };
 
-  const restoreMenuFocus = (): void => {
-    const target = returnFocusRef.current ?? (returnFocusTestIdRef.current
-      ? document.querySelector<HTMLElement>(`[data-testid="${returnFocusTestIdRef.current}"]`)
-      : null);
+  const restoreMenuFocus = useCallback((): void => {
+    const target =
+      returnFocusRef.current ??
+      (returnFocusTestIdRef.current
+        ? document.querySelector<HTMLElement>(`[data-testid="${returnFocusTestIdRef.current}"]`)
+        : null);
     if (!target || !document.contains(target)) return;
     target.focus({ preventScroll: true });
-  };
+  }, []);
 
-  const scheduleMenuFocusRestore = (): void => {
+  const scheduleMenuFocusRestore = useCallback((): void => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         restoreMenuFocus();
@@ -248,7 +250,7 @@ export function MenuOverlay(): ReactElement {
         window.setTimeout(restoreMenuFocus, 300);
       });
     });
-  };
+  }, [restoreMenuFocus]);
 
   const handleMenuOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen);
@@ -258,7 +260,7 @@ export function MenuOverlay(): ReactElement {
   useEffect(() => {
     if (previousOpenRef.current && !open) scheduleMenuFocusRestore();
     previousOpenRef.current = open;
-  }, [open]);
+  }, [open, scheduleMenuFocusRestore]);
 
   useEffect(() => {
     const host = gameplayHudRef.current;
@@ -278,9 +280,7 @@ export function MenuOverlay(): ReactElement {
     };
   }, [open]);
 
-  const hpRatio = heroStatus.maxHealth > 0
-    ? Math.max(0, Math.min(1, heroStatus.health / heroStatus.maxHealth))
-    : 0;
+  const hpRatio = heroStatus.maxHealth > 0 ? Math.max(0, Math.min(1, heroStatus.health / heroStatus.maxHealth)) : 0;
 
   return (
     <>
@@ -288,76 +288,82 @@ export function MenuOverlay(): ReactElement {
         <ContextActionHand state={gameState} events={gameEvents} hidden={open} />
         {!open ? (
           <div ref={hudRailRef} className="hud-rail" data-testid="hud-rail" aria-label="Hero controls">
-          <TorchButton
-            className="hud-icon-button hud-hero-button"
-            type="button"
-            aria-label="Open hero"
-            title="Hero"
-            aria-controls="torch-menu"
-            data-testid="hud-hero-button"
-            onClick={(event) => openMenu('hero', event.currentTarget)}
-          >
-            <img src={heroAssets.knight.hud} alt="" />
-          </TorchButton>
+            <TorchButton
+              className="hud-icon-button hud-hero-button"
+              type="button"
+              aria-label="Open hero"
+              title="Hero"
+              aria-controls="torch-menu"
+              data-testid="hud-hero-button"
+              onClick={(event) => openMenu('hero', event.currentTarget)}
+            >
+              <img src={heroAssets.knight.hud} alt="" />
+            </TorchButton>
 
-          <div className="hud-hp" data-testid="hero-hp" aria-label={`Hero HP ${heroStatus.health} of ${heroStatus.maxHealth}`}>
-            <div className="hud-hp-meta">
-              <span>HP</span>
-              <span>{heroStatus.health}/{heroStatus.maxHealth}</span>
+            <div
+              className="hud-hp"
+              data-testid="hero-hp"
+              aria-label={`Hero HP ${heroStatus.health} of ${heroStatus.maxHealth}`}
+            >
+              <div className="hud-hp-meta">
+                <span>HP</span>
+                <span>
+                  {heroStatus.health}/{heroStatus.maxHealth}
+                </span>
+              </div>
+              <div className="hud-hp-track" aria-hidden="true">
+                <span className="hud-hp-fill" style={{ width: `${hpRatio * 100}%` }} />
+              </div>
             </div>
-            <div className="hud-hp-track" aria-hidden="true">
-              <span className="hud-hp-fill" style={{ width: `${hpRatio * 100}%` }} />
-            </div>
-          </div>
 
-          <TorchButton
-            className="hud-icon-button"
-            type="button"
-            aria-label="Open inventory"
-            title="Inventory"
-            aria-controls="torch-menu"
-            data-testid="hud-inventory-button"
-            onClick={(event) => openMenu('inventory', event.currentTarget)}
-          >
-            <Backpack aria-hidden="true" />
-          </TorchButton>
+            <TorchButton
+              className="hud-icon-button"
+              type="button"
+              aria-label="Open inventory"
+              title="Inventory"
+              aria-controls="torch-menu"
+              data-testid="hud-inventory-button"
+              onClick={(event) => openMenu('inventory', event.currentTarget)}
+            >
+              <Backpack aria-hidden="true" />
+            </TorchButton>
 
-          <TorchButton
-            className="hud-icon-button"
-            type="button"
-            aria-label="Open gear"
-            title="Equipment"
-            aria-controls="torch-menu"
-            data-testid="hud-gear-button"
-            onClick={(event) => openMenu('gear', event.currentTarget)}
-          >
-            <Swords aria-hidden="true" />
-          </TorchButton>
+            <TorchButton
+              className="hud-icon-button"
+              type="button"
+              aria-label="Open gear"
+              title="Equipment"
+              aria-controls="torch-menu"
+              data-testid="hud-gear-button"
+              onClick={(event) => openMenu('gear', event.currentTarget)}
+            >
+              <Swords aria-hidden="true" />
+            </TorchButton>
 
-          <TorchButton
-            className="hud-icon-button"
-            type="button"
-            aria-label="Open abilities"
-            title="Abilities"
-            aria-controls="torch-menu"
-            data-testid="hud-abilities-button"
-            onClick={(event) => openMenu('abilities', event.currentTarget)}
-          >
-            <Sparkles aria-hidden="true" />
-          </TorchButton>
+            <TorchButton
+              className="hud-icon-button"
+              type="button"
+              aria-label="Open abilities"
+              title="Abilities"
+              aria-controls="torch-menu"
+              data-testid="hud-abilities-button"
+              onClick={(event) => openMenu('abilities', event.currentTarget)}
+            >
+              <Sparkles aria-hidden="true" />
+            </TorchButton>
 
-          <TorchButton
-            className="hud-icon-button"
-            type="button"
-            aria-label="Open menu"
-            title="Menu"
-            aria-controls="torch-menu"
-            aria-expanded={open}
-            data-testid="menu-button"
-            onClick={(event) => openMenu('menu', event.currentTarget)}
-          >
-            <MenuIcon aria-hidden="true" />
-          </TorchButton>
+            <TorchButton
+              className="hud-icon-button"
+              type="button"
+              aria-label="Open menu"
+              title="Menu"
+              aria-controls="torch-menu"
+              aria-expanded={open}
+              data-testid="menu-button"
+              onClick={(event) => openMenu('menu', event.currentTarget)}
+            >
+              <MenuIcon aria-hidden="true" />
+            </TorchButton>
           </div>
         ) : null}
       </div>
@@ -365,10 +371,7 @@ export function MenuOverlay(): ReactElement {
       <TorchDialog.Root open={open} onOpenChange={handleMenuOpenChange}>
         <TorchDialog.Portal>
           <div className="menu-layer">
-            <TorchDialog.Backdrop
-              className="menu-backdrop"
-              data-testid="menu-backdrop"
-            />
+            <TorchDialog.Backdrop className="menu-backdrop" data-testid="menu-backdrop" />
             <TorchDialog.Viewport className="menu-viewport">
               <TorchDialog.Popup
                 id="torch-menu"
@@ -377,9 +380,7 @@ export function MenuOverlay(): ReactElement {
               >
                 <div className="menu-header">
                   <div className="menu-header-main">
-                    <TorchDialog.Title id="menu-title">
-                      {SCREEN_TITLES[screen]}
-                    </TorchDialog.Title>
+                    <TorchDialog.Title id="menu-title">{SCREEN_TITLES[screen]}</TorchDialog.Title>
                   </div>
                   <TorchDialog.Close
                     ref={closeButtonRef}
@@ -404,21 +405,25 @@ export function MenuOverlay(): ReactElement {
                   <nav className="menu-grid" aria-label="Game menu">
                     {menuItems.map((item) => {
                       const Icon = item.icon;
-                      return <TorchButton
-                        variant="outline"
-                        size="lg"
-                        className="menu-item"
-                        type="button"
-                        disabled={!item.available}
-                        aria-label={`${item.label}${item.available ? '' : ', coming soon'}`}
-                        title={item.available ? undefined : 'Coming soon'}
-                        data-testid={item.available ? (item.testId ?? `menu-${item.label.toLowerCase()}`) : undefined}
-                        key={item.label}
-                        onClick={item.available ? () => setScreen(item.screen) : undefined}
-                      >
-                        <span className="menu-item-icon" aria-hidden="true"><Icon /></span>
-                        <span className="menu-item-label">{item.label}</span>
-                      </TorchButton>
+                      return (
+                        <TorchButton
+                          variant="outline"
+                          size="lg"
+                          className="menu-item"
+                          type="button"
+                          disabled={!item.available}
+                          aria-label={`${item.label}${item.available ? '' : ', coming soon'}`}
+                          title={item.available ? undefined : 'Coming soon'}
+                          data-testid={item.available ? (item.testId ?? `menu-${item.label.toLowerCase()}`) : undefined}
+                          key={item.label}
+                          onClick={item.available ? () => setScreen(item.screen) : undefined}
+                        >
+                          <span className="menu-item-icon" aria-hidden="true">
+                            <Icon />
+                          </span>
+                          <span className="menu-item-label">{item.label}</span>
+                        </TorchButton>
+                      );
                     })}
                   </nav>
                 ) : screen === 'hero' ? (
@@ -477,10 +482,7 @@ function InventoryItemsPanel(): ReactElement {
     () => inventoryLayoutForViewport(viewport.width, viewport.height),
     [viewport.height, viewport.width],
   );
-  const filteredItems = useMemo(
-    () => filterAndSortInventoryItems(inventoryItems, category, sort),
-    [category, sort],
-  );
+  const filteredItems = useMemo(() => filterAndSortInventoryItems(inventoryItems, category, sort), [category, sort]);
   const pageCount = inventoryPageCount(filteredItems.length, layout.pageSize);
   const safePageIndex = clampInventoryPage(pageIndex, pageCount);
   const pageItems = inventoryPageItems(filteredItems, safePageIndex, layout.pageSize);
@@ -498,7 +500,7 @@ function InventoryItemsPanel(): ReactElement {
   }, [pageIndex, safePageIndex, selectedId, selectedItemFromFilteredItems]);
 
   const selectCategory = (nextCategory: InventoryCategory): void => {
-    setCategory((currentCategory) => currentCategory === nextCategory ? undefined : nextCategory);
+    setCategory((currentCategory) => (currentCategory === nextCategory ? undefined : nextCategory));
     setSelectedId(undefined);
     setPageIndex(0);
     setDetailOpen(false);
@@ -540,9 +542,13 @@ function InventoryItemsPanel(): ReactElement {
       <div className="inventory-heading-row">
         <div>
           <p className="inventory-kicker">Items</p>
-          <p className="inventory-range" aria-live="polite">{inventoryPageRange(filteredItems.length, safePageIndex, layout.pageSize)}</p>
+          <p className="inventory-range" aria-live="polite">
+            {inventoryPageRange(filteredItems.length, safePageIndex, layout.pageSize)}
+          </p>
         </div>
-        <span className="inventory-page-status" aria-live="polite">Page {safePageIndex + 1} of {pageCount}</span>
+        <span className="inventory-page-status" aria-live="polite">
+          Page {safePageIndex + 1} of {pageCount}
+        </span>
       </div>
 
       <div className="inventory-toolbar">
@@ -607,18 +613,18 @@ function InventoryItemsPanel(): ReactElement {
               align="end"
               sideOffset={6}
             >
-                  <TorchMenuRadioGroup value={sort} onValueChange={(value) => selectSort(value as InventorySort)}>
-                    {sortOptions.map((option) => (
-                      <TorchMenuRadioItem
-                        className="inventory-sort-option"
-                        value={option.value}
-                        key={option.value}
-                        closeOnClick
-                      >
-                        <span>{option.label}</span>
-                      </TorchMenuRadioItem>
-                    ))}
-                  </TorchMenuRadioGroup>
+              <TorchMenuRadioGroup value={sort} onValueChange={(value) => selectSort(value as InventorySort)}>
+                {sortOptions.map((option) => (
+                  <TorchMenuRadioItem
+                    className="inventory-sort-option"
+                    value={option.value}
+                    key={option.value}
+                    closeOnClick
+                  >
+                    <span>{option.label}</span>
+                  </TorchMenuRadioItem>
+                ))}
+              </TorchMenuRadioGroup>
             </TorchMenuContent>
           </div>
         </TorchMenuRoot>
@@ -671,7 +677,9 @@ function InventoryItemsPanel(): ReactElement {
                     moveItemFocus(itemIndex, direction);
                   }}
                 >
-                  <span className="inventory-item-icon"><Icon aria-hidden="true" /></span>
+                  <span className="inventory-item-icon">
+                    <Icon aria-hidden="true" />
+                  </span>
                   <span className="inventory-item-quantity">×{item.quantity}</span>
                 </TorchButton>
               </div>
@@ -680,15 +688,14 @@ function InventoryItemsPanel(): ReactElement {
           {pageItems.length === 0 ? (
             <div className="inventory-empty-state" role="status">
               <PackageOpen aria-hidden="true" />
-              <strong>{category ? `No ${inventoryCategories.find((item) => item.id === category)?.label.toLowerCase() ?? 'items'} yet` : 'Your inventory is empty'}</strong>
+              <strong>
+                {category
+                  ? `No ${inventoryCategories.find((item) => item.id === category)?.label.toLowerCase() ?? 'items'} yet`
+                  : 'Your inventory is empty'}
+              </strong>
               <span>{category ? 'Items you find will appear here.' : 'Items you discover will appear here.'}</span>
               {category ? (
-                <TorchButton
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => selectCategory(category)}
-                >
+                <TorchButton variant="outline" size="sm" type="button" onClick={() => selectCategory(category)}>
                   View all items
                 </TorchButton>
               ) : null}
@@ -752,7 +759,9 @@ function InventoryItemsPanel(): ReactElement {
           <ChevronLeft aria-hidden="true" />
           <span className="inventory-page-button-label">Previous</span>
         </TorchButton>
-        <span className="inventory-pagination-label" aria-live="polite">Page {safePageIndex + 1} of {pageCount}</span>
+        <span className="inventory-pagination-label" aria-live="polite">
+          Page {safePageIndex + 1} of {pageCount}
+        </span>
         <TorchButton
           variant="outline"
           size="sm"
@@ -772,20 +781,14 @@ function InventoryItemsPanel(): ReactElement {
 }
 
 function HeroScreen({ state }: { state: GameState }): ReactElement {
-  const heroDefinition = Object.values(heroDefinitions).find((definition) => definition.id === state.hero.heroId)
-    ?? heroDefinitions.knight;
-  const heroAsset = Object.values(heroAssets).find((asset) => asset.id === state.hero.heroId)
-    ?? heroAssets.knight;
+  const heroDefinition =
+    Object.values(heroDefinitions).find((definition) => definition.id === state.hero.heroId) ?? heroDefinitions.knight;
+  const heroAsset = Object.values(heroAssets).find((asset) => asset.id === state.hero.heroId) ?? heroAssets.knight;
 
   return (
     <div className="hero-screen">
       <div className="hero-details">
-        <img
-          className="hero-art-full"
-          src={heroAsset.full}
-          alt={heroAsset.fullAlt}
-          data-testid="hero-art-full"
-        />
+        <img className="hero-art-full" src={heroAsset.full} alt={heroAsset.fullAlt} data-testid="hero-art-full" />
 
         <section className="stats-panel hero-stats-panel" aria-labelledby="hero-stats-title">
           <div className="stats-panel-header">
@@ -793,8 +796,16 @@ function HeroScreen({ state }: { state: GameState }): ReactElement {
             <h2 id="hero-stats-title">Stats</h2>
           </div>
           <div className="hero-summary" aria-label="Hero status">
-            <span><small>Health</small><strong>{state.hero.health}/{state.hero.maxHealth}</strong></span>
-            <span><small>Turn</small><strong>{state.turn}</strong></span>
+            <span>
+              <small>Health</small>
+              <strong>
+                {state.hero.health}/{state.hero.maxHealth}
+              </strong>
+            </span>
+            <span>
+              <small>Turn</small>
+              <strong>{state.turn}</strong>
+            </span>
           </div>
           <dl className="stats-list">
             {(Object.keys(HERO_STAT_LABELS) as Array<keyof typeof HERO_STAT_LABELS>).map((stat) => (
@@ -869,41 +880,45 @@ function MapScreen(): ReactElement {
   const bounds = mapBounds(mapState);
   const exploredColumns = bounds.maxX - bounds.minX + 1;
   const exploredRows = bounds.maxY - bounds.minY + 1;
-  const mapSizing = mapViewportSize.width > 0 && mapViewportSize.height > 0
-    ? (() => {
-      const baseCellSize = Math.max(1, Math.floor(Math.min(mapViewportSize.width / exploredColumns, mapViewportSize.height / exploredRows)));
-      const expandedColumns = Math.max(exploredColumns, Math.ceil(mapViewportSize.width / baseCellSize));
-      const expandedRows = Math.max(exploredRows, Math.ceil(mapViewportSize.height / baseCellSize));
-      const candidates = [
-        { columns: expandedColumns, rows: exploredRows },
-        { columns: exploredColumns, rows: expandedRows },
-        { columns: expandedColumns, rows: expandedRows },
-      ].map((candidate) => ({
-        ...candidate,
-        cellSize: Math.min(mapViewportSize.width / candidate.columns, mapViewportSize.height / candidate.rows),
-      }));
-      const best = candidates.reduce((currentBest, candidate) => {
-        const bestArea = currentBest.cellSize * currentBest.columns * currentBest.cellSize * currentBest.rows;
-        const candidateArea = candidate.cellSize * candidate.columns * candidate.cellSize * candidate.rows;
-        return candidateArea > bestArea ? candidate : currentBest;
-      });
-      // Bias the final fit toward the full viewport width. When height is the
-      // limiting dimension, keep a little vertical breathing room instead of
-      // shrinking every cell and leaving a wide unused strip on the sides.
-      const columns = Math.max(
-        exploredColumns,
-        Math.ceil(mapViewportSize.width / best.cellSize),
-        Math.ceil((mapViewportSize.width * exploredRows) / mapViewportSize.height),
-      );
-      const cellSize = mapViewportSize.width / columns;
-      const rows = Math.max(exploredRows, Math.floor(mapViewportSize.height / cellSize));
-      return {
-        columns,
-        rows,
-        cellSize,
-      };
-    })()
-    : undefined;
+  const mapSizing =
+    mapViewportSize.width > 0 && mapViewportSize.height > 0
+      ? (() => {
+          const baseCellSize = Math.max(
+            1,
+            Math.floor(Math.min(mapViewportSize.width / exploredColumns, mapViewportSize.height / exploredRows)),
+          );
+          const expandedColumns = Math.max(exploredColumns, Math.ceil(mapViewportSize.width / baseCellSize));
+          const expandedRows = Math.max(exploredRows, Math.ceil(mapViewportSize.height / baseCellSize));
+          const candidates = [
+            { columns: expandedColumns, rows: exploredRows },
+            { columns: exploredColumns, rows: expandedRows },
+            { columns: expandedColumns, rows: expandedRows },
+          ].map((candidate) => ({
+            ...candidate,
+            cellSize: Math.min(mapViewportSize.width / candidate.columns, mapViewportSize.height / candidate.rows),
+          }));
+          const best = candidates.reduce((currentBest, candidate) => {
+            const bestArea = currentBest.cellSize * currentBest.columns * currentBest.cellSize * currentBest.rows;
+            const candidateArea = candidate.cellSize * candidate.columns * candidate.cellSize * candidate.rows;
+            return candidateArea > bestArea ? candidate : currentBest;
+          });
+          // Bias the final fit toward the full viewport width. When height is the
+          // limiting dimension, keep a little vertical breathing room instead of
+          // shrinking every cell and leaving a wide unused strip on the sides.
+          const columns = Math.max(
+            exploredColumns,
+            Math.ceil(mapViewportSize.width / best.cellSize),
+            Math.ceil((mapViewportSize.width * exploredRows) / mapViewportSize.height),
+          );
+          const cellSize = mapViewportSize.width / columns;
+          const rows = Math.max(exploredRows, Math.floor(mapViewportSize.height / cellSize));
+          return {
+            columns,
+            rows,
+            cellSize,
+          };
+        })()
+      : undefined;
   const cellSize = mapSizing?.cellSize;
   const columns = mapSizing?.columns ?? exploredColumns;
   const rows = mapSizing?.rows ?? exploredRows;
@@ -944,11 +959,7 @@ function MapScreen(): ReactElement {
             const terrain = tileAt(mapState.seed, position);
             const isHero = position.x === mapState.hero.position.x && position.y === mapState.hero.position.y;
             return (
-              <div
-                className={`map-tile ${revealed ? `is-${terrain}` : 'is-unexplored'}`}
-                key={key}
-                aria-hidden="true"
-              >
+              <div className={`map-tile ${revealed ? `is-${terrain}` : 'is-unexplored'}`} key={key} aria-hidden="true">
                 {isHero ? (
                   <span className="map-hero-token">
                     <img src={heroAssets.knight.marker} alt="Hero" />
@@ -987,8 +998,8 @@ function GearPanel(): ReactElement {
     );
   }
 
-  const heroAsset = Object.values(heroAssets).find((asset) => asset.id === gameSession.state.hero.heroId)
-    ?? heroAssets.knight;
+  const heroAsset =
+    Object.values(heroAssets).find((asset) => asset.id === gameSession.state.hero.heroId) ?? heroAssets.knight;
   const paperDollSlots = ['helm', 'main-hand', 'body', 'off-hand', 'gloves', 'belt', 'boots'] as const;
   const jewelrySlots = ['amulet', 'trinket', 'ring-1', 'ring-2'] as const;
 
@@ -1023,10 +1034,16 @@ function GearPanel(): ReactElement {
         title={equippedItem ? `${slot.label}: ${equippedItem.name}` : `Equip ${slot.label}`}
         onClick={() => setActiveEquipmentSlot(slot.id)}
       >
-        <span className="equipment-slot-art">{equippedItem ? <Sword aria-hidden="true" /> : <Icon aria-hidden="true" />}</span>
+        <span className="equipment-slot-art">
+          {equippedItem ? <Sword aria-hidden="true" /> : <Icon aria-hidden="true" />}
+        </span>
         <span className="equipment-slot-copy">
           <span className="loadout-slot-label">{slot.label}</span>
-          {equippedItem ? <strong className="loadout-slot-value">{equippedItem.name}</strong> : <small className="loadout-slot-empty">Empty</small>}
+          {equippedItem ? (
+            <strong className="loadout-slot-value">{equippedItem.name}</strong>
+          ) : (
+            <small className="loadout-slot-empty">Empty</small>
+          )}
         </span>
       </TorchButton>
     );
@@ -1039,14 +1056,10 @@ function GearPanel(): ReactElement {
       </div>
       <div className="gear-loadout-pane">
         <section className="gear-slot-group gear-paper-doll" aria-label="Equipment slots">
-          <div className="paper-doll-grid">
-            {paperDollSlots.map(equipmentButton)}
-          </div>
+          <div className="paper-doll-grid">{paperDollSlots.map(equipmentButton)}</div>
         </section>
         <section className="gear-slot-group gear-jewelry" aria-label="Jewelry slots">
-          <div className="jewelry-grid">
-            {jewelrySlots.map(equipmentButton)}
-          </div>
+          <div className="jewelry-grid">{jewelrySlots.map(equipmentButton)}</div>
         </section>
         <section className="gear-slot-group gear-tools" aria-label="Tool slots">
           <div className="tool-loadout-grid" role="group" aria-label="Tool slots">
@@ -1063,10 +1076,16 @@ function GearPanel(): ReactElement {
                   title={equippedTool ? `${slot.label}: ${equippedTool.name}` : `Equip ${slot.label}`}
                   onClick={() => setSelectedToolSlot(slot.id)}
                 >
-                  <span className="tool-slot-art"><Icon aria-hidden="true" /></span>
+                  <span className="tool-slot-art">
+                    <Icon aria-hidden="true" />
+                  </span>
                   <span className="tool-slot-copy">
                     <span className="loadout-slot-label">{slot.label}</span>
-                    {equippedTool ? <strong className="loadout-slot-value">{equippedTool.name}</strong> : <small className="loadout-slot-empty">Empty</small>}
+                    {equippedTool ? (
+                      <strong className="loadout-slot-value">{equippedTool.name}</strong>
+                    ) : (
+                      <small className="loadout-slot-empty">Empty</small>
+                    )}
                   </span>
                 </TorchButton>
               );
@@ -1092,34 +1111,53 @@ function EquipmentSelectorScreen({
   onSelect: (itemId: string) => void;
 }): ReactElement {
   return (
-    <div className="loadout-screen selector-screen" data-testid="equipment-picker" aria-label={`Choose ${slot?.label ?? 'Equipment'}`}>
+    <div
+      className="loadout-screen selector-screen"
+      data-testid="equipment-picker"
+      aria-label={`Choose ${slot?.label ?? 'Equipment'}`}
+    >
       <header className="selector-header">
-        <TorchButton type="button" className="selector-back" aria-label="Back to Equipment" data-testid="equipment-picker-back" onClick={onBack}>
+        <TorchButton
+          type="button"
+          className="selector-back"
+          aria-label="Back to Equipment"
+          data-testid="equipment-picker-back"
+          onClick={onBack}
+        >
           <ArrowLeft aria-hidden="true" />
         </TorchButton>
         <h2>{slot?.label}</h2>
       </header>
       {items.length ? (
-        <div className="equipment-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Equipment'} choices`}>
+        <div
+          className="equipment-choice-grid selector-grid"
+          role="list"
+          aria-label={`${slot?.label ?? 'Equipment'} choices`}
+        >
           {items.map((item) => (
             <TorchButton
               className={`equipment-choice${selectedId === item.id ? ' is-selected' : ''}`}
               type="button"
-              role="listitem"
               key={item.id}
               aria-label={item.name}
               aria-pressed={selectedId === item.id}
               data-testid={`equipment-choice-${item.id}`}
               onClick={() => onSelect(item.id)}
             >
-              <span className="equipment-choice-art"><Sword aria-hidden="true" /></span>
-              <span className="equipment-choice-copy"><strong>{item.name}</strong></span>
+              <span className="equipment-choice-art">
+                <Sword aria-hidden="true" />
+              </span>
+              <span className="equipment-choice-copy">
+                <strong>{item.name}</strong>
+              </span>
               {selectedId === item.id ? <Check aria-hidden="true" /> : null}
             </TorchButton>
           ))}
         </div>
       ) : (
-        <div className="selector-empty" role="status">No equipment</div>
+        <div className="selector-empty" role="status">
+          No equipment
+        </div>
       )}
     </div>
   );
@@ -1139,19 +1177,27 @@ function ToolSelectorScreen({
   onSelect: (toolId: string) => void;
 }): ReactElement {
   return (
-    <div className="loadout-screen selector-screen" data-testid="tool-picker" aria-label={`Choose ${slot?.label ?? 'Tool'}`}>
+    <div
+      className="loadout-screen selector-screen"
+      data-testid="tool-picker"
+      aria-label={`Choose ${slot?.label ?? 'Tool'}`}
+    >
       <header className="selector-header">
-        <TorchButton type="button" className="selector-back" aria-label="Back to Equipment" data-testid="tool-picker-back" onClick={onBack}>
+        <TorchButton
+          type="button"
+          className="selector-back"
+          aria-label="Back to Equipment"
+          data-testid="tool-picker-back"
+          onClick={onBack}
+        >
           <ArrowLeft aria-hidden="true" />
         </TorchButton>
         <h2>{slot?.label}</h2>
       </header>
       <div className="tool-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Tool'} choices`}>
         {items.map((tool) => {
-          const Icon = tool.icon === 'axe' ? Axe
-            : tool.icon === 'pickaxe' ? Pickaxe
-              : tool.icon === 'hammer' ? Hammer
-                : Shovel;
+          const Icon =
+            tool.icon === 'axe' ? Axe : tool.icon === 'pickaxe' ? Pickaxe : tool.icon === 'hammer' ? Hammer : Shovel;
           return (
             <TorchButton
               className={`tool-choice${selectedId === tool.id ? ' is-selected' : ''}`}
@@ -1162,8 +1208,12 @@ function ToolSelectorScreen({
               data-testid={`tool-choice-${tool.id}`}
               onClick={() => onSelect(tool.id)}
             >
-              <span className="tool-choice-art"><Icon aria-hidden="true" /></span>
-              <span className="tool-choice-copy"><strong>{tool.name}</strong></span>
+              <span className="tool-choice-art">
+                <Icon aria-hidden="true" />
+              </span>
+              <span className="tool-choice-copy">
+                <strong>{tool.name}</strong>
+              </span>
               {selectedId === tool.id ? <Check aria-hidden="true" /> : null}
             </TorchButton>
           );
@@ -1176,7 +1226,7 @@ function ToolSelectorScreen({
 function AbilitiesScreen(): ReactElement {
   const [activeAbilitySlot, setActiveAbilitySlot] = useState<AbilitySlotId>('basic');
   const [pickerSlot, setPickerSlot] = useState<AbilitySlotId>();
-  const [detailAbility, setDetailAbility] = useState<typeof abilities[number]>();
+  const [detailAbility, setDetailAbility] = useState<(typeof abilities)[number]>();
   const [feedback, setFeedback] = useState<string>();
   const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({
     ...gameSession.state.hero.equippedAbilities,
@@ -1185,10 +1235,14 @@ function AbilitiesScreen(): ReactElement {
     ...gameSession.state.hero.abilityCooldowns,
   });
 
-  useEffect(() => gameSession.subscribe((state) => {
-    setEquippedAbilities({ ...state.hero.equippedAbilities });
-    setAbilityCooldowns({ ...state.hero.abilityCooldowns });
-  }), []);
+  useEffect(
+    () =>
+      gameSession.subscribe((state) => {
+        setEquippedAbilities({ ...state.hero.equippedAbilities });
+        setAbilityCooldowns({ ...state.hero.abilityCooldowns });
+      }),
+    [],
+  );
 
   if (pickerSlot) {
     const picker = abilitySlots.find((slot) => slot.id === pickerSlot);
@@ -1222,8 +1276,13 @@ function AbilitiesScreen(): ReactElement {
               <h2>Build your combat loadout</h2>
               <p>Choose one ability for each slot. Changes do not consume a turn.</p>
             </div>
-            <div className="abilities-progress" aria-label={`${equippedCount} of ${abilitySlots.length} ability slots equipped`}>
-              <strong>{equippedCount} / {abilitySlots.length}</strong>
+            <div
+              className="abilities-progress"
+              aria-label={`${equippedCount} of ${abilitySlots.length} ability slots equipped`}
+            >
+              <strong>
+                {equippedCount} / {abilitySlots.length}
+              </strong>
               <span>equipped</span>
             </div>
           </header>
@@ -1260,7 +1319,9 @@ function AbilitiesScreen(): ReactElement {
                       <div className="ability-loadout-label">
                         <strong>{slot.label}</strong>
                         <small>{equipped?.name ?? 'Empty slot'}</small>
-                        <span>{equipped ? abilityCooldownLabel(equipped.id, abilityCooldowns) : 'Choose an ability'}</span>
+                        <span>
+                          {equipped ? abilityCooldownLabel(equipped.id, abilityCooldowns) : 'Choose an ability'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -1277,10 +1338,16 @@ function AbilitiesScreen(): ReactElement {
             />
           </div>
 
-          {feedback ? <div className="ability-feedback" data-testid="ability-feedback" role="status" aria-live="polite">{feedback}</div> : null}
+          {feedback ? (
+            <div className="ability-feedback" data-testid="ability-feedback" role="status" aria-live="polite">
+              {feedback}
+            </div>
+          ) : null}
         </section>
       </div>
-      {detailAbility ? <AbilityDetailDialog ability={detailAbility} onClose={() => setDetailAbility(undefined)} /> : null}
+      {detailAbility ? (
+        <AbilityDetailDialog ability={detailAbility} onClose={() => setDetailAbility(undefined)} />
+      ) : null}
     </>
   );
 }
@@ -1300,7 +1367,7 @@ function AbilityInspector({
   onShowDetail,
 }: {
   slot: (typeof abilitySlots)[number];
-  ability: typeof abilities[number] | undefined;
+  ability: (typeof abilities)[number] | undefined;
   cooldown: string | undefined;
   onChange: () => void;
   onShowDetail: (() => void) | undefined;
@@ -1323,15 +1390,35 @@ function AbilityInspector({
           <div className="ability-inspector-copy">
             <p>{ability.description}</p>
             <dl className="ability-metadata">
-              <div><dt>Slot</dt><dd>{slot.label}</dd></div>
-              <div><dt>Cooldown</dt><dd>{abilityActionDefinition(ability.id)?.cooldown ? `${abilityActionDefinition(ability.id)?.cooldown} actions` : 'No cooldown'}</dd></div>
+              <div>
+                <dt>Slot</dt>
+                <dd>{slot.label}</dd>
+              </div>
+              <div>
+                <dt>Cooldown</dt>
+                <dd>
+                  {abilityActionDefinition(ability.id)?.cooldown
+                    ? `${abilityActionDefinition(ability.id)?.cooldown} actions`
+                    : 'No cooldown'}
+                </dd>
+              </div>
             </dl>
             <div className="ability-inspector-actions">
-              <TorchButton type="button" className="ability-change-button" data-testid="ability-change" onClick={onChange}>
+              <TorchButton
+                type="button"
+                className="ability-change-button"
+                data-testid="ability-change"
+                onClick={onChange}
+              >
                 Change ability
               </TorchButton>
               {onShowDetail ? (
-                <TorchButton type="button" className="ability-details-button" data-testid="ability-view-details" onClick={onShowDetail}>
+                <TorchButton
+                  type="button"
+                  className="ability-details-button"
+                  data-testid="ability-view-details"
+                  onClick={onShowDetail}
+                >
                   View full details
                 </TorchButton>
               ) : null}
@@ -1358,21 +1445,19 @@ function AbilityArtButton({
   onClick,
   selected = false,
 }: {
-  ability: typeof abilities[number] | undefined;
+  ability: (typeof abilities)[number] | undefined;
   className: string;
   ariaLabel: string;
   onClick: () => void;
   selected?: boolean;
 }): ReactElement {
   return (
-    <TorchButton
-      className={className}
-      type="button"
-      aria-label={ariaLabel}
-      aria-pressed={selected}
-      onClick={onClick}
-    >
-      {ability ? <img src={ability.assetPath} alt={ability.assetAlt} /> : <span className="ability-loadout-placeholder">+</span>}
+    <TorchButton className={className} type="button" aria-label={ariaLabel} aria-pressed={selected} onClick={onClick}>
+      {ability ? (
+        <img src={ability.assetPath} alt={ability.assetAlt} />
+      ) : (
+        <span className="ability-loadout-placeholder">+</span>
+      )}
     </TorchButton>
   );
 }
@@ -1382,7 +1467,7 @@ function AbilityChoiceButton({
   selected,
   onClick,
 }: {
-  ability: typeof abilities[number];
+  ability: (typeof abilities)[number];
   selected: boolean;
   onClick: () => void;
 }): ReactElement {
@@ -1411,14 +1496,19 @@ function AbilityDetailDialog({
   ability,
   onClose,
 }: {
-  ability: typeof abilities[number];
+  ability: (typeof abilities)[number];
   onClose: () => void;
 }): ReactElement {
   const closeRef = useRef<HTMLButtonElement>(null);
   const cooldown = abilityActionDefinition(ability.id)?.cooldown ?? 0;
 
   return (
-    <TorchDialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <TorchDialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <TorchDialog.Portal>
         <div className="ability-detail-layer" data-testid="ability-detail">
           <TorchDialog.Backdrop className="ability-detail-backdrop" />
@@ -1444,7 +1534,10 @@ function AbilityDetailDialog({
                 <TorchDialog.Title className="ability-detail-title">{ability.name}</TorchDialog.Title>
                 <p>{ability.description}</p>
                 <dl className="ability-detail-metadata">
-                  <div><dt>Cooldown</dt><dd>{cooldown > 0 ? `${cooldown} actions` : 'No cooldown'}</dd></div>
+                  <div>
+                    <dt>Cooldown</dt>
+                    <dd>{cooldown > 0 ? `${cooldown} actions` : 'No cooldown'}</dd>
+                  </div>
                 </dl>
               </div>
             </TorchDialog.Popup>
@@ -1469,25 +1562,41 @@ function AbilitySelectorScreen({
   onSelect: (abilityId: string) => void;
 }): ReactElement {
   return (
-    <div className="loadout-screen selector-screen ability-selector-screen" data-testid="ability-picker" aria-label={`Choose ${slot?.label ?? 'Ability'}`}>
+    <div
+      className="loadout-screen selector-screen ability-selector-screen"
+      data-testid="ability-picker"
+      aria-label={`Choose ${slot?.label ?? 'Ability'}`}
+    >
       <header className="selector-header">
         <div>
           <p className="stats-kicker">Abilities → {slot?.label ?? 'Slot'}</p>
           <h2>Choose an ability</h2>
         </div>
-        <TorchButton type="button" className="selector-back" aria-label="Back to Abilities" data-testid="ability-picker-back" onClick={onBack}>
+        <TorchButton
+          type="button"
+          className="selector-back"
+          aria-label="Back to Abilities"
+          data-testid="ability-picker-back"
+          onClick={onBack}
+        >
           <ArrowLeft aria-hidden="true" />
         </TorchButton>
       </header>
       <div className="ability-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Ability'} choices`}>
-        {choices.length > 0 ? choices.map((ability) => (
-          <AbilityChoiceButton
-            ability={ability}
-            selected={selectedId === ability.id}
-            onClick={() => onSelect(ability.id)}
-            key={ability.id}
-          />
-        )) : <div className="selector-empty" role="status">No abilities available for this slot.</div>}
+        {choices.length > 0 ? (
+          choices.map((ability) => (
+            <AbilityChoiceButton
+              ability={ability}
+              selected={selectedId === ability.id}
+              onClick={() => onSelect(ability.id)}
+              key={ability.id}
+            />
+          ))
+        ) : (
+          <div className="selector-empty" role="status">
+            No abilities available for this slot.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1516,7 +1625,11 @@ function TorchSelect({ value, options, onChange, ariaLabel, testId }: TorchSelec
         data-testid={testId}
         onChange={(event) => onChange(event.target.value)}
       >
-        {options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+        {options.map((option) => (
+          <option value={option.value} key={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
       <ChevronDown className="torch-select-chevron" aria-hidden="true" />
     </label>
@@ -1534,17 +1647,43 @@ type OptionsTabDefinition = {
 };
 
 const optionsTabs: readonly OptionsTabDefinition[] = [
-  { id: 'display', label: 'Display', description: 'Window and board presentation', icon: Monitor, testId: 'settings-tab-display' },
+  {
+    id: 'display',
+    label: 'Display',
+    description: 'Window and board presentation',
+    icon: Monitor,
+    testId: 'settings-tab-display',
+  },
   { id: 'audio', label: 'Audio', description: 'Soundscape levels', icon: Volume2, testId: 'settings-tab-audio' },
-  { id: 'gameplay', label: 'Gameplay', description: 'Comfort and interaction', icon: Gamepad2, testId: 'settings-tab-gameplay' },
-  { id: 'controls', label: 'Controls', description: 'Keyboard bindings', icon: Keyboard, testId: 'settings-tab-bindings' },
-  { id: 'accessibility', label: 'Accessibility', description: 'Motion and readability', icon: Accessibility, testId: 'settings-tab-accessibility' },
+  {
+    id: 'gameplay',
+    label: 'Gameplay',
+    description: 'Comfort and interaction',
+    icon: Gamepad2,
+    testId: 'settings-tab-gameplay',
+  },
+  {
+    id: 'controls',
+    label: 'Controls',
+    description: 'Keyboard bindings',
+    icon: Keyboard,
+    testId: 'settings-tab-bindings',
+  },
+  {
+    id: 'accessibility',
+    label: 'Accessibility',
+    description: 'Motion and readability',
+    icon: Accessibility,
+    testId: 'settings-tab-accessibility',
+  },
 ];
 
 function SettingsScreen(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>('display');
   const [settings, setSettings] = useState<PresentationSettings>(readPresentationSettings);
-  const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement));
+  const [fullscreen, setFullscreen] = useState(
+    () => typeof document !== 'undefined' && Boolean(document.fullscreenElement),
+  );
   const [status, setStatus] = useState('Changes save locally; connected adapters update immediately.');
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -1605,7 +1744,7 @@ function SettingsScreen(): ReactElement {
       <div className="options-heading">
         <div>
           <p className="stats-kicker">Game preferences</p>
-        <p className="options-subtitle">Tune Torch for your expedition. Preferences are saved as you change them.</p>
+          <p className="options-subtitle">Tune Torch for your expedition. Preferences are saved as you change them.</p>
         </div>
       </div>
 
@@ -1627,37 +1766,100 @@ function SettingsScreen(): ReactElement {
 
         <div className="options-content">
           <TorchTabsContent className="settings-tab-panel" value="display">
-            <OptionsGroup eyebrow="Presentation" title="Display" description="Keep the board readable at the size and brightness that suits you.">
+            <OptionsGroup
+              eyebrow="Presentation"
+              title="Display"
+              description="Keep the board readable at the size and brightness that suits you."
+            >
               <SettingRow label="Fullscreen" description="Use the whole display for Torch.">
-                <SettingSwitch label="Fullscreen" value={fullscreen} onChange={toggleFullscreen} testId="settings-fullscreen" />
+                <SettingSwitch
+                  label="Fullscreen"
+                  value={fullscreen}
+                  onChange={toggleFullscreen}
+                  testId="settings-fullscreen"
+                />
               </SettingRow>
               <SettingRow label="UI Scale" description="Adjust interface density independently of the board.">
-                <TorchSelect value={settings.uiScale} options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compact' }, { value: 'large', label: 'Large' }]} onChange={(value) => updateSetting('uiScale', value as PresentationSettings['uiScale'])} ariaLabel="UI Scale" testId="settings-ui-scale" />
+                <TorchSelect
+                  value={settings.uiScale}
+                  options={[
+                    { value: 'auto', label: 'Auto' },
+                    { value: 'compact', label: 'Compact' },
+                    { value: 'large', label: 'Large' },
+                  ]}
+                  onChange={(value) => updateSetting('uiScale', value as PresentationSettings['uiScale'])}
+                  ariaLabel="UI Scale"
+                  testId="settings-ui-scale"
+                />
               </SettingRow>
               <SettingRow label="Show Grid" description="Display tile boundaries across the lit Torch area.">
-                <SettingSwitch label="Show Grid" value={settings.showGrid} onChange={() => updateSetting('showGrid', !settings.showGrid)} testId="settings-show-grid" />
+                <SettingSwitch
+                  label="Show Grid"
+                  value={settings.showGrid}
+                  onChange={() => updateSetting('showGrid', !settings.showGrid)}
+                  testId="settings-show-grid"
+                />
               </SettingRow>
             </OptionsGroup>
           </TorchTabsContent>
 
           <TorchTabsContent className="settings-tab-panel" value="audio">
-            <OptionsGroup eyebrow="Soundscape" title="Audio" description="Balance the sounds that accompany each action.">
-              <SettingRange label="Master Volume" description="Overall Torch volume." value={settings.masterVolume} onChange={(value) => updateSetting('masterVolume', value)} testId="settings-master-volume" />
-              <SettingRange label="Music Volume" description="Ambient music and exploration themes." value={settings.musicVolume} onChange={(value) => updateSetting('musicVolume', value)} />
-              <SettingRange label="Effects Volume" description="Combat, gathering, and interface sounds." value={settings.sfxVolume} onChange={(value) => updateSetting('sfxVolume', value)} />
+            <OptionsGroup
+              eyebrow="Soundscape"
+              title="Audio"
+              description="Balance the sounds that accompany each action."
+            >
+              <SettingRange
+                label="Master Volume"
+                description="Overall Torch volume."
+                value={settings.masterVolume}
+                onChange={(value) => updateSetting('masterVolume', value)}
+                testId="settings-master-volume"
+              />
+              <SettingRange
+                label="Music Volume"
+                description="Ambient music and exploration themes."
+                value={settings.musicVolume}
+                onChange={(value) => updateSetting('musicVolume', value)}
+              />
+              <SettingRange
+                label="Effects Volume"
+                description="Combat, gathering, and interface sounds."
+                value={settings.sfxVolume}
+                onChange={(value) => updateSetting('sfxVolume', value)}
+              />
             </OptionsGroup>
           </TorchTabsContent>
 
           <TorchTabsContent className="settings-tab-panel" value="gameplay">
-            <OptionsGroup eyebrow="Comfort" title="Gameplay" description="Shape how much feedback Torch gives you during play.">
+            <OptionsGroup
+              eyebrow="Comfort"
+              title="Gameplay"
+              description="Shape how much feedback Torch gives you during play."
+            >
               <SettingRow label="Screen Shake" description="Emphasize impactful actions and attacks.">
-                <SettingSwitch label="Screen Shake" value={settings.screenShake} onChange={() => updateSetting('screenShake', !settings.screenShake)} />
+                <SettingSwitch
+                  label="Screen Shake"
+                  value={settings.screenShake}
+                  onChange={() => updateSetting('screenShake', !settings.screenShake)}
+                />
               </SettingRow>
               <SettingRow label="Interaction Hints" description="Show contextual action affordances near the Hero.">
-                <SettingSwitch label="Interaction Hints" value={settings.interactionHints} onChange={() => updateSetting('interactionHints', !settings.interactionHints)} />
+                <SettingSwitch
+                  label="Interaction Hints"
+                  value={settings.interactionHints}
+                  onChange={() => updateSetting('interactionHints', !settings.interactionHints)}
+                />
               </SettingRow>
-              <SettingRow label="Confirm Context Actions" description="Ask before gathering, mining, or attacking from a blocked move.">
-                <SettingSwitch label="Confirm Context Actions" value={settings.confirmActions} onChange={() => updateSetting('confirmActions', !settings.confirmActions)} />
+              <SettingRow
+                label="Confirm Context Actions"
+                description="Ask before gathering, mining, or attacking from a blocked move."
+              >
+                <SettingSwitch
+                  label="Confirm Context Actions"
+                  value={settings.confirmActions}
+                  onChange={() => updateSetting('confirmActions', !settings.confirmActions)}
+                />
               </SettingRow>
             </OptionsGroup>
           </TorchTabsContent>
@@ -1667,13 +1869,23 @@ function SettingsScreen(): ReactElement {
           </TorchTabsContent>
 
           <TorchTabsContent className="settings-tab-panel" value="accessibility">
-            <OptionsGroup eyebrow="Readability" title="Accessibility" description="Reduce visual intensity without changing the simulation rules.">
+            <OptionsGroup
+              eyebrow="Readability"
+              title="Accessibility"
+              description="Reduce visual intensity without changing the simulation rules."
+            >
               <SettingRow label="Reduce Motion" description="Use shorter transitions and less camera movement.">
-                <SettingSwitch label="Reduce Motion" value={settings.reduceMotion} onChange={() => updateSetting('reduceMotion', !settings.reduceMotion)} />
+                <SettingSwitch
+                  label="Reduce Motion"
+                  value={settings.reduceMotion}
+                  onChange={() => updateSetting('reduceMotion', !settings.reduceMotion)}
+                />
               </SettingRow>
               <div className="options-info" role="note">
                 <Accessibility aria-hidden="true" />
-                <p>More accessibility options will be added as the corresponding presentation adapters become available.</p>
+                <p>
+                  More accessibility options will be added as the corresponding presentation adapters become available.
+                </p>
               </div>
             </OptionsGroup>
           </TorchTabsContent>
@@ -1689,16 +1901,44 @@ function SettingsScreen(): ReactElement {
           {confirmReset ? (
             <div className="options-reset-confirm" role="group" aria-label="Confirm reset options">
               <span>Reset all options?</span>
-              <TorchButton variant="destructive" size="sm" type="button" data-testid="options-reset-confirm" onClick={resetAll}>Reset</TorchButton>
-              <TorchButton variant="ghost" size="sm" type="button" data-testid="options-reset-cancel" onClick={() => setConfirmReset(false)}>Cancel</TorchButton>
+              <TorchButton
+                variant="destructive"
+                size="sm"
+                type="button"
+                data-testid="options-reset-confirm"
+                onClick={resetAll}
+              >
+                Reset
+              </TorchButton>
+              <TorchButton
+                variant="ghost"
+                size="sm"
+                type="button"
+                data-testid="options-reset-cancel"
+                onClick={() => setConfirmReset(false)}
+              >
+                Cancel
+              </TorchButton>
             </div>
           ) : (
-            <TorchButton variant="ghost" size="sm" type="button" data-testid="options-reset" onClick={() => setConfirmReset(true)}>
+            <TorchButton
+              variant="ghost"
+              size="sm"
+              type="button"
+              data-testid="options-reset"
+              onClick={() => setConfirmReset(true)}
+            >
               <RotateCcw aria-hidden="true" />
               Reset defaults
             </TorchButton>
           )}
-          <TorchButton variant="default" size="sm" type="button" className="options-done" onClick={() => document.querySelector<HTMLElement>('[data-testid="close-menu"]')?.click()}>
+          <TorchButton
+            variant="default"
+            size="sm"
+            type="button"
+            className="options-done"
+            onClick={() => document.querySelector<HTMLElement>('[data-testid="close-menu"]')?.click()}
+          >
             Done
           </TorchButton>
         </div>
@@ -1707,9 +1947,22 @@ function SettingsScreen(): ReactElement {
   );
 }
 
-function OptionsGroup({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactElement | ReactElement[] }): ReactElement {
+function OptionsGroup({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactElement | ReactElement[];
+}): ReactElement {
   return (
-    <section className="settings-group options-group" aria-labelledby={`options-${title.toLowerCase().replaceAll(' ', '-')}-title`}>
+    <section
+      className="settings-group options-group"
+      aria-labelledby={`options-${title.toLowerCase().replaceAll(' ', '-')}-title`}
+    >
       <div className="settings-group-heading options-group-heading">
         <p className="stats-kicker">{eyebrow}</p>
         <h2 id={`options-${title.toLowerCase().replaceAll(' ', '-')}-title`}>{title}</h2>
@@ -1720,7 +1973,15 @@ function OptionsGroup({ eyebrow, title, description, children }: { eyebrow: stri
   );
 }
 
-function SettingRow({ label, description, children }: { label: string; description: string; children: ReactElement }): ReactElement {
+function SettingRow({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description: string;
+  children: ReactElement;
+}): ReactElement {
   return (
     <div className="settings-row options-row">
       <div className="options-row-copy">
@@ -1732,7 +1993,17 @@ function SettingRow({ label, description, children }: { label: string; descripti
   );
 }
 
-function SettingSwitch({ label, value, onChange, testId }: { label: string; value: boolean; onChange: () => void; testId?: string }): ReactElement {
+function SettingSwitch({
+  label,
+  value,
+  onChange,
+  testId,
+}: {
+  label: string;
+  value: boolean;
+  onChange: () => void;
+  testId?: string;
+}): ReactElement {
   return (
     <TorchButton
       variant="outline"
@@ -1745,7 +2016,9 @@ function SettingSwitch({ label, value, onChange, testId }: { label: string; valu
       data-testid={testId}
       onClick={onChange}
     >
-      <span className="settings-switch-track" aria-hidden="true"><span /></span>
+      <span className="settings-switch-track" aria-hidden="true">
+        <span />
+      </span>
       <span>{value ? 'On' : 'Off'}</span>
     </TorchButton>
   );
@@ -1787,12 +2060,16 @@ function KeyBindingsPanel({ onStatus }: { onStatus: (message: string) => void })
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [bindings, capturing]);
+  }, [bindings, capturing, onStatus]);
 
   return (
     <section className="settings-group key-bindings-group options-group" aria-labelledby="settings-bindings-title">
       <div className="settings-group-heading key-bindings-heading">
-        <div><p className="stats-kicker">Keyboard</p><h2 id="settings-bindings-title">Controls</h2><p>Choose the keys that feel natural for moving through the dark.</p></div>
+        <div>
+          <p className="stats-kicker">Keyboard</p>
+          <h2 id="settings-bindings-title">Controls</h2>
+          <p>Choose the keys that feel natural for moving through the dark.</p>
+        </div>
         <TorchButton
           variant="ghost"
           size="sm"
@@ -1809,22 +2086,34 @@ function KeyBindingsPanel({ onStatus }: { onStatus: (message: string) => void })
           Reset defaults
         </TorchButton>
       </div>
-      <p className="key-bindings-help">Select a key, then press a replacement. Escape cancels rebinding. Conflicts swap safely so every action keeps a key.</p>
+      <p className="key-bindings-help">
+        Select a key, then press a replacement. Escape cancels rebinding. Conflicts swap safely so every action keeps a
+        key.
+      </p>
       {capturing ? (
         <p className="key-bindings-status" role="status" aria-live="polite">
-          Press a replacement key for {keyBindingDefinitions.find((definition) => definition.id === capturing.action)?.label ?? 'this binding'}. Escape cancels.
+          Press a replacement key for{' '}
+          {keyBindingDefinitions.find((definition) => definition.id === capturing.action)?.label ?? 'this binding'}.
+          Escape cancels.
         </p>
       ) : null}
       <div className="key-bindings-list">
         {keyBindingGroups.map((group) => (
-          <section className="key-binding-group" aria-labelledby={`key-binding-group-${group.label.toLowerCase()}`} key={group.label}>
+          <section
+            className="key-binding-group"
+            aria-labelledby={`key-binding-group-${group.label.toLowerCase()}`}
+            key={group.label}
+          >
             <h3 id={`key-binding-group-${group.label.toLowerCase()}`}>{group.label}</h3>
             {group.actions.map((action) => {
               const definition = keyBindingDefinitions.find((candidate) => candidate.id === action);
               if (!definition) return null;
               return (
                 <div className="key-binding-row" key={definition.id}>
-                  <div><strong>{definition.label}</strong><small>{definition.description}</small></div>
+                  <div>
+                    <strong>{definition.label}</strong>
+                    <small>{definition.description}</small>
+                  </div>
                   <div className="key-binding-keys">
                     {(bindings[definition.id] ?? []).map((key, slot) => {
                       const isCapturing = capturing?.action === definition.id && capturing.slot === slot;
@@ -1856,11 +2145,39 @@ function KeyBindingsPanel({ onStatus }: { onStatus: (message: string) => void })
   );
 }
 
-function SettingRange({ label, description, value, onChange, testId }: { label: string; description: string; value: number; onChange: (value: number) => void; testId?: string }): ReactElement {
+function SettingRange({
+  label,
+  description,
+  value,
+  onChange,
+  testId,
+}: {
+  label: string;
+  description: string;
+  value: number;
+  onChange: (value: number) => void;
+  testId?: string;
+}): ReactElement {
   return (
     <label className="settings-range-row">
-      <span className="options-row-copy"><strong>{label}</strong><small>{description}</small></span>
-      <span className="options-range-control"><output htmlFor={testId}>{value}%</output><input aria-label={label} data-testid={testId} className="settings-range" id={testId} type="range" min="0" max="100" value={value} onChange={(event) => onChange(Number(event.target.value))} /></span>
+      <span className="options-row-copy">
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </span>
+      <span className="options-range-control">
+        <output htmlFor={testId}>{value}%</output>
+        <input
+          aria-label={label}
+          data-testid={testId}
+          className="settings-range"
+          id={testId}
+          type="range"
+          min="0"
+          max="100"
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </span>
     </label>
   );
 }

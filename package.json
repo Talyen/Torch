@@ -2,6 +2,7 @@
   "name": "torch",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.3",
   "engines": {
     "node": "22.x"
   },
@@ -12,11 +13,19 @@
     "build": "npm run assets:build && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "typecheck:sim": "tsc --project tsconfig.sim.json --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:prod": "TORCH_E2E_PROD=1 npm run test:e2e -- --reporter=line",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "check:theme": "node scripts/check-ui-theme.mjs",
-    "verify": "npm run check:theme && npm run typecheck && npm test && npm run build && npm run test:e2e -- --reporter=line"
+    "check:content": "node scripts/check-content.mjs",
+    "check:size": "node scripts/check-bundle-size.mjs",
+    "verify": "npm run format:check && npm run lint && npm run check:theme && npm run check:content && npm run typecheck:sim && npm run typecheck && npm test && npm run build && npm run check:size && npm run test:e2e:prod"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -35,9 +44,15 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.9.6",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
   }

@@ -113,8 +113,7 @@ export function directionalVisibilityProgress(
 
   const forwardX = directionX / movement;
   const forwardY = directionY / movement;
-  const projection = (position.x - currentHero.x) * forwardX
-    + (position.y - currentHero.y) * forwardY;
+  const projection = (position.x - currentHero.x) * forwardX + (position.y - currentHero.y) * forwardY;
   const sweepRange = TORCH_RADIUS * 2 + 2;
   const normalizedProjection = Math.max(0, Math.min(1, (projection + TORCH_RADIUS + 1) / sweepRange));
   const delay = normalizedProjection * 0.72;

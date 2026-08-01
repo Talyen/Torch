@@ -16,12 +16,12 @@ Inventory confirmed transition or persistence issues and fix them at the owner t
 
 ## Triage
 
-| Priority | Examples |
-| --- | --- |
-| P0 | A command can mutate state without going through `applyCommand`, resolve twice, grant a resource twice, or leave the state invalid after a death/respawn |
-| P1 | A rejected command changes state; enemy response, cooldown, gathering progress, reveal, or generated-entity removal is applied in the wrong turn; an error is silently discarded |
-| P2 | Browser preference or key-binding corruption is hidden without a deterministic fallback or useful diagnostic |
-| P3 | Style-only error handling or defensive checks with no confirmed behavior impact |
+| Priority | Examples                                                                                                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0       | A command can mutate state without going through `applyCommand`, resolve twice, grant a resource twice, or leave the state invalid after a death/respawn                         |
+| P1       | A rejected command changes state; enemy response, cooldown, gathering progress, reveal, or generated-entity removal is applied in the wrong turn; an error is silently discarded |
+| P2       | Browser preference or key-binding corruption is hidden without a deterministic fallback or useful diagnostic                                                                     |
+| P3       | Style-only error handling or defensive checks with no confirmed behavior impact                                                                                                  |
 
 Prioritize P0–P1 by player-visible correctness and replay impact.
 

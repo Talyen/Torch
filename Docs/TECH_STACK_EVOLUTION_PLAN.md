@@ -1,6 +1,6 @@
 # Torch Tech Stack Evolution Plan
 
-Status: revised after read-only subagent review
+Status: implemented through the Phase 1 guardrail/save/controller slice
 Scope: architecture, developer tooling, quality gates, and delivery workflow
 Current milestone: Phase 1 first playable vertical slice
 
@@ -35,11 +35,32 @@ reconcile that wording in `ROADMAP.md` and state which work is actively in
 flight. This plan treats Phase 1 as the product milestone while treating the
 guardrails below as a small foundation slice, not a replacement milestone.
 
+### Implementation status — 2026-07-31
+
+The first implementation slice is now present in the working tree:
+
+- Prettier, flat ESLint, React Hooks, JSX accessibility, simulation boundary
+  restrictions, `tsconfig.sim.json`, recursive theme discovery, content/asset
+  integrity checks, and a post-build bundle-size budget.
+- Node 22 plus npm 10.9.3 is declared and CI activates that npm line. TypeScript
+  is pinned to 6.0.x because the selected `typescript-eslint` release supports
+  TypeScript below 6.1; this is an explicit compatibility decision, not a
+  runtime architecture change.
+- `WorldSave` schema version 1, strict decode validation, generated-baseline
+  re-materialization, fixed-seed replay checkpoints, one local revisioned save
+  slot, and action-boundary persistence through `GameSession`.
+- Standard browser controller mapping with deadzone and edge-trigger handling,
+  plus focused unit tests and a production-preview reload smoke journey.
+
+The remaining roadmap work is deliberately deferred: profile saves, migrations,
+multiple-slot UX, interrupted-write recovery qualification, cloud providers,
+additional browser engines, and large UI/scene/CSS ownership refactors.
+
 ## Current stack and evidence
 
 ### Runtime and source organization
 
-The repository currently uses Phaser 4, React 19, TypeScript 7, Vite 8,
+The repository currently uses Phaser 4, React 19, TypeScript 6, Vite 8,
 Tailwind 4, Base UI/shadcn-style primitives, Lucide, and Sharp. The intended
 ownership is:
 
@@ -68,7 +89,7 @@ conventions rather than mechanical checks. The simulation is compiled as part
 of the same DOM-capable TypeScript project as the client, so the compiler does
 not independently prevent browser types from entering `src/sim/`.
 
-### Existing verification
+### Pre-implementation verification baseline
 
 The current `npm run verify` command runs:
 
@@ -103,19 +124,18 @@ reported only minor React type-package updates.
 
 ### Current gaps confirmed in the checkout
 
-- No `lint` or `format` command.
-- No coverage command or coverage artifact.
-- No import-graph or architecture-boundary command.
+- No coverage command or coverage artifact (deferred until a meaningful
+  threshold can be chosen).
+- No separate import-graph command; expressible boundaries now belong to ESLint
+  and the simulation-only TypeScript project.
 - The asset build fails on unreadable/missing sources and records dimensions, but
   there is no independent uniqueness, reference-integrity, orphan-output,
   freshness, or size validation.
 - One Playwright project: desktop Chromium. The existing suite already exercises
   the documented responsive viewport geometry; missing coverage is browser
   engines, device emulation, and real hardware.
-- No runtime schema validation for durable save data.
-- No replay runner.
-- No production desktop shell or platform adapter implementation.
-- No `engines` or `packageManager` declaration in `package.json`.
+- No profile/migration/recovery schema beyond the implemented WorldSave v1.
+- No production desktop shell or cloud platform adapter implementation.
 - Large ownership hotspots: `src/ui/menu-overlay.tsx`, `src/game/scene.ts`, and
   `src/styles.css`.
 

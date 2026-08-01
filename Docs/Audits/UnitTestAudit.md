@@ -24,19 +24,19 @@ surface—not merely the number of `it` calls.
 
 ## Current ownership map
 
-| Concern | Semantic owner |
-| --- | --- |
-| Seeded terrain/chunks, cardinal movement, gathering, combat, abilities, cooldowns, death/respawn | `src/sim/**` → `tests/simulation.test.ts` |
-| Simulation visibility state and revealed tiles | `src/sim/**` → `tests/simulation.test.ts` |
-| Entity footprint math | `src/sim/footprint.ts` → `tests/footprint.test.ts` |
-| Board tile sizing and responsive view radius | `src/game/layout.ts` → `tests/layout.test.ts` |
-| Fog/visibility transition math | `src/game/visibility.ts` → `tests/visibility.test.ts` |
-| Phaser fog transition orchestration | `src/game/scene.ts` → the closest browser smoke contract |
-| CSS color bridge used by Phaser | `src/game/presentation-colors.ts` → `tests/presentation-colors.test.ts` |
-| Keyboard normalization and rebinding | `src/game/input-bindings.ts` → `tests/input-bindings.test.ts` |
-| Development frame metric helpers | `src/dev/frame-monitor.ts` → `tests/frame-monitor.test.ts` |
-| Action Hand playback replacement helper | `src/ui/context-action-hand.tsx` → `tests/context-action-hand.test.ts` |
-| Rendered menu/HUD, focus, responsive geometry, assets, theme | `tests/e2e/first-light.spec.ts` and `tests/e2e/theme.spec.ts` |
+| Concern                                                                                          | Semantic owner                                                          |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Seeded terrain/chunks, cardinal movement, gathering, combat, abilities, cooldowns, death/respawn | `src/sim/**` → `tests/simulation.test.ts`                               |
+| Simulation visibility state and revealed tiles                                                   | `src/sim/**` → `tests/simulation.test.ts`                               |
+| Entity footprint math                                                                            | `src/sim/footprint.ts` → `tests/footprint.test.ts`                      |
+| Board tile sizing and responsive view radius                                                     | `src/game/layout.ts` → `tests/layout.test.ts`                           |
+| Fog/visibility transition math                                                                   | `src/game/visibility.ts` → `tests/visibility.test.ts`                   |
+| Phaser fog transition orchestration                                                              | `src/game/scene.ts` → the closest browser smoke contract                |
+| CSS color bridge used by Phaser                                                                  | `src/game/presentation-colors.ts` → `tests/presentation-colors.test.ts` |
+| Keyboard normalization and rebinding                                                             | `src/game/input-bindings.ts` → `tests/input-bindings.test.ts`           |
+| Development frame metric helpers                                                                 | `src/dev/frame-monitor.ts` → `tests/frame-monitor.test.ts`              |
+| Action Hand playback replacement helper                                                          | `src/ui/context-action-hand.tsx` → `tests/context-action-hand.test.ts`  |
+| Rendered menu/HUD, focus, responsive geometry, assets, theme                                     | `tests/e2e/first-light.spec.ts` and `tests/e2e/theme.spec.ts`           |
 
 The current checkout has no feature-store or migration-test hierarchy and no
 DOM testing harness. Keep the audit aligned with the top-level Vitest files and

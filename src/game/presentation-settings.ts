@@ -102,7 +102,8 @@ export function setPresentationSetting<K extends PresentationSettingKey>(
   value: PresentationSettings[K],
 ): PresentationSettings {
   const current = readPresentationSettings();
-  const next = { ...current, [key]: value } as PresentationSettings;
+  const next: PresentationSettings = { ...current };
+  next[key] = value;
 
   if (key === 'showGrid') setShowGridPreference(value as boolean);
   if (key === 'uiScale') setUiScalePreference(value as UiScale);

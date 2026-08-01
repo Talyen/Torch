@@ -1,4 +1,4 @@
 interface:
-  display_name: "Torch UI/UX"
-  short_description: "Torch UI review, design, and implementation"
-  default_prompt: "Use $torch-ui-ux to review, design, implement, or verify this Torch interface as requested, with deliberate visual hierarchy, accessibility, and responsive behavior."
+  display_name: 'Torch UI/UX'
+  short_description: 'Torch UI review, design, and implementation'
+  default_prompt: 'Use $torch-ui-ux to review, design, implement, or verify this Torch interface as requested, with deliberate visual hierarchy, accessibility, and responsive behavior.'

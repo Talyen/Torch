@@ -40,7 +40,8 @@ export function filterAndSortInventoryItems(
     .filter((item) => !category || item.category === category)
     .sort((a, b) => {
       if (sort === 'name') return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
-      if (sort === 'quantity') return b.quantity - a.quantity || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+      if (sort === 'quantity')
+        return b.quantity - a.quantity || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
       return a.id.localeCompare(b.id);
     });
 }

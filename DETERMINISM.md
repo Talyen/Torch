@@ -56,9 +56,12 @@ behavior matters. Prefer assertions over final state, turn count, event
 sequence, entity positions, inventory, health, and revealed tiles. Include a
 small fixed-seed regression case whenever a generation or action rule changes.
 
-The replay runner itself is intentionally not implemented yet. The current
-simulation tests exercise the contract directly; Phase 1 will add a reusable
-command-transcript runner and save/load round-trip coverage.
+`runReplay()` in `src/sim/replay.ts` is the reusable command-transcript runner.
+It validates command shapes, replays the fixed seed and generation version, and
+returns structured state/event checkpoints for each command. `WorldSave` v1 in
+`src/sim/world-save.ts` uses the same deterministic baseline and sparse mutation
+boundary, so save/load tests compare restored state with replay output without
+snapshotting renderer text or animation details.
 
 ## Versioning
 

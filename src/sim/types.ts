@@ -80,6 +80,8 @@ export interface HeroState {
 }
 
 export interface GameState {
+  /** Stable world-slot identity used by the versioned WorldSave projection. */
+  worldId: string;
   seed: number;
   generationVersion: number;
   turn: number;
@@ -89,6 +91,8 @@ export interface GameState {
   removedGeneratedEntities: Record<string, true>;
   /** Partial work on generated gatherables survives active-ring pruning. */
   gatheringProgress: Record<string, number>;
+  /** World-local discovery flags; profile/meta progression is intentionally separate. */
+  discoveries: Record<string, true>;
   revealedTiles: Record<string, true>;
 }
 

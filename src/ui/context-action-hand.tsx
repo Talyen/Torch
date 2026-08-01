@@ -90,10 +90,7 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
     };
   }, [handElement]);
 
-  const actions = useMemo(
-    () => availableContextActionsAt(state, focusedTarget),
-    [focusedTarget, state],
-  );
+  const actions = useMemo(() => availableContextActionsAt(state, focusedTarget), [focusedTarget, state]);
   const metrics = useMemo(() => calculateHandMetrics(availableWidth, actions.length), [actions.length, availableWidth]);
   const enteringCardKeys = useMemo(() => {
     const entering = new Set<string>();
@@ -113,11 +110,12 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
   }, [actions]);
 
   useEffect(() => {
-    const resolvedEvent = [...events].reverse().find(
-      (event): event is Extract<SimEvent, { type: 'action-resolved' | 'ability-used' }> => (
-        event.type === 'action-resolved' || event.type === 'ability-used'
-      ),
-    );
+    const resolvedEvent = [...events]
+      .reverse()
+      .find(
+        (event): event is Extract<SimEvent, { type: 'action-resolved' | 'ability-used' }> =>
+          event.type === 'action-resolved' || event.type === 'ability-used',
+      );
     if (!resolvedEvent) return;
 
     const eventSignature = [
@@ -131,17 +129,19 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
     if (lastPlaybackSignatureRef.current === eventSignature) return;
     lastPlaybackSignatureRef.current = eventSignature;
 
-    const cardKey = resolvedEvent.type === 'ability-used'
-      ? `ability:${resolvedEvent.abilityId}`
-      : resolvedEvent.action === 'ability'
-        ? `ability:${resolvedEvent.abilityId ?? ''}`
-        : `entity:${resolvedEvent.action}`;
+    const cardKey =
+      resolvedEvent.type === 'ability-used'
+        ? `ability:${resolvedEvent.abilityId}`
+        : resolvedEvent.action === 'ability'
+          ? `ability:${resolvedEvent.abilityId ?? ''}`
+          : `entity:${resolvedEvent.action}`;
     const rememberedAction = knownActionsRef.current.get(cardKey);
-    const action = rememberedAction?.action.entityId === resolvedEvent.entityId
-      ? rememberedAction
-      : resolvedEvent.type === 'ability-used'
-        ? actionForAbilityUsedEvent(state, resolvedEvent)
-        : actionForResolvedEvent(state, resolvedEvent);
+    const action =
+      rememberedAction?.action.entityId === resolvedEvent.entityId
+        ? rememberedAction
+        : resolvedEvent.type === 'ability-used'
+          ? actionForAbilityUsedEvent(state, resolvedEvent)
+          : actionForResolvedEvent(state, resolvedEvent);
     if (!action) return;
 
     setPlayingAction(action);
@@ -152,9 +152,7 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
 
   useEffect(() => {
     if (!playingAction || !replacingCardKey) return;
-    const playDuration = document.documentElement.dataset.reduceMotion === 'true'
-      ? 80
-      : PLAY_DURATION_MS;
+    const playDuration = document.documentElement.dataset.reduceMotion === 'true' ? 80 : PLAY_DURATION_MS;
     const timeout = window.setTimeout(() => {
       setPlayingAction(undefined);
       setActivatingId(undefined);
@@ -181,41 +179,50 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
 
   const displayedActions = actionsDuringCardPlayback(actions, playingAction, replacingCardKey);
   const displayedPlayingId = playingAction?.id ?? activatingId;
-  const handLayer = !hidden && displayedActions.length > 0 ? (
-    <div
-      ref={handCallbackRef}
-      className="context-action-hand"
-      data-testid="context-action-hand"
-      aria-label="Available actions"
-    >
-      <div className="context-action-hand__cards" style={{ height: `${metrics.cardHeight + 42}px` }}>
-        {displayedActions.map((action, index) => (
-          <ContextActionCard
-            action={action}
-            index={index}
-            count={displayedActions.length}
-            metrics={metrics}
-            entering={enteringCardKeys.has(contextActionCardKey(action)) || revealingCardKey === contextActionCardKey(action)}
-            activating={displayedPlayingId === action.id}
-            playing={playingAction?.id === action.id}
-            key={contextActionCardKey(action)}
-            onActivate={(activatedAction, rect) => {
-              if (activatedAction.disabledReason) return;
-              sourceRectsRef.current.set(contextActionCardKey(activatedAction), rect);
-              gameSession.performAction(activatedAction.action);
-            }}
-          />
-        ))}
+  const handLayer =
+    !hidden && displayedActions.length > 0 ? (
+      <div
+        ref={handCallbackRef}
+        className="context-action-hand"
+        data-testid="context-action-hand"
+        aria-label="Available actions"
+      >
+        <div className="context-action-hand__cards" style={{ height: `${metrics.cardHeight + 42}px` }}>
+          {displayedActions.map((action, index) => (
+            <ContextActionCard
+              action={action}
+              index={index}
+              count={displayedActions.length}
+              metrics={metrics}
+              entering={
+                enteringCardKeys.has(contextActionCardKey(action)) || revealingCardKey === contextActionCardKey(action)
+              }
+              activating={displayedPlayingId === action.id}
+              playing={playingAction?.id === action.id}
+              key={contextActionCardKey(action)}
+              onActivate={(activatedAction, rect) => {
+                if (activatedAction.disabledReason) return;
+                sourceRectsRef.current.set(contextActionCardKey(activatedAction), rect);
+                gameSession.performAction(activatedAction.action);
+              }}
+            />
+          ))}
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
 
-  const ghostLayer = !hidden && playingGhost && typeof document !== 'undefined'
-    ? createPortal(<PlayGhost {...playingGhost} />, document.body)
-    : null;
+  const ghostLayer =
+    !hidden && playingGhost && typeof document !== 'undefined'
+      ? createPortal(<PlayGhost {...playingGhost} />, document.body)
+      : null;
 
   if (!handLayer && !ghostLayer) return null;
-  return <>{handLayer}{ghostLayer}</>;
+  return (
+    <>
+      {handLayer}
+      {ghostLayer}
+    </>
+  );
 }
 
 /**
@@ -237,11 +244,7 @@ export function actionsDuringCardPlayback(
   const playingCardKey = contextActionCardKey(playingAction);
   const replacementIndex = actions.findIndex((action) => contextActionCardKey(action) === playingCardKey);
   if (replacementIndex < 0) return [playingAction, ...currentActions];
-  return [
-    ...currentActions.slice(0, replacementIndex),
-    playingAction,
-    ...currentActions.slice(replacementIndex),
-  ];
+  return [...currentActions.slice(0, replacementIndex), playingAction, ...currentActions.slice(replacementIndex)];
 }
 
 function ContextActionCard({
@@ -376,13 +379,14 @@ function ContextActionCard({
         <small>{action.source === 'ability' ? action.slot : action.entityName}</small>
       </span>
       {action.progress ? (
-        <span className="context-action-card__progress" aria-label={`${action.progress.current} of ${action.progress.required}`}>
+        <span
+          className="context-action-card__progress"
+          aria-label={`${action.progress.current} of ${action.progress.required}`}
+        >
           {action.progress.current}/{action.progress.required}
         </span>
       ) : null}
-      {action.disabledReason ? (
-        <span className="context-action-card__cooldown">{action.cooldownRemaining}</span>
-      ) : null}
+      {action.disabledReason ? <span className="context-action-card__cooldown">{action.cooldownRemaining}</span> : null}
     </button>
   );
 }
@@ -406,13 +410,10 @@ function PlayGhost({ action, sourceRect }: PlayingGhost): ReactElement {
   } as CSSProperties;
 
   return (
-    <div
-      className="context-action-play-ghost"
-      style={style}
-      data-testid="context-action-play-ghost"
-      aria-hidden="true"
-    >
-      <span className="context-action-card__art"><CardArtwork action={action} /></span>
+    <div className="context-action-play-ghost" style={style} data-testid="context-action-play-ghost" aria-hidden="true">
+      <span className="context-action-card__art">
+        <CardArtwork action={action} />
+      </span>
       <span className="context-action-card__shade" />
       <span className="context-action-card__meta">
         <strong>{action.label}</strong>

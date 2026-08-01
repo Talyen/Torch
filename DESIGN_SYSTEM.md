@@ -71,28 +71,28 @@ enforced.
 
 ### Color roles
 
-| Role | Canonical token | Current value |
-| --- | --- | --- |
-| Board/page background | `--ui-color-background` | `#0c0b09` |
-| Menu/HUD shell | `--ui-color-surface` | `#15130f` |
-| HUD surface | `--ui-color-surface-hud` | `#15130f` |
-| Panel/popover shell | `--ui-color-surface-panel` | `#171511` |
-| Opaque content | `--ui-color-surface-content` | `#201d18` |
-| Raised card/control | `--ui-color-surface-content-raised` | `#2b2720` |
-| Recessed content/empty state | `--ui-color-surface-content-deep` | `#0f0e0c` |
-| Primary text | `--ui-color-text` | `#f5ead4` |
-| Heading text | `--ui-color-heading` | `#fff1d1` |
-| Muted text | `--ui-color-muted` | `#b8ae9f` |
-| Accent | `--ui-color-accent` | `#f2c463` |
-| Strong accent/focus text | `--ui-color-accent-strong` | `#ffd98a` |
-| Selected/pressed fill | `--ui-color-accent-soft` | `rgb(242 196 99 / 14%)` |
-| Text on accent | `--ui-color-on-accent` | `#1b160c` |
-| Control / hover control | `--ui-color-control`, `--ui-color-control-hover` | `#2a261f`, `#3b342a` |
-| Modal scrim | `--ui-menu-backdrop` | `rgb(8 7 6 / 86%)` |
-| Phaser grid / fog | `--ui-color-grid`, `--ui-color-fog` | `#3a3328`, `#15130f` |
-| Semantic feedback | `--ui-color-success`, `--ui-color-warning`, `--ui-color-danger`, `--ui-color-info` | semantic exceptions |
-| Disabled text | `--ui-color-disabled` | `#827b6d` |
-| Borders / focus | `--ui-border-subtle`, `--ui-border-strong`, `--ui-focus-ring` | semantic roles |
+| Role                         | Canonical token                                                                    | Current value           |
+| ---------------------------- | ---------------------------------------------------------------------------------- | ----------------------- |
+| Board/page background        | `--ui-color-background`                                                            | `#0c0b09`               |
+| Menu/HUD shell               | `--ui-color-surface`                                                               | `#15130f`               |
+| HUD surface                  | `--ui-color-surface-hud`                                                           | `#15130f`               |
+| Panel/popover shell          | `--ui-color-surface-panel`                                                         | `#171511`               |
+| Opaque content               | `--ui-color-surface-content`                                                       | `#201d18`               |
+| Raised card/control          | `--ui-color-surface-content-raised`                                                | `#2b2720`               |
+| Recessed content/empty state | `--ui-color-surface-content-deep`                                                  | `#0f0e0c`               |
+| Primary text                 | `--ui-color-text`                                                                  | `#f5ead4`               |
+| Heading text                 | `--ui-color-heading`                                                               | `#fff1d1`               |
+| Muted text                   | `--ui-color-muted`                                                                 | `#b8ae9f`               |
+| Accent                       | `--ui-color-accent`                                                                | `#f2c463`               |
+| Strong accent/focus text     | `--ui-color-accent-strong`                                                         | `#ffd98a`               |
+| Selected/pressed fill        | `--ui-color-accent-soft`                                                           | `rgb(242 196 99 / 14%)` |
+| Text on accent               | `--ui-color-on-accent`                                                             | `#1b160c`               |
+| Control / hover control      | `--ui-color-control`, `--ui-color-control-hover`                                   | `#2a261f`, `#3b342a`    |
+| Modal scrim                  | `--ui-menu-backdrop`                                                               | `rgb(8 7 6 / 86%)`      |
+| Phaser grid / fog            | `--ui-color-grid`, `--ui-color-fog`                                                | `#3a3328`, `#15130f`    |
+| Semantic feedback            | `--ui-color-success`, `--ui-color-warning`, `--ui-color-danger`, `--ui-color-info` | semantic exceptions     |
+| Disabled text                | `--ui-color-disabled`                                                              | `#827b6d`               |
+| Borders / focus              | `--ui-border-subtle`, `--ui-border-strong`, `--ui-focus-ring`                      | semantic roles          |
 
 Feedback colors are semantic exceptions to the gold/charcoal chrome palette;
 they must not be reused as arbitrary feature accents.
@@ -107,14 +107,14 @@ Use the 4 px spacing scale: `--ui-space-1` (4), `--ui-space-2` (8),
 `--ui-space-3` (12), `--ui-space-4` (16), `--ui-space-5` (20), and
 `--ui-space-6` (24). Prefer the named semantic roles over new values.
 
-| Role | Token | Value |
-| --- | --- | ---: |
-| Compact control | `--ui-control-radius` | 12 px |
-| Card/slot/content | `--ui-card-radius` | 14 px |
-| Menu/HUD shell | `--ui-panel-radius` | 18 px |
-| Panel padding | `--ui-panel-padding` | 20 px |
-| Raised content shadow | `--ui-shadow-card` | `0 14px 32px rgb(0 0 0 / 28%)` |
-| Overlay shadow | `--ui-shadow-panel` | `0 28px 80px rgb(0 0 0 / 48%)` plus hairline |
+| Role                  | Token                 |                                        Value |
+| --------------------- | --------------------- | -------------------------------------------: |
+| Compact control       | `--ui-control-radius` |                                        12 px |
+| Card/slot/content     | `--ui-card-radius`    |                                        14 px |
+| Menu/HUD shell        | `--ui-panel-radius`   |                                        18 px |
+| Panel padding         | `--ui-panel-padding`  |                                        20 px |
+| Raised content shadow | `--ui-shadow-card`    |               `0 14px 32px rgb(0 0 0 / 28%)` |
+| Overlay shadow        | `--ui-shadow-panel`   | `0 28px 80px rgb(0 0 0 / 48%)` plus hairline |
 
 Use one visual container per meaningful surface. A nested card is justified
 only when it communicates a distinct group, state, or interaction.
@@ -179,16 +179,16 @@ behavior variant.
 
 Every interactive primitive defines the states that apply to it:
 
-| State | Contract |
-| --- | --- |
-| Default | Role, label, affordance, and reading order are clear. |
-| Hover | Pointer feedback without layout shift. |
-| Focus-visible | Persistent, high-contrast ring that is not clipped. |
-| Pressed | Immediate feedback without duplicate activation. |
-| Selected | Native state plus a visual treatment beyond color alone. |
-| Disabled | Inert but readable, with a clear reason where useful. |
-| Loading | Progress is communicated without losing the accessible name. |
-| Empty/error | Explain the state and provide a recoverable next action when possible. |
+| State         | Contract                                                               |
+| ------------- | ---------------------------------------------------------------------- |
+| Default       | Role, label, affordance, and reading order are clear.                  |
+| Hover         | Pointer feedback without layout shift.                                 |
+| Focus-visible | Persistent, high-contrast ring that is not clipped.                    |
+| Pressed       | Immediate feedback without duplicate activation.                       |
+| Selected      | Native state plus a visual treatment beyond color alone.               |
+| Disabled      | Inert but readable, with a clear reason where useful.                  |
+| Loading       | Progress is communicated without losing the accessible name.           |
+| Empty/error   | Explain the state and provide a recoverable next action when possible. |
 
 Icon-only controls require an `aria-label`; visible labels are preferred when
 space permits. Tabs, menus, selectors, dialogs, toggles, and sliders must

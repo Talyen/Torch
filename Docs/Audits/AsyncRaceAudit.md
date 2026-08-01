@@ -17,13 +17,13 @@ Investigate high-risk candidates and fix confirmed lifetime or ordering issues. 
 
 ## Severity
 
-| Sev | Description | Action |
-| --- | --- | --- |
-| P0 | A user action can resolve twice, or a listener/timer can mutate shared state after teardown on a hot path | Fix now |
-| P1 | React state update after overlay unmount; stale Phaser tween, session callback, or input handler | Fix when confirmed |
-| P2 | Missing cleanup for timers, `requestAnimationFrame`, `ResizeObserver`, DOM events, or Phaser events | Establish ownership and teardown |
-| P3 | Redundant `Promise`/`async` wrapper with no lifetime or ordering hazard | Skip unless trivial |
-| P4 | Speculative Worker, queue, or cancellation abstraction | Propose only |
+| Sev | Description                                                                                               | Action                           |
+| --- | --------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| P0  | A user action can resolve twice, or a listener/timer can mutate shared state after teardown on a hot path | Fix now                          |
+| P1  | React state update after overlay unmount; stale Phaser tween, session callback, or input handler          | Fix when confirmed               |
+| P2  | Missing cleanup for timers, `requestAnimationFrame`, `ResizeObserver`, DOM events, or Phaser events       | Establish ownership and teardown |
+| P3  | Redundant `Promise`/`async` wrapper with no lifetime or ordering hazard                                   | Skip unless trivial              |
+| P4  | Speculative Worker, queue, or cancellation abstraction                                                    | Propose only                     |
 
 ## Domain rules
 

@@ -26,14 +26,14 @@ This is an **opportunistic defect hunt**. When a hit is clearly owned by a sibli
 
 ## Severity
 
-| Sev | Criteria | Default disposition |
-| --- | --- | --- |
-| P0 | Crash, data loss, save corruption, or a deterministic replay divergence that can destroy progress | Fix now |
-| P1 | Wrong simulation, progression, visibility, input-mode, or UI state | Fix now |
-| P2 | Degraded UX (stuck menu, missing dismissal, ghost input, duplicate action feedback) | Fix when confirmed and scoped |
-| P3 | Recoverable failure without useful diagnostics | Fix only if trivial |
-| P4 | Maintainability (orphaned state) | Defer to `DeadCodeAudit.md` |
-| P5 | Async/effect lifetime risk | Defer to `AsyncRaceAudit.md` |
+| Sev | Criteria                                                                                          | Default disposition           |
+| --- | ------------------------------------------------------------------------------------------------- | ----------------------------- |
+| P0  | Crash, data loss, save corruption, or a deterministic replay divergence that can destroy progress | Fix now                       |
+| P1  | Wrong simulation, progression, visibility, input-mode, or UI state                                | Fix now                       |
+| P2  | Degraded UX (stuck menu, missing dismissal, ghost input, duplicate action feedback)               | Fix when confirmed and scoped |
+| P3  | Recoverable failure without useful diagnostics                                                    | Fix only if trivial           |
+| P4  | Maintainability (orphaned state)                                                                  | Defer to `DeadCodeAudit.md`   |
+| P5  | Async/effect lifetime risk                                                                        | Defer to `AsyncRaceAudit.md`  |
 
 ## Known signals
 

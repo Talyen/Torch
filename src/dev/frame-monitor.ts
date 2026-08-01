@@ -220,9 +220,7 @@ class DevFrameMonitor {
 
     const longTask = this.overlappingLongTask(frame);
     if (longTask) {
-      return longTask.attribution
-        ? `browser long task (${longTask.attribution})`
-        : 'browser long task';
+      return longTask.attribution ? `browser long task (${longTask.attribution})` : 'browser long task';
     }
 
     if (frame.phaserLoopDeltaMs >= STUTTER_THRESHOLD_MS) {

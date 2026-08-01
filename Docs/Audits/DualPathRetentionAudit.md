@@ -8,15 +8,15 @@ Confirm two reachable paths for one behavior (or a reachable shim that only forw
 
 ## What counts as dual-path retention
 
-| Tell | Why it is a finding candidate |
-| --- | --- |
-| Forwarding wrapper or rename-only type alias still imported beside the real owner | Extra name preserves a deleted API surface |
-| Barrel dual-export of old and new names after callers moved | Side-by-side re-exports keep both names live with no unique behavior |
-| Session/UI or scene helper duplicates a rule already owned by `src/sim/` | Callers can use either path and rules drift |
-| Migration/legacy bridge remains on a live path after its consumer window closes | Temporary compatibility became permanent surface |
-| Parallel implementations of one simulation, visibility, input, asset, or presentation rule | “Keep both for safety” has no remaining distinct consumer |
-| Deprecated entry only exists to call the new entry | Reachable twin with no unique behavior |
-| Permanent environment switch ships both implementations indefinitely | The losing path has no remaining distinct consumer |
+| Tell                                                                                       | Why it is a finding candidate                                        |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Forwarding wrapper or rename-only type alias still imported beside the real owner          | Extra name preserves a deleted API surface                           |
+| Barrel dual-export of old and new names after callers moved                                | Side-by-side re-exports keep both names live with no unique behavior |
+| Session/UI or scene helper duplicates a rule already owned by `src/sim/`                   | Callers can use either path and rules drift                          |
+| Migration/legacy bridge remains on a live path after its consumer window closes            | Temporary compatibility became permanent surface                     |
+| Parallel implementations of one simulation, visibility, input, asset, or presentation rule | “Keep both for safety” has no remaining distinct consumer            |
+| Deprecated entry only exists to call the new entry                                         | Reachable twin with no unique behavior                               |
+| Permanent environment switch ships both implementations indefinitely                       | The losing path has no remaining distinct consumer                   |
 
 **Not this audit:** zero live consumers → `DeadCodeAudit.md`; single intentional entry with no second product path → `InelegantSlopAudit.md`; wrong owner (with or without a twin) → `StateGravityOwnershipAudit.md`; duplicate product screens → `DuplicateFeatureSurfaceAudit.md`; test-only scaffolding → `UnitTestAudit.md` / `E2ETestQualityAudit.md`; async races/effect lifetime → `AsyncRaceAudit.md`. `src/ui/primitives.tsx` re-exporting Base UI and Torch-owned `src/components/ui/` components is an intentional behavior/styling boundary, not automatically a twin.
 

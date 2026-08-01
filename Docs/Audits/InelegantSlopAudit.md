@@ -12,17 +12,17 @@ This audit owns two scales: **local ceremony** (functions, wrappers, comments, b
 
 Slop looks industrious but fails a pragmatism test: more types, indirection, comments, or branches than the problem warrants.
 
-| Tell | Why it is slop |
-| --- | --- |
-| Interface + single implementer + factory | Indirection with no second implementation |
-| `*Manager` / `*Helper` / `*Coordinator` / `*Wrapper` for one function | Noun theater around a free function or method |
-| Narrating comments/restated docs | Rephrases the signature instead of encoding non-obvious intent |
-| Boolean parameter soup | Combinatorial call sites that should be an enum or two functions |
-| Deep nesting or a giant component | Complexity that should be collapsed or extracted, not layered |
-| Pass-through wrappers/rename-only aliases | Reachable twin/no-op shim callers can retarget → `DualPathRetentionAudit.md` |
-| Premature DI/config objects for a local call | Ceremony without a current second consumer |
-| Defensive `??` / `as` / `any` stacks without a real failure mode | Ceremony hides the invariant; typing escapes belong to `TypeSafetyAudit.md` |
-| Near-duplicate blocks with tiny diffs | Copy-paste growth instead of one parameterized path |
+| Tell                                                                  | Why it is slop                                                               |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Interface + single implementer + factory                              | Indirection with no second implementation                                    |
+| `*Manager` / `*Helper` / `*Coordinator` / `*Wrapper` for one function | Noun theater around a free function or method                                |
+| Narrating comments/restated docs                                      | Rephrases the signature instead of encoding non-obvious intent               |
+| Boolean parameter soup                                                | Combinatorial call sites that should be an enum or two functions             |
+| Deep nesting or a giant component                                     | Complexity that should be collapsed or extracted, not layered                |
+| Pass-through wrappers/rename-only aliases                             | Reachable twin/no-op shim callers can retarget → `DualPathRetentionAudit.md` |
+| Premature DI/config objects for a local call                          | Ceremony without a current second consumer                                   |
+| Defensive `??` / `as` / `any` stacks without a real failure mode      | Ceremony hides the invariant; typing escapes belong to `TypeSafetyAudit.md`  |
+| Near-duplicate blocks with tiny diffs                                 | Copy-paste growth instead of one parameterized path                          |
 
 Elegant Torch code is usually plain typed data, pure `src/sim/` rules, a thin `src/game/session.ts` boundary, focused Phaser scene/presentation helpers, React function components, shared UI wrappers, discriminated unions, and direct call sites.
 

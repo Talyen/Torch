@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
 const e2ePort = runtimeProcess?.env?.TORCH_E2E_PORT ?? '4173';
+const useProductionPreview = runtimeProcess?.env?.TORCH_E2E_PROD === '1';
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 
 export default defineConfig({
@@ -20,9 +21,11 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: `npm run dev -- --host 127.0.0.1 --port ${e2ePort}`,
+    command: useProductionPreview
+      ? `npm run preview -- --host 127.0.0.1 --port ${e2ePort}`
+      : `npm run dev -- --host 127.0.0.1 --port ${e2ePort}`,
     url: e2eBaseUrl,
-    reuseExistingServer: true,
+    reuseExistingServer: !useProductionPreview,
   },
   projects: [
     {

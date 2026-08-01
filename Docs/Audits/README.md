@@ -60,11 +60,11 @@ Use a full-repository pass periodically or when the audit’s cheap probe is
 cheap enough to justify it. The cadence table is guidance, not a gate; a user
 citing an audit always runs it.
 
-| Cadence | Audits |
-| --- | --- |
-| Frequent, mechanical | `DeadCodeAudit`, `TypeSafetyAudit`, `SideEffectSurfaceAudit`, `DesignSystemConsistencyAudit`, `DocumentationStalenessAudit`, diff-scoped `BugHuntingAudit` |
+| Cadence                      | Audits                                                                                                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frequent, mechanical         | `DeadCodeAudit`, `TypeSafetyAudit`, `SideEffectSurfaceAudit`, `DesignSystemConsistencyAudit`, `DocumentationStalenessAudit`, diff-scoped `BugHuntingAudit` |
 | Occasional, judgment/runtime | `UnitTestAudit`, `E2ETestQualityAudit`, `BehaviorHardeningAudit`, `AsyncRaceAudit`, `UIInteractionFeedbackAudit`, `InelegantSlopAudit`, `PerformanceAudit` |
-| Rare, structural | `DuplicateFeatureSurfaceAudit`, `StateGravityOwnershipAudit`, `DualPathRetentionAudit`, `ChangeLocalityContextEfficiencyAudit` |
+| Rare, structural             | `DuplicateFeatureSurfaceAudit`, `StateGravityOwnershipAudit`, `DualPathRetentionAudit`, `ChangeLocalityContextEfficiencyAudit`                             |
 
 ## Orchestrated runs
 
@@ -79,25 +79,25 @@ dumping full logs.
 
 ## Ownership
 
-| Concern | Owner audit |
-| --- | --- |
-| Dead or unused symbols | `DeadCodeAudit.md` |
-| Reachable shims or parallel implementations | `DualPathRetentionAudit.md` |
-| RNG, browser I/O, and shared mutation seams | `SideEffectSurfaceAudit.md` |
-| Idempotency, persistence, and swallowed errors | `BehaviorHardeningAudit.md` |
-| Async lifetime, timers, listeners, and stale effects | `AsyncRaceAudit.md` |
-| `any`, unsafe casts, and suppressions | `TypeSafetyAudit.md` |
-| Vitest value, runtime, redundancy, and ownership | `UnitTestAudit.md` |
-| Playwright reliability and tier fit | `E2ETestQualityAudit.md` |
-| Opportunistic defects | `BugHuntingAudit.md` |
-| Documentation drift | `DocumentationStalenessAudit.md` |
-| React interaction, feedback, and keyboard behavior | `UIInteractionFeedbackAudit.md` |
-| Shared UI tokens and primitives | `DesignSystemConsistencyAudit.md` |
-| Over-engineering, ceremony, and mass hotspots | `InelegantSlopAudit.md` |
-| Render churn, frame cost, build and asset weight | `PerformanceAudit.md` |
-| Copied UI surfaces and shells | `DuplicateFeatureSurfaceAudit.md` |
-| Misplaced rules, state, or presentation | `StateGravityOwnershipAudit.md` |
-| Change amplification and context cost | `ChangeLocalityContextEfficiencyAudit.md` |
+| Concern                                              | Owner audit                               |
+| ---------------------------------------------------- | ----------------------------------------- |
+| Dead or unused symbols                               | `DeadCodeAudit.md`                        |
+| Reachable shims or parallel implementations          | `DualPathRetentionAudit.md`               |
+| RNG, browser I/O, and shared mutation seams          | `SideEffectSurfaceAudit.md`               |
+| Idempotency, persistence, and swallowed errors       | `BehaviorHardeningAudit.md`               |
+| Async lifetime, timers, listeners, and stale effects | `AsyncRaceAudit.md`                       |
+| `any`, unsafe casts, and suppressions                | `TypeSafetyAudit.md`                      |
+| Vitest value, runtime, redundancy, and ownership     | `UnitTestAudit.md`                        |
+| Playwright reliability and tier fit                  | `E2ETestQualityAudit.md`                  |
+| Opportunistic defects                                | `BugHuntingAudit.md`                      |
+| Documentation drift                                  | `DocumentationStalenessAudit.md`          |
+| React interaction, feedback, and keyboard behavior   | `UIInteractionFeedbackAudit.md`           |
+| Shared UI tokens and primitives                      | `DesignSystemConsistencyAudit.md`         |
+| Over-engineering, ceremony, and mass hotspots        | `InelegantSlopAudit.md`                   |
+| Render churn, frame cost, build and asset weight     | `PerformanceAudit.md`                     |
+| Copied UI surfaces and shells                        | `DuplicateFeatureSurfaceAudit.md`         |
+| Misplaced rules, state, or presentation              | `StateGravityOwnershipAudit.md`           |
+| Change amplification and context cost                | `ChangeLocalityContextEfficiencyAudit.md` |
 
 The ownership boundary comes from
 [ARCHITECTURE.md](../../ARCHITECTURE.md): `src/sim/` is pure deterministic
@@ -111,15 +111,15 @@ authority in an audit guide.
 Use the cheapest check that can confirm the candidate, then run the complete
 gate when a change crosses multiple layers:
 
-| Check | Best fit |
-| --- | --- |
-| `npm run check:theme` | UI token and palette ownership |
-| `npm run typecheck` | Type safety, import/API drift, and documentation snippets that are compiled in tests |
-| `npm test` or a focused `npm test -- <pattern>` | Simulation, state, UI helper, and regression behavior |
-| `npm run build` | Production TypeScript/Vite integration and asset pipeline |
-| `npm run test:e2e -- --reporter=line` | Browser flow, interaction, console, and responsive evidence |
-| `npm run assets:build` | Raw-art changes and generated asset/manifest consistency |
-| `npm run verify` | Integrated UI theme, typecheck, unit tests, build, and Playwright gate |
+| Check                                           | Best fit                                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run check:theme`                           | UI token and palette ownership                                                       |
+| `npm run typecheck`                             | Type safety, import/API drift, and documentation snippets that are compiled in tests |
+| `npm test` or a focused `npm test -- <pattern>` | Simulation, state, UI helper, and regression behavior                                |
+| `npm run build`                                 | Production TypeScript/Vite integration and asset pipeline                            |
+| `npm run test:e2e -- --reporter=line`           | Browser flow, interaction, console, and responsive evidence                          |
+| `npm run assets:build`                          | Raw-art changes and generated asset/manifest consistency                             |
+| `npm run verify`                                | Integrated UI theme, typecheck, unit tests, build, and Playwright gate               |
 
 If the default E2E port is occupied, use an isolated port:
 

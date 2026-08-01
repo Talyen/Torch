@@ -27,8 +27,9 @@ describe('Torch simulation', () => {
 
   it('generates grassland and mountain terrain with deterministic tree groves and ore candidates', () => {
     const seed = 1234;
-    const positions = Array.from({ length: 129 }, (_, index) => index - 64)
-      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })));
+    const positions = Array.from({ length: 129 }, (_, index) => index - 64).flatMap((x) =>
+      Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })),
+    );
     const mountain = positions.find((position) => tileAt(seed, position) === 'mountain');
     const ore = positions.find((position) => generatedResourceAt(seed, position) === 'ore');
     const treeCount = positions.filter((position) => generatedTreeAt(seed, position)).length;
@@ -119,12 +120,18 @@ describe('Torch simulation', () => {
     ];
     const mountainAndStart = Array.from({ length: 129 }, (_, index) => index - 64)
       .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
-      .flatMap((position) => offsets
-        .filter((offset) => (
-          tileAt(state.seed, position) === 'mountain'
-          && isTerrainWalkable(tileAt(state.seed, { x: position.x + offset.x, y: position.y + offset.y }))
-        ))
-        .map((offset) => ({ mountain: position, start: { x: position.x + offset.x, y: position.y + offset.y }, direction: offset.direction }))
+      .flatMap((position) =>
+        offsets
+          .filter(
+            (offset) =>
+              tileAt(state.seed, position) === 'mountain' &&
+              isTerrainWalkable(tileAt(state.seed, { x: position.x + offset.x, y: position.y + offset.y })),
+          )
+          .map((offset) => ({
+            mountain: position,
+            start: { x: position.x + offset.x, y: position.y + offset.y },
+            direction: offset.direction,
+          })),
       )[0];
 
     expect(mountainAndStart).toBeDefined();
@@ -171,7 +178,7 @@ describe('Torch simulation', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 2, y: 2 };
 
-    let result = applyCommand(state, {
+    const result = applyCommand(state, {
       type: 'interact',
       target: { x: 3, y: 2 },
     });
@@ -205,7 +212,7 @@ describe('Torch simulation', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 2, y: 2 };
 
-    let result = applyCommand(state, { type: 'move', direction: 'east' });
+    const result = applyCommand(state, { type: 'move', direction: 'east' });
 
     expect(result.accepted).toBe(true);
     expect(result.state.hero.position).toEqual({ x: 2, y: 2 });
@@ -229,7 +236,9 @@ describe('Torch simulation', () => {
     expect(result.state.entities.slime.health).toBe(4);
     expect(result.state.entities.slime.alerted).toBe(true);
     expect(result.state.hero.health).toBe(9);
-    expect(result.events.some((event) => event.type === 'ability-used' && event.abilityId === 'ability.avatar')).toBe(true);
+    expect(result.events.some((event) => event.type === 'ability-used' && event.abilityId === 'ability.avatar')).toBe(
+      true,
+    );
   });
 
   it('resolves an explicit typed action through the same validation path', () => {
@@ -270,10 +279,7 @@ describe('Torch simulation', () => {
 
     const cards = availableContextActionsAt(state, { x: 5, y: 2 });
 
-    expect(cards.map((card) => card.abilityId)).toEqual([
-      'ability.bash',
-      'ability.avatar',
-    ]);
+    expect(cards.map((card) => card.abilityId)).toEqual(['ability.bash', 'ability.avatar']);
     expect(cards.some((card) => card.abilityId === 'ability.sunder')).toBe(false);
     expect(cards[0]?.action).toEqual({
       kind: 'ability',
@@ -316,7 +322,9 @@ describe('Torch simulation', () => {
     expect(result.accepted).toBe(true);
     expect(result.state.entities.slime.health).toBe(1);
     expect(result.state.hero.abilityCooldowns['ability.sunder']).toBe(3);
-    expect(result.events.some((event) => event.type === 'ability-used' && event.abilityId === 'ability.sunder')).toBe(true);
+    expect(result.events.some((event) => event.type === 'ability-used' && event.abilityId === 'ability.sunder')).toBe(
+      true,
+    );
 
     const afterOneTurn = applyCommand(result.state, { type: 'wait' });
     expect(afterOneTurn.state.hero.abilityCooldowns['ability.sunder']).toBe(2);

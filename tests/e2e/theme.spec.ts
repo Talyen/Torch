@@ -1,16 +1,34 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const legacyBlueValues = [
-  '203039', '142027', '3a443e', '222f32', '1b292f', '152027',
-  '1b292e', '142026', '18252b', '18272d', '101a20', '18262c',
-  '121d23', '121c21', '0b1217', '151d22', '1b2022', '111c22',
+  '203039',
+  '142027',
+  '3a443e',
+  '222f32',
+  '1b292f',
+  '152027',
+  '1b292e',
+  '142026',
+  '18252b',
+  '18272d',
+  '101a20',
+  '18262c',
+  '121d23',
+  '121c21',
+  '0b1217',
+  '151d22',
+  '1b2022',
+  '111c22',
 ];
 
 async function surfaceStyle(page: Page, selector: string): Promise<string> {
-  return page.locator(selector).first().evaluate((element: Element) => {
-    const style = getComputedStyle(element);
-    return [style.backgroundColor, style.backgroundImage, style.borderColor, style.color].join(' ');
-  });
+  return page
+    .locator(selector)
+    .first()
+    .evaluate((element: Element) => {
+      const style = getComputedStyle(element);
+      return [style.backgroundColor, style.backgroundImage, style.borderColor, style.color].join(' ');
+    });
 }
 
 test('uses the canonical Gold/Charcoal palette across overlay surfaces', async ({ page }) => {

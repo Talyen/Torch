@@ -13,7 +13,12 @@ describe('inventory pagination', () => {
   it('uses a finite page capacity for each supported layout profile', () => {
     expect(inventoryLayoutForViewport(1280, 720)).toMatchObject({ profile: 'wide', columns: 4, rows: 2, pageSize: 8 });
     expect(inventoryLayoutForViewport(1170, 624)).toMatchObject({ profile: 'short', columns: 4, rows: 2, pageSize: 8 });
-    expect(inventoryLayoutForViewport(390, 844)).toMatchObject({ profile: 'compact', columns: 3, rows: 2, pageSize: 6 });
+    expect(inventoryLayoutForViewport(390, 844)).toMatchObject({
+      profile: 'compact',
+      columns: 3,
+      rows: 2,
+      pageSize: 6,
+    });
     expect(inventoryLayoutForViewport(320, 568)).toMatchObject({ profile: 'tiny', columns: 3, rows: 1, pageSize: 3 });
   });
 
@@ -38,8 +43,12 @@ describe('inventory pagination', () => {
   });
 
   it('keeps category and sort results deterministic', () => {
-    expect(filterAndSortInventoryItems(inventoryItems, 'resources', 'category').map((item) => item.id))
-      .toEqual(['bark', 'copper-ore', 'silver-ore', 'wood']);
+    expect(filterAndSortInventoryItems(inventoryItems, 'resources', 'category').map((item) => item.id)).toEqual([
+      'bark',
+      'copper-ore',
+      'silver-ore',
+      'wood',
+    ]);
     expect(filterAndSortInventoryItems(inventoryItems, undefined, 'quantity')[0]?.id).toBe('wood');
     expect(filterAndSortInventoryItems(inventoryItems, undefined, 'name')[0]?.name).toBe('Ancient Coin');
   });

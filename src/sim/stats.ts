@@ -1,10 +1,4 @@
-export const PRIMARY_STAT_NAMES = [
-  'strength',
-  'agility',
-  'toughness',
-  'wisdom',
-  'intellect',
-] as const;
+export const PRIMARY_STAT_NAMES = ['strength', 'agility', 'toughness', 'wisdom', 'intellect'] as const;
 
 export type PrimaryStatName = (typeof PRIMARY_STAT_NAMES)[number];
 export type PrimaryStats = Record<PrimaryStatName, number>;

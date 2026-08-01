@@ -12,19 +12,19 @@ owners.
 
 ## Current ownership map
 
-| Concern | Owner |
-| --- | --- |
-| Rules, validation, deterministic action resolution, entities, generation, and visibility facts (`revealedTiles`, lit/revealed decisions) | `src/sim/` (`simulation.ts`, `actions.ts`, `ability-rules.ts`, `world.ts`, `entities.ts`, `types.ts`) |
-| Application/session command routing and action-boundary snapshots | `src/game/session.ts` |
-| Physical-key normalization, rebinding, and input preference storage | `src/game/input-bindings.ts` |
-| Phaser pointer/keyboard subscription and world-input gating | `src/game/scene.ts` and `GameSession.inputMode` |
-| Phaser world presentation, camera, fog, terrain/entity draw orchestration | `src/game/scene.ts` |
-| Pure board/layout/presentation math and CSS color bridge | `src/game/layout.ts`, `src/game/visibility.ts` (renderer-facing snapshot/interpolation/alpha math only), `src/game/presentation-colors.ts` |
-| React HUD, menus, dialogs, selectors, settings, and screen-only state | `src/ui/menu-overlay.tsx`, `src/ui/context-action-hand.tsx` |
-| Shared React behavior boundary and styled controls | `src/ui/primitives.tsx`, `src/components/ui/` |
-| Stable content definitions and asset IDs | `src/content/` |
-| Browser presentation preferences | `src/game/presentation-settings.ts` |
-| Raw artwork processing and generated outputs | `Raw Assets/`, `scripts/process-assets.mjs`, `public/assets/` (generated; never hand-edit) |
+| Concern                                                                                                                                  | Owner                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rules, validation, deterministic action resolution, entities, generation, and visibility facts (`revealedTiles`, lit/revealed decisions) | `src/sim/` (`simulation.ts`, `actions.ts`, `ability-rules.ts`, `world.ts`, `entities.ts`, `types.ts`)                                      |
+| Application/session command routing and action-boundary snapshots                                                                        | `src/game/session.ts`                                                                                                                      |
+| Physical-key normalization, rebinding, and input preference storage                                                                      | `src/game/input-bindings.ts`                                                                                                               |
+| Phaser pointer/keyboard subscription and world-input gating                                                                              | `src/game/scene.ts` and `GameSession.inputMode`                                                                                            |
+| Phaser world presentation, camera, fog, terrain/entity draw orchestration                                                                | `src/game/scene.ts`                                                                                                                        |
+| Pure board/layout/presentation math and CSS color bridge                                                                                 | `src/game/layout.ts`, `src/game/visibility.ts` (renderer-facing snapshot/interpolation/alpha math only), `src/game/presentation-colors.ts` |
+| React HUD, menus, dialogs, selectors, settings, and screen-only state                                                                    | `src/ui/menu-overlay.tsx`, `src/ui/context-action-hand.tsx`                                                                                |
+| Shared React behavior boundary and styled controls                                                                                       | `src/ui/primitives.tsx`, `src/components/ui/`                                                                                              |
+| Stable content definitions and asset IDs                                                                                                 | `src/content/`                                                                                                                             |
+| Browser presentation preferences                                                                                                         | `src/game/presentation-settings.ts`                                                                                                        |
+| Raw artwork processing and generated outputs                                                                                             | `Raw Assets/`, `scripts/process-assets.mjs`, `public/assets/` (generated; never hand-edit)                                                 |
 
 ## Intent
 
@@ -37,16 +37,16 @@ a renamed gravity well.
 
 ## What “state gravity” means in Torch
 
-| Tell | Why it is a finding |
-| --- | --- |
-| Damage, cooldown, gathering, enemy response, or generation math in `*.tsx` or `scene.ts` | Rules bypass the deterministic `src/sim` command resolver |
-| React callback mutates `GameState` or a content definition directly | UI becomes a second simulation authority |
-| `GameSession` grows feature-specific state or UI layout APIs | Application routing hub has absorbed domain/presentation concerns |
-| `src/sim` imports Phaser, React, browser APIs, or platform SDKs | Simulation portability and deterministic tests are broken |
-| `scene.ts` owns durable settings or save policy | Renderer lifetime leaks into adapters/persistence |
+| Tell                                                                                      | Why it is a finding                                                |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Damage, cooldown, gathering, enemy response, or generation math in `*.tsx` or `scene.ts`  | Rules bypass the deterministic `src/sim` command resolver          |
+| React callback mutates `GameState` or a content definition directly                       | UI becomes a second simulation authority                           |
+| `GameSession` grows feature-specific state or UI layout APIs                              | Application routing hub has absorbed domain/presentation concerns  |
+| `src/sim` imports Phaser, React, browser APIs, or platform SDKs                           | Simulation portability and deterministic tests are broken          |
+| `scene.ts` owns durable settings or save policy                                           | Renderer lifetime leaks into adapters/persistence                  |
 | Menu screen duplicates authoritative Hero/loadout/health state and writes around commands | Local presentation mirror can drift from action-boundary snapshots |
-| Content definitions import React/Lucide or hide game rules in artwork | Data and rules cannot be tested independently |
-| New `*Manager`, `*Store`, or alternate command resolver for one flow | Parallel hub instead of extending the real owner |
+| Content definitions import React/Lucide or hide game rules in artwork                     | Data and rules cannot be tested independently                      |
+| New `*Manager`, `*Store`, or alternate command resolver for one flow                      | Parallel hub instead of extending the real owner                   |
 
 Local React state for screen selection, focused card, dialog visibility, or
 transient feedback is valid. It must not become canonical `GameState` or

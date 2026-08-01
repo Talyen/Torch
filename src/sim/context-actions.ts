@@ -26,9 +26,7 @@ export interface ContextActionOption {
  * the card animation.
  */
 export function contextActionCardKey(action: ContextActionOption): string {
-  return action.source === 'ability'
-    ? `ability:${action.abilityId ?? action.id}`
-    : `entity:${action.action.kind}`;
+  return action.source === 'ability' ? `ability:${action.abilityId ?? action.id}` : `entity:${action.action.kind}`;
 }
 
 /** Returns adjacent occupied targets in a stable compass order for focus selection. */
@@ -74,20 +72,22 @@ function equippedAbilityCards(state: GameState, entity: EntityState, target: Pos
     const cooldownRemaining = state.hero.abilityCooldowns?.[ability.id] ?? 0;
     if (cooldownRemaining > 0) return [];
 
-    return [{
-      id: `context:ability:${ability.id}`,
-      label: ability.name,
-      source: 'ability' as const,
-      entityName: entity.name,
-      abilityId: ability.id,
-      slot,
-      action: {
-        kind: 'ability' as const,
-        entityId: entity.id,
-        target: { ...target },
+    return [
+      {
+        id: `context:ability:${ability.id}`,
+        label: ability.name,
+        source: 'ability' as const,
+        entityName: entity.name,
         abilityId: ability.id,
-      },
-    } satisfies ContextActionOption];
+        slot,
+        action: {
+          kind: 'ability' as const,
+          entityId: entity.id,
+          target: { ...target },
+          abilityId: ability.id,
+        },
+      } satisfies ContextActionOption,
+    ];
   });
 }
 

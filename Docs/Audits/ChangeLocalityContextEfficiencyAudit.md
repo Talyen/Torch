@@ -12,19 +12,19 @@ This audit owns two distinct concerns; a run may scope to either.
 
 ### Change amplification (authored edits)
 
-| Tell | Why it is a finding candidate |
-| --- | --- |
-| Comparable changes repeatedly co-touch unrelated authored owners | The behavior may lack one source of truth |
-| A frequently changed owner requires unrelated code to understand one concern | The semantic change is not locally reviewable |
-| The same behavior repeatedly touches many authored files | A missing seam or owner may force parallel edits |
+| Tell                                                                         | Why it is a finding candidate                    |
+| ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| Comparable changes repeatedly co-touch unrelated authored owners             | The behavior may lack one source of truth        |
+| A frequently changed owner requires unrelated code to understand one concern | The semantic change is not locally reviewable    |
+| The same behavior repeatedly touches many authored files                     | A missing seam or owner may force parallel edits |
 
 ### Context & tool-output cost (agent working set)
 
-| Tell | Why it is a finding candidate |
-| --- | --- |
-| One policy or command is maintained in several authored sources | Every change risks drift and consumes repeated context |
-| A local path forces unrelated docs, asset sources, or generated output into the working set | Routine work pays avoidable reading cost |
-| Successful commands emit repetitive output, or failures require opening raw logs | Useful signal is buried in avoidable tool output |
+| Tell                                                                                        | Why it is a finding candidate                          |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| One policy or command is maintained in several authored sources                             | Every change risks drift and consumes repeated context |
+| A local path forces unrelated docs, asset sources, or generated output into the working set | Routine work pays avoidable reading cost               |
+| Successful commands emit repetitive output, or failures require opening raw logs            | Useful signal is buried in avoidable tool output       |
 
 **Not this audit:** wrong simulation/UI ownership → `StateGravityOwnershipAudit.md`; local ceremony or file/folder mass without recurring co-touch → `InelegantSlopAudit.md`; duplicate UI → `DuplicateFeatureSurfaceAudit.md`; shared CSS/token drift → `DesignSystemConsistencyAudit.md`; stale or duplicated documentation policy → `DocumentationStalenessAudit.md`; unit/E2E portfolio → `UnitTestAudit.md` / `E2ETestQualityAudit.md`; reachable dual paths/shims → `DualPathRetentionAudit.md`; single-use export cleanup without fan-out evidence → `DeadCodeAudit.md`.
 

@@ -41,10 +41,16 @@ the hosted safety gate.
 Run the focused checks while iterating:
 
 ```bash
+npm run format:check
+npm run lint
 npm run check:theme
+npm run check:content
+npm run typecheck:sim
 npm run typecheck
 npm test
 npm run test:e2e -- --reporter=line
+npm run test:e2e:prod -- --reporter=line
+npm run check:size   # after npm run build
 ```
 
 Run the complete local gate before handing off a change:
@@ -53,9 +59,11 @@ Run the complete local gate before handing off a change:
 npm run verify
 ```
 
-`verify` first checks the Gold/Charcoal UI token contract, then runs TypeScript
-checking, headless tests, the production build, and the Playwright browser
-smoke suite. The development-only FPS monitor may log
+`verify` first checks formatting, lint, the Gold/Charcoal UI token contract,
+content/asset references, and the simulation-only TypeScript boundary. It then
+runs full TypeScript checking, headless tests, the production build, a bundle
+size budget, and a
+Playwright smoke suite against the built Vite preview. The development-only FPS monitor may log
 browser long-task warnings during automated browser work; those warnings are
 diagnostic and should be investigated separately from test failures.
 

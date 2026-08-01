@@ -1,11 +1,5 @@
 import Phaser from 'phaser';
-import {
-  entityFootprint,
-  footprintPositions,
-  positionKey,
-  samePosition,
-  tileAt,
-} from '../sim';
+import { entityFootprint, footprintPositions, positionKey, samePosition, tileAt } from '../sim';
 import type { GameState, Position, SimEvent } from '../sim';
 import { heroAssets } from '../content/hero-assets';
 import { enemyAssets } from '../content/enemy-assets';
@@ -30,11 +24,13 @@ import {
 } from './presentation-settings';
 import {
   directionForKey,
+  directionForInputAction,
   keyMatchesBinding,
   KEY_BINDINGS_EVENT,
   OPEN_MAP_EVENT,
   readKeyBindings,
 } from './input-bindings';
+import { ControllerInputTracker, readConnectedGamepad } from './controller-input';
 
 const COLORS = {
   grass: 0x789f55,
@@ -79,6 +75,7 @@ export class TorchScene extends Phaser.Scene {
   private showGrid = false;
   private reduceMotion = false;
   private keyBindings = readKeyBindings();
+  private controllerInput = new ControllerInputTracker();
   private terrainDrawKey?: string;
   private fogDrawKey?: string;
   private presentationColors = {
@@ -131,11 +128,10 @@ export class TorchScene extends Phaser.Scene {
     this.showGrid = readShowGridPreference();
     this.reduceMotion = readReduceMotionPreference();
     this.keyBindings = readKeyBindings();
+    this.controllerInput.reset();
     this.textures.get('hero-knight-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.textures.get('enemy-slime-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
-    this.heroImage = this.add
-      .image(0, 0, 'hero-knight-marker')
-      .setDepth(2);
+    this.heroImage = this.add.image(0, 0, 'hero-knight-marker').setDepth(2);
     this.presentationColors = {
       grid: cssHexColorToNumber(readCssColorToken('--ui-color-grid', '#3a3328'), 0x3a3328),
       fog: cssHexColorToNumber(readCssColorToken('--ui-color-fog', '#15130f'), 0x15130f),
@@ -144,9 +140,8 @@ export class TorchScene extends Phaser.Scene {
     this.unsubscribe = gameSession.subscribe((_state, events) => this.redraw(true, events));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
     this.renderResolution = Math.min(2, Math.max(1, this.game.device.os.pixelRatio || 1));
-    this.resizeObserver = typeof ResizeObserver === 'undefined'
-      ? undefined
-      : new ResizeObserver(() => this.resizeToViewport());
+    this.resizeObserver =
+      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => this.resizeToViewport());
     this.resizeObserver?.observe(this.game.canvas.parentElement ?? this.game.canvas);
     window.addEventListener('resize', this.resizeToViewport);
     window.addEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
@@ -167,10 +162,24 @@ export class TorchScene extends Phaser.Scene {
       window.removeEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
       window.removeEventListener(REDUCE_MOTION_EVENT, this.handleReduceMotionChange);
       window.removeEventListener(KEY_BINDINGS_EVENT, this.handleKeyBindingsChange);
+      this.controllerInput.reset();
     });
 
     this.resizeToViewport();
     this.redraw();
+  }
+
+  public update(): void {
+    // Poll even while UI or animation owns input so a held control does not
+    // unexpectedly fire when the world becomes available again.
+    const action = this.controllerInput.poll(readConnectedGamepad());
+    if (!action || gameSession.inputMode !== 'world' || this.heroAnimating) return;
+
+    const direction = directionForInputAction(action);
+    if (direction) gameSession.move(direction);
+    else if (action === 'wait') gameSession.wait();
+    else if (action === 'gather') gameSession.gather();
+    else if (action === 'map') window.dispatchEvent(new Event(OPEN_MAP_EVENT));
   }
 
   private handleScaleResize = (): void => {
@@ -298,7 +307,13 @@ export class TorchScene extends Phaser.Scene {
         this.heroAnimating = false;
         this.cameraPosition = { ...hero };
         this.visualHeroPosition = { ...hero };
-        this.renderMovementFrame(previousHero ?? hero, hero, previousVisibility, currentVisibility, hasVisibilityChanged);
+        this.renderMovementFrame(
+          previousHero ?? hero,
+          hero,
+          previousVisibility,
+          currentVisibility,
+          hasVisibilityChanged,
+        );
       },
     });
     this.renderMovementFrame(previousHero ?? hero, hero, previousVisibility, currentVisibility);
@@ -312,7 +327,7 @@ export class TorchScene extends Phaser.Scene {
     forceBoardRedraw = false,
   ): void {
     const progress = this.movementProgress.value;
-    const heroProgress = Math.sin(progress * Math.PI / 2);
+    const heroProgress = Math.sin((progress * Math.PI) / 2);
     this.cameraPosition = interpolatePosition(previousHero, currentHero, progress);
     this.visualHeroPosition = interpolatePosition(previousHero, currentHero, heroProgress);
     devFrameMonitor.measure('scene.render', () => {
@@ -346,7 +361,9 @@ export class TorchScene extends Phaser.Scene {
     currentVisibility?: VisibilitySnapshot,
     visibilityProgress = 1,
   ): void {
-    devFrameMonitor.measure('scene.render', () => this.renderFrameInternal(previousVisibility, currentVisibility, visibilityProgress));
+    devFrameMonitor.measure('scene.render', () =>
+      this.renderFrameInternal(previousVisibility, currentVisibility, visibilityProgress),
+    );
   }
 
   private renderFrameInternal(
@@ -515,18 +532,9 @@ export class TorchScene extends Phaser.Scene {
 
   private positionBoard(baseCamera: Position, tileSize: number): void {
     const camera = this.cameraPosition ?? baseCamera;
-    this.board.setPosition(
-      (baseCamera.x - camera.x) * tileSize,
-      (baseCamera.y - camera.y) * tileSize,
-    );
-    this.fogLayer.setPosition(
-      (baseCamera.x - camera.x) * tileSize,
-      (baseCamera.y - camera.y) * tileSize,
-    );
-    this.gridLayer.setPosition(
-      (baseCamera.x - camera.x) * tileSize,
-      (baseCamera.y - camera.y) * tileSize,
-    );
+    this.board.setPosition((baseCamera.x - camera.x) * tileSize, (baseCamera.y - camera.y) * tileSize);
+    this.fogLayer.setPosition((baseCamera.x - camera.x) * tileSize, (baseCamera.y - camera.y) * tileSize);
+    this.gridLayer.setPosition((baseCamera.x - camera.x) * tileSize, (baseCamera.y - camera.y) * tileSize);
   }
 
   private prepareEntityMotion(state: GameState, events: SimEvent[]): boolean {
@@ -592,10 +600,7 @@ export class TorchScene extends Phaser.Scene {
       if (token instanceof Phaser.GameObjects.Image) {
         token
           .setDisplaySize(tileSize * footprint.width, tileSize * footprint.height)
-          .setPosition(
-            screen.x + (tileSize * footprint.width) / 2,
-            screen.y + (tileSize * footprint.height) / 2,
-          );
+          .setPosition(screen.x + (tileSize * footprint.width) / 2, screen.y + (tileSize * footprint.height) / 2);
       } else {
         token.setPosition(screen.x, screen.y);
       }
@@ -642,14 +647,21 @@ export class TorchScene extends Phaser.Scene {
     const positions = motion ? [entity.position, motion.from] : [entity.position];
     const level = positions
       .flatMap((position) => footprintPositions(position, entityFootprint(entity)))
-      .reduce((highest, tile) => Math.max(
-        highest,
-        interpolatedVisibilityLevel(previousVisibility, currentVisibility, tile, visibilityProgress),
-      ), 0);
+      .reduce(
+        (highest, tile) =>
+          Math.max(
+            highest,
+            interpolatedVisibilityLevel(previousVisibility, currentVisibility, tile, visibilityProgress),
+          ),
+        0,
+      );
     return entityVisibilityAlpha(level);
   }
 
-  private positionHeroImage(tileSize: number, visualHero = this.visualHeroPosition ?? gameSession.state.hero.position): void {
+  private positionHeroImage(
+    tileSize: number,
+    visualHero = this.visualHeroPosition ?? gameSession.state.hero.position,
+  ): void {
     const heroScreen = this.tileScreenPosition(visualHero, tileSize);
     this.heroImage
       .setDisplaySize(tileSize, tileSize)
@@ -692,7 +704,11 @@ export class TorchScene extends Phaser.Scene {
     }
   }
 
-  private drawEntity(target: Phaser.GameObjects.Graphics, entity: GameState['entities'][string], tileSize: number): void {
+  private drawEntity(
+    target: Phaser.GameObjects.Graphics,
+    entity: GameState['entities'][string],
+    tileSize: number,
+  ): void {
     const footprint = entityFootprint(entity);
     const width = tileSize * footprint.width;
     const height = tileSize * footprint.height;

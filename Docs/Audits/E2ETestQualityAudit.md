@@ -55,14 +55,14 @@ count.
 
 ## Reliability and signal rules
 
-| Priority | Torch candidate | Preferred correction |
-| --- | --- | --- |
-| P0 | Browser crash, unhandled runtime error, or harness failure | Reproduce the spec in isolation; fix the boundary and keep the failure visible |
-| P1 | Flake from render-loop timing, asset readiness, or animation state | Wait for a semantic locator/state (`expect`, `waitForFunction`) rather than a blind delay; preserve the product timing contract |
-| P1 | Multi-step flow fails because a prior test leaks state | Keep each test on a fresh `page.goto('/')`; avoid shared mutable module state and order dependence |
-| P2 | Brittle selector or geometry check | Prefer role, accessible name, `data-testid`, and explicit state; retain `evaluate` only for geometry/aspect-ratio contracts |
-| P2 | Duplicate flow/assertion across specs | Keep one semantic owner and delete the weaker copy |
-| P3 | Unclear naming or noisy diagnostics | Use flow-oriented test names; collect traces/screenshots during an explicitly configured retry or diagnostic run |
+| Priority | Torch candidate                                                    | Preferred correction                                                                                                            |
+| -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| P0       | Browser crash, unhandled runtime error, or harness failure         | Reproduce the spec in isolation; fix the boundary and keep the failure visible                                                  |
+| P1       | Flake from render-loop timing, asset readiness, or animation state | Wait for a semantic locator/state (`expect`, `waitForFunction`) rather than a blind delay; preserve the product timing contract |
+| P1       | Multi-step flow fails because a prior test leaks state             | Keep each test on a fresh `page.goto('/')`; avoid shared mutable module state and order dependence                              |
+| P2       | Brittle selector or geometry check                                 | Prefer role, accessible name, `data-testid`, and explicit state; retain `evaluate` only for geometry/aspect-ratio contracts     |
+| P2       | Duplicate flow/assertion across specs                              | Keep one semantic owner and delete the weaker copy                                                                              |
+| P3       | Unclear naming or noisy diagnostics                                | Use flow-oriented test names; collect traces/screenshots during an explicitly configured retry or diagnostic run                |
 
 ## Domain rules
 

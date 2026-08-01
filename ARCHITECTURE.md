@@ -139,8 +139,10 @@ Clicking a gear or tool slot or an ability card transitions to a dedicated
 selector submenu with a grid of compatible artwork; choosing an item immediately
 returns to the loadout. The three starter ability definitions use stable IDs and
 native 3:4 art variants; their effects and loadout changes resolve through typed
-simulation commands. Durable save serialization for that state remains future
-work.
+simulation commands. The session now persists the Phase 1 world state at
+accepted action boundaries through a browser-independent `WorldSave` v1
+projection and a local storage adapter; profile progression, cloud providers,
+and migrations remain future work.
 
 ## Input
 
@@ -155,6 +157,12 @@ Input adapters must not mutate game state directly. Platform-specific layouts ma
 
 The React UI may dispatch application commands through the session boundary, but React state is never the canonical `GameState`. UI updates should subscribe to action-boundary snapshots rather than polling or re-rendering on every Phaser frame.
 
+The browser controller adapter polls the standard Gamepad API at the Phaser
+scene boundary. D-pad and dominant left-stick input produce one cardinal move
+per neutral-to-active edge; the primary face button gathers, the secondary face
+button waits, and the menu button opens the map. Deadzone, diagonal ambiguity,
+disconnects, and unavailable APIs are handled without touching simulation rules.
+
 ## Persistence
 
 Use separate, versioned save envelopes:
@@ -168,7 +176,19 @@ WorldSave
   discoveries, chunk mutations, and world-local progression
 ```
 
-Save after completed action boundaries and important lifecycle events. A `SaveProvider` interface should support local storage first and platform providers later. Cloud storage is never authoritative for simulation rules; it stores portable save data and must tolerate fallback to local saves.
+The Phase 1 implementation currently ships only the `WorldSave` envelope with
+`schemaVersion: 1`. It stores seed/generation version, world ID, Hero,
+homestead, non-generated entity mutations, generated removals, gathering
+progress, discoveries, and revealed tiles. Generated terrain and generated
+trees are re-materialized from the seed rather than serialized wholesale.
+`GameSession` saves after accepted action boundaries through the `SaveProvider`
+contract; providers receive monotonic revisions so an older asynchronous write
+cannot supersede a newer snapshot. The browser adapter uses one addressed local
+slot and surfaces recoverable load/save errors without invalidating the running
+simulation. Profile saves, migrations, multiple-slot UX, cloud providers, and
+interruption recovery remain future work. Cloud storage is never authoritative
+for simulation rules; it stores portable save data and must tolerate fallback to
+local saves.
 
 Cross-platform synchronization is optional. Platform-specific cloud saves should not be confused with a universal account backend.
 

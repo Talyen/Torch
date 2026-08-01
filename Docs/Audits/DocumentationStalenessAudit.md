@@ -15,11 +15,11 @@ Find contradictions between live docs and the repository's executable sources of
 
 ## Severity
 
-| Level | Criteria |
-| --- | --- |
+| Level    | Criteria                                                                                                                    |
+| -------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Critical | Wrong API/path, broken internal link, stale architecture boundary, wrong framework/tool version, or command that cannot run |
-| Moderate | Wrong current-status claim, test/path count, terminology, or milestone state |
-| Minor | Typo, formatting, or missing code-fence language that does not change meaning |
+| Moderate | Wrong current-status claim, test/path count, terminology, or milestone state                                                |
+| Minor    | Typo, formatting, or missing code-fence language that does not change meaning                                               |
 
 ## Domain rules
 

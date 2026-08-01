@@ -17,18 +17,18 @@ Confirm unexpected effect ownership and fix violations using existing owners. A 
 
 ## Allowlisted seams
 
-| Effect | Allowed owner |
-| --- | --- |
-| Deterministic command/state mutation | `src/sim/**`, reached through `applyCommand` in `src/sim/simulation.ts` and dispatched by `src/game/session.ts` |
-| Browser preference storage and JSON decode | `src/game/presentation-settings.ts` and `src/game/input-bindings.ts` |
-| DOM event, focus, timer, and React lifecycle work | `src/ui/**`, `src/components/ui/**`, with cleanup in the owning effect |
-| Phaser canvas, textures, tweens, resize, and pointer/keyboard input | `src/main.ts` and `src/game/scene.ts` |
-| Session listeners and input mode | `src/game/session.ts` |
-| CSS token bridge | `readCssColorToken` in `src/game/presentation-colors.ts`, called by the scene; keep color math pure |
-| Vite asset URL bridge | `import.meta.env.BASE_URL` in `src/content/*-assets.ts`; path composition only, never gameplay state |
-| Frame timing and Long Task diagnostics | `src/dev/frame-monitor.ts`; development-only and never part of `GameState` |
-| Asset reads/transforms and generated manifest writes | `scripts/assets.config.mjs` and `scripts/process-assets.mjs`; source artwork under `Raw Assets/` |
-| Seeded generation | `unitRandom`/`hashCoordinates` in `src/sim/rng.ts`, consumed by deterministic world generation |
+| Effect                                                              | Allowed owner                                                                                                   |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Deterministic command/state mutation                                | `src/sim/**`, reached through `applyCommand` in `src/sim/simulation.ts` and dispatched by `src/game/session.ts` |
+| Browser preference storage and JSON decode                          | `src/game/presentation-settings.ts` and `src/game/input-bindings.ts`                                            |
+| DOM event, focus, timer, and React lifecycle work                   | `src/ui/**`, `src/components/ui/**`, with cleanup in the owning effect                                          |
+| Phaser canvas, textures, tweens, resize, and pointer/keyboard input | `src/main.ts` and `src/game/scene.ts`                                                                           |
+| Session listeners and input mode                                    | `src/game/session.ts`                                                                                           |
+| CSS token bridge                                                    | `readCssColorToken` in `src/game/presentation-colors.ts`, called by the scene; keep color math pure             |
+| Vite asset URL bridge                                               | `import.meta.env.BASE_URL` in `src/content/*-assets.ts`; path composition only, never gameplay state            |
+| Frame timing and Long Task diagnostics                              | `src/dev/frame-monitor.ts`; development-only and never part of `GameState`                                      |
+| Asset reads/transforms and generated manifest writes                | `scripts/assets.config.mjs` and `scripts/process-assets.mjs`; source artwork under `Raw Assets/`                |
+| Seeded generation                                                   | `unitRandom`/`hashCoordinates` in `src/sim/rng.ts`, consumed by deterministic world generation                  |
 
 `src/game/layout.ts`, most of `src/game/visibility.ts`, `src/game/presentation-colors.ts`, and all `src/sim/**`/`src/content/**` definitions should remain pure unless a function is explicitly documented as an integration bridge.
 

@@ -257,6 +257,7 @@ export function MenuOverlay(): ReactElement {
   }, [open]);
 
   const hpRatio = heroStatus.maxHealth > 0 ? Math.max(0, Math.min(1, heroStatus.health / heroStatus.maxHealth)) : 0;
+  const closeLabel = screen === 'menu' ? 'Close menu' : `Close ${SCREEN_TITLES[screen]}`;
   const hudNavigationButtons: readonly HudNavigationButtonConfig[] = [
     {
       screen: 'hero',
@@ -355,7 +356,7 @@ export function MenuOverlay(): ReactElement {
                         variant="ghost"
                         size="icon-lg"
                         className="menu-close"
-                        aria-label="Close menu"
+                        aria-label={closeLabel}
                         data-testid="close-menu"
                       />
                     }
@@ -1704,6 +1705,7 @@ function SettingsScreen(): ReactElement {
   const [confirmReset, setConfirmReset] = useState(false);
   const mountedRef = useRef(false);
   const optionsBodyRef = useRef<HTMLDivElement>(null);
+  const tabScrollInitializedRef = useRef(false);
   const optionsBodySize = useElementSize(optionsBodyRef);
   const optionsOrientation = optionsBodySize.width > 0 && optionsBodySize.width <= 720 ? 'horizontal' : 'vertical';
 
@@ -1722,6 +1724,19 @@ function SettingsScreen(): ReactElement {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (!tabScrollInitializedRef.current) {
+      tabScrollInitializedRef.current = true;
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('.options-nav [role="tab"][aria-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab]);
 
   const updateSetting = <K extends PresentationSettingKey>(key: K, value: PresentationSettings[K]): void => {
     const next = setPresentationSetting(key, value);

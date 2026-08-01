@@ -57,6 +57,7 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const detailFocusFrameRef = useRef<number | undefined>(undefined);
   const backFocusFrameRef = useRef<number | undefined>(undefined);
+  const tabScrollInitializedRef = useRef(false);
 
   const allDefinitions = useMemo(
     () => [...journalEntryDefinitionsForState('world', state), ...journalEntryDefinitionsForState('profile', profile)],
@@ -89,6 +90,19 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
   useEffect(() => {
     if (selectedEntryId && selectedScope) gameRuntime.markJournalEntrySeen(selectedScope, selectedEntryId);
   }, [gameRuntime, selectedEntryId, selectedScope]);
+
+  useEffect(() => {
+    if (!tabScrollInitializedRef.current) {
+      tabScrollInitializedRef.current = true;
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('.journal-tabs [role="tab"][aria-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [section]);
 
   useEffect(() => {
     if (!mobileDetailOpen) return;

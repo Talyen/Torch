@@ -11883,3 +11883,71 @@ html[data-reduce-motion='true'] *::after {
   height: 18px;
   color: var(--ui-color-icon);
 }
+
+/* Compact overflow and focus contracts ----------------------------------- */
+.settings-range:focus,
+input[type='range']:focus {
+  outline: none;
+  box-shadow: var(--ui-focus-ring);
+}
+
+#journal-detail-title:focus,
+#journal-detail-title:focus-visible {
+  outline: 2px solid var(--ui-color-accent);
+  outline-offset: 4px;
+  border-radius: var(--ui-control-radius);
+}
+
+.menu-panel-wide .gear-screen .gear-loadout-pane {
+  scrollbar-gutter: stable;
+  scroll-padding-block: var(--ui-space-3);
+}
+
+.journal-screen [role='tablist'],
+.crafting-category-tabs,
+.options-nav {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  overscroll-behavior-inline: contain;
+  scroll-padding-inline: var(--ui-space-3);
+  scrollbar-color: var(--ui-color-accent) var(--ui-color-surface-content-deep);
+}
+
+.crafting-category-tabs {
+  min-height: var(--ui-hit-target);
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.journal-screen [role='tablist'] {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .journal-screen [role='tablist'],
+  .crafting-category-tabs,
+  .options-nav {
+    position: relative;
+    box-shadow: inset -18px 0 14px -18px var(--ui-color-accent);
+  }
+
+  .journal-screen [role='tablist']::after,
+  .crafting-category-tabs::after,
+  .options-nav::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    width: 22px;
+    place-items: center;
+    content: '›';
+    color: var(--ui-color-accent);
+    background: linear-gradient(90deg, transparent, var(--ui-color-surface-content));
+    font-size: 1.2rem;
+    font-weight: 800;
+    pointer-events: none;
+  }
+}

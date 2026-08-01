@@ -57,14 +57,7 @@ export function availableContextActionsAt(state: GameState, target?: Position): 
 
   if (entity.kind === 'enemy') {
     const abilityCards = equippedAbilityCards(state, entity, focusedTarget);
-    if (abilityCards.length > 0) {
-      if (abilityCards.some((card) => !card.disabledReason)) return abilityCards;
-
-      return [
-        ...abilityCards,
-        ...actionOptionsForEntity(entity).map((kind) => entityActionCard(state, entity, focusedTarget, kind)),
-      ];
-    }
+    if (abilityCards.length > 0) return abilityCards;
   }
 
   return actionOptionsForEntity(entity).map((kind) => entityActionCard(state, entity, focusedTarget, kind));
@@ -78,6 +71,7 @@ function equippedAbilityCards(state: GameState, entity: EntityState, target: Pos
     if (!ability) return [];
 
     const cooldownRemaining = state.hero.abilityCooldowns?.[ability.id] ?? 0;
+    if (cooldownRemaining > 0) return [];
 
     return [
       {

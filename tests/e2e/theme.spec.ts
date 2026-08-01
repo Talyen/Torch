@@ -106,7 +106,7 @@ test('uses Torch geometry for dialog close and pagination controls', async ({ pa
     };
 
     return {
-      close: read("button[aria-label='Close menu']"),
+      close: read("button[aria-label='Close Inventory']"),
       previous: read("button[aria-label='Previous inventory page']"),
       next: read("button[aria-label='Next inventory page']"),
     };

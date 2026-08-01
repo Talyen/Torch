@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   AlertCircle,
@@ -56,6 +56,7 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>();
   const [quantity, setQuantity] = useState(1);
   const [feedback, setFeedback] = useState('Select a recipe to inspect its ingredients.');
+  const tabScrollInitializedRef = useRef(false);
 
   const craftingContext = useMemo(() => craftingContextForState(state), [state]);
   const recipeEntries = useMemo(() => availableRecipes(state, craftingContext), [craftingContext, state]);
@@ -81,6 +82,19 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
   useEffect(() => {
     setQuantity((current) => (maxQuantity > 0 ? Math.max(1, Math.min(current, maxQuantity)) : 1));
   }, [maxQuantity, selectedRecipe?.id]);
+
+  useEffect(() => {
+    if (!tabScrollInitializedRef.current) {
+      tabScrollInitializedRef.current = true;
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('.crafting-category-tabs [role="tab"][aria-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [category]);
 
   useEffect(() => {
     const message = [...events]

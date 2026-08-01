@@ -156,3 +156,41 @@ test('keeps selector and Unequip controls at least 42px across supported viewpor
     await page.getByTestId('close-menu').click();
   }
 });
+
+test('keeps the final equipment slots reachable in a short compact viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+  await page.getByTestId('hud-gear-button').click();
+  await expect(page.getByTestId('equipment-screen')).toBeVisible();
+
+  const pane = page.locator('.gear-tab-panel:not([hidden]):not([inert]) .gear-loadout-pane');
+  const scrollState = await pane.evaluate((element) => ({
+    overflowY: getComputedStyle(element).overflowY,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  expect(scrollState.overflowY).toBe('auto');
+  expect(scrollState.scrollHeight).toBeGreaterThan(scrollState.clientHeight);
+
+  const boots = page.getByTestId('equipment-slot-boots');
+  await boots.evaluate((element) => element.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  const reachability = await page.evaluate(() => {
+    const paneElement = document.querySelector<HTMLElement>(
+      '.gear-tab-panel:not([hidden]):not([inert]) .gear-loadout-pane',
+    );
+    const slot = document.querySelector<HTMLElement>('[data-testid="equipment-slot-boots"]');
+    const paneRect = paneElement?.getBoundingClientRect();
+    const slotRect = slot?.getBoundingClientRect();
+    return {
+      reachable:
+        Boolean(paneRect && slotRect) &&
+        slotRect!.top >= paneRect!.top - 1 &&
+        slotRect!.bottom <= paneRect!.bottom + 1 &&
+        slotRect!.left >= paneRect!.left - 1 &&
+        slotRect!.right <= paneRect!.right + 1,
+    };
+  });
+  expect(reachability.reachable).toBe(true);
+  await boots.click();
+  await expect(page.getByTestId('equipment-picker')).toBeVisible();
+});

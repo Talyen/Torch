@@ -12,19 +12,18 @@ function chopCard(entityId: string, kind: 'chop' | 'mine' | 'attack' = 'chop'): 
   };
 }
 
-function coolingAbilityCard(cooldownRemaining: number): ContextActionOption {
+function readyAbilityCard(abilityId: string, label: string, slot: 'basic' | 'skill' | 'ultimate'): ContextActionOption {
   return {
-    id: 'context:ability:ability.sunder',
-    label: 'Sunder',
+    id: `context:ability:${abilityId}`,
+    label,
     source: 'ability',
     entityName: 'Forest Slime',
-    abilityId: 'ability.sunder',
-    slot: 'skill',
-    cooldownRemaining,
-    disabledReason: `Ready in ${cooldownRemaining} action${cooldownRemaining === 1 ? '' : 's'}.`,
+    abilityId,
+    slot,
+    cooldownRemaining: 0,
     action: {
       kind: 'ability',
-      abilityId: 'ability.sunder',
+      abilityId,
       entityId: 'slime',
       target: { x: 5, y: 2 },
     },
@@ -53,17 +52,18 @@ describe('context action playback', () => {
     ]);
   });
 
-  it('retains disabled cooldown feedback when the hand renders a replacement', () => {
-    const cooling = coolingAbilityCard(2);
-    const replacement = chopCard('replacement-tree');
+  it('reflows ready cards after a played ability disappears during a cooldown update', () => {
+    const left = readyAbilityCard('ability.bash', 'Bash', 'basic');
+    const played = readyAbilityCard('ability.sunder', 'Sunder', 'skill');
+    const right = readyAbilityCard('ability.avatar', 'Avatar', 'ultimate');
 
-    const displayed = actionsDuringCardPlayback([cooling, replacement], replacement, 'entity:chop', 1);
+    const displayed = actionsDuringCardPlayback([left, right], played, 'ability:ability.sunder', 1);
 
-    expect(displayed).toEqual([cooling, replacement]);
-    expect(displayed[0]).toMatchObject({
-      cooldownRemaining: 2,
-      disabledReason: 'Ready in 2 actions.',
-    });
+    expect(displayed).toEqual([left, played, right]);
+    expect(actionsDuringCardPlayback([left, right], undefined, undefined)).toEqual([left, right]);
+    expect(actionsDuringCardPlayback([left, right], undefined, undefined)).not.toContainEqual(
+      expect.objectContaining({ abilityId: 'ability.sunder' }),
+    );
   });
 
   it('keeps the card geometry stable while deriving a proportional tuck depth', () => {

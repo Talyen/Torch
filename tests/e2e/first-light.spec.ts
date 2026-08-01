@@ -909,26 +909,29 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await sunderCard.click();
   await expect(sunderCard).toHaveAttribute('data-card-animation-preset', 'trinket');
   await expect(sunderCard).toHaveAttribute('data-card-animation-phase', 'play');
-  await expect(sunderCard).toHaveAttribute('data-card-animation-phase', 'idle', { timeout: 2500 });
-  await expect(sunderCard).toBeVisible();
-  await expect(sunderCard).toBeDisabled();
-  await expect(sunderCard).toHaveAttribute('aria-disabled', 'true');
-  await expect(sunderCard).toHaveClass(/is-disabled/);
-  await expect(sunderCard).toHaveAccessibleName(/Sunder, Ready in \d+ actions\./);
-  await expect(sunderCard.locator('.context-action-card__cooldown')).toHaveText('3');
+  await expect(sunderCard).toHaveCount(0, { timeout: 2500 });
   const defaultAbilityCard = page.getByTestId('context-action-card-context-ability-ability.avatar');
+  const bashCard = page.getByTestId('context-action-card-context-ability-ability.bash');
+  await expect(bashCard).toBeVisible();
+  await expect(bashCard).toBeEnabled();
   await expect(defaultAbilityCard).toBeVisible();
   await expect(defaultAbilityCard).toBeEnabled();
-  await expect(defaultAbilityCard).toHaveAttribute('aria-disabled', 'false');
+  expect(
+    await page
+      .locator('.context-action-card')
+      .evaluateAll((cards) => cards.map((card) => card.getAttribute('data-card-key'))),
+  ).toEqual(['ability:ability.bash', 'ability:ability.avatar']);
   await defaultAbilityCard.click();
   await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-phase', 'play');
   await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-preset', 'trinket');
-  await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-phase', 'idle', { timeout: 2500 });
-  await expect(defaultAbilityCard).toBeVisible();
-  await expect(defaultAbilityCard).toBeDisabled();
-  await expect(defaultAbilityCard).toHaveAttribute('aria-disabled', 'true');
-  await expect(defaultAbilityCard).toHaveClass(/is-disabled/);
-  await expect(defaultAbilityCard).toHaveAccessibleName(/Avatar, Ready in \d+ actions\./);
+  await expect(defaultAbilityCard).toHaveCount(0, { timeout: 2500 });
+  await expect(bashCard).toBeVisible();
+  await expect(bashCard).toBeEnabled();
+  expect(
+    await page
+      .locator('.context-action-card')
+      .evaluateAll((cards) => cards.map((card) => card.getAttribute('data-card-key'))),
+  ).toEqual(['ability:ability.bash']);
 });
 
 test('persists an action-boundary world and restores it after reload', async ({ page }) => {

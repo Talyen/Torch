@@ -290,17 +290,12 @@ describe('Torch simulation', () => {
 
     const cards = availableContextActionsAt(state, { x: 5, y: 2 });
 
-    expect(cards.map((card) => card.abilityId)).toEqual(['ability.bash', 'ability.sunder', 'ability.avatar']);
+    expect(cards.map((card) => card.abilityId)).toEqual(['ability.bash', 'ability.avatar']);
     expect(cards).toEqual([
       expect.objectContaining({
         abilityId: 'ability.bash',
         cooldownRemaining: 0,
         disabledReason: undefined,
-      }),
-      expect.objectContaining({
-        abilityId: 'ability.sunder',
-        cooldownRemaining: 2,
-        disabledReason: 'Ready in 2 actions.',
       }),
       expect.objectContaining({
         abilityId: 'ability.avatar',
@@ -314,9 +309,10 @@ describe('Torch simulation', () => {
       entityId: 'slime',
       target: { x: 5, y: 2 },
     });
+    expect(cards).not.toContainEqual(expect.objectContaining({ abilityId: 'ability.sunder' }));
   });
 
-  it('keeps all cooling abilities disabled while exposing a ready entity fallback', () => {
+  it('falls back deterministically to entity actions when all abilities are cooling down', () => {
     const state = createInitialGameState(1234);
     state.hero.position = { x: 4, y: 2 };
     state.hero.abilityCooldowns = {
@@ -327,41 +323,31 @@ describe('Torch simulation', () => {
 
     const cards = availableContextActionsAt(state, { x: 5, y: 2 });
 
-    expect(cards.slice(0, 3)).toEqual([
-      expect.objectContaining({
-        abilityId: 'ability.bash',
-        cooldownRemaining: 1,
-        disabledReason: 'Ready in 1 action.',
-      }),
-      expect.objectContaining({
-        abilityId: 'ability.sunder',
-        cooldownRemaining: 2,
-        disabledReason: 'Ready in 2 actions.',
-      }),
-      expect.objectContaining({
-        abilityId: 'ability.avatar',
-        cooldownRemaining: 3,
-        disabledReason: 'Ready in 3 actions.',
-      }),
+    expect(cards).toEqual([
+      {
+        id: 'context:entity:slime:attack',
+        label: 'Attack',
+        source: 'entity',
+        entityName: 'Forest Slime',
+        action: { kind: 'attack', entityId: 'slime', target: { x: 5, y: 2 } },
+      },
     ]);
-    expect(cards[3]).toEqual({
-      id: 'context:entity:slime:attack',
-      label: 'Attack',
-      source: 'entity',
-      entityName: 'Forest Slime',
-      action: { kind: 'attack', entityId: 'slime', target: { x: 5, y: 2 } },
-    });
 
     const blockedCooldownAction = applyCommand(state, {
       type: 'action',
-      action: cards[1]!.action,
+      action: {
+        kind: 'ability',
+        abilityId: 'ability.sunder',
+        entityId: 'slime',
+        target: { x: 5, y: 2 },
+      },
     });
     expect(blockedCooldownAction.accepted).toBe(false);
     expect(blockedCooldownAction.state.turn).toBe(0);
     expect(blockedCooldownAction.state.entities.slime.health).toBe(state.entities.slime.health);
     expect(blockedCooldownAction.events.some((event) => event.type === 'blocked')).toBe(true);
 
-    const fallback = applyCommand(state, { type: 'action', action: cards[3]!.action });
+    const fallback = applyCommand(state, { type: 'action', action: cards[0]!.action });
     expect(fallback.accepted).toBe(true);
     expect(fallback.state.turn).toBe(1);
     expect(fallback.state.entities.slime.health).toBe(3);

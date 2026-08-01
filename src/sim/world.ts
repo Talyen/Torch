@@ -1,10 +1,12 @@
-import { CARDINAL_OFFSETS, floorDiv, positionKey, samePosition } from './coords';
+import { CARDINAL_OFFSETS, floorDiv, positionKey } from './coords';
 import { unitRandom } from './rng';
 import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
 import { GATHERING_ACTION_COSTS } from './gathering';
 import { heroDefinitions } from '../content/heroes';
 import { createInitialWorldJournalState } from './journal';
+import { entityFootprint, footprintPositions } from './footprint';
+import { invalidateEntitySpatialIndex } from './spatial-index';
 
 export const GENERATION_VERSION = 6;
 export const CHUNK_SIZE = 16;
@@ -17,6 +19,18 @@ export function worldIdForSeed(seed: number): string {
 export interface GeneratedTile {
   position: Position;
   kind: TileKind;
+}
+
+export interface ChunkCoordinate {
+  x: number;
+  y: number;
+}
+
+export interface ActiveTileBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 }
 
 function smoothStep(value: number): number {
@@ -91,32 +105,101 @@ export function generatedTreeId(position: Position): string {
   return `generated-tree:${positionKey(position)}`;
 }
 
+export function activeTileBounds(center: Position, radius = TORCH_RADIUS + 5): ActiveTileBounds {
+  return {
+    minX: center.x - radius,
+    minY: center.y - radius,
+    maxX: center.x + radius,
+    maxY: center.y + radius,
+  };
+}
+
+/** Chunks intersecting the active tile window, ordered top-to-bottom then left-to-right. */
+export function activeChunkCoordinates(
+  center: Position,
+  radius = TORCH_RADIUS + 5,
+  chunkSize = CHUNK_SIZE,
+): ChunkCoordinate[] {
+  const bounds = activeTileBounds(center, radius);
+  const chunks: ChunkCoordinate[] = [];
+  for (let y = floorDiv(bounds.minY, chunkSize); y <= floorDiv(bounds.maxY, chunkSize); y += 1) {
+    for (let x = floorDiv(bounds.minX, chunkSize); x <= floorDiv(bounds.maxX, chunkSize); x += 1) {
+      chunks.push({ x, y });
+    }
+  }
+  return chunks;
+}
+
+/** Pure generated-entity projection for one chunk. Persistent mutations stay outside it. */
+export function generateChunkTreePositions(
+  seed: number,
+  chunkX: number,
+  chunkY: number,
+  chunkSize = CHUNK_SIZE,
+): Position[] {
+  const startX = chunkX * chunkSize;
+  const startY = chunkY * chunkSize;
+  return generateChunkTreePositionsWithin(seed, {
+    minX: startX,
+    minY: startY,
+    maxX: startX + chunkSize - 1,
+    maxY: startY + chunkSize - 1,
+  });
+}
+
+function generateChunkTreePositionsWithin(seed: number, bounds: ActiveTileBounds): Position[] {
+  const positions: Position[] = [];
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const position = { x, y };
+      if (generatedTreeAt(seed, position)) positions.push(position);
+    }
+  }
+  return positions;
+}
+
 /** Materialize only a bounded ring of generated trees and retain chop mutations. */
 export function materializeGeneratedTrees(state: GameState, center: Position, radius = TORCH_RADIUS + 5): void {
   const activeIds = new Set<string>();
-
-  for (let y = center.y - radius; y <= center.y + radius; y += 1) {
-    for (let x = center.x - radius; x <= center.x + radius; x += 1) {
-      const position = { x, y };
-      if (!generatedTreeAt(state.seed, position)) continue;
-
-      const id = generatedTreeId(position);
-      activeIds.add(id);
-      if (state.removedGeneratedEntities[id] || state.entities[id]) continue;
-      if (Object.values(state.entities).some((entity) => samePosition(entity.position, position))) continue;
-
-      state.entities[id] = {
-        id,
-        kind: 'tree',
-        name: 'Forest Tree',
-        position,
-        blocksMovement: true,
-        resourceType: 'wood',
-        gatheringActionCost: GATHERING_ACTION_COSTS.chop,
-        remainingGatheringActions: state.gatheringProgress?.[id] ?? GATHERING_ACTION_COSTS.chop,
-        actions: ['chop'],
-      };
+  const bounds = activeTileBounds(center, radius);
+  const occupiedPositions = new Set<string>();
+  for (const entity of Object.values(state.entities)) {
+    if (entity.id.startsWith('generated-tree:')) continue;
+    for (const position of footprintPositions(entity.position, entityFootprint(entity))) {
+      occupiedPositions.add(positionKey(position));
     }
+  }
+
+  const generatedPositions = activeChunkCoordinates(center, radius)
+    .flatMap((chunk) => {
+      const chunkMinX = chunk.x * CHUNK_SIZE;
+      const chunkMinY = chunk.y * CHUNK_SIZE;
+      return generateChunkTreePositionsWithin(state.seed, {
+        minX: Math.max(bounds.minX, chunkMinX),
+        minY: Math.max(bounds.minY, chunkMinY),
+        maxX: Math.min(bounds.maxX, chunkMinX + CHUNK_SIZE - 1),
+        maxY: Math.min(bounds.maxY, chunkMinY + CHUNK_SIZE - 1),
+      });
+    })
+    .sort((left, right) => left.y - right.y || left.x - right.x);
+
+  for (const position of generatedPositions) {
+    const id = generatedTreeId(position);
+    activeIds.add(id);
+    if (state.removedGeneratedEntities[id] || state.entities[id] || occupiedPositions.has(positionKey(position)))
+      continue;
+
+    state.entities[id] = {
+      id,
+      kind: 'tree',
+      name: 'Forest Tree',
+      position,
+      blocksMovement: true,
+      resourceType: 'wood',
+      gatheringActionCost: GATHERING_ACTION_COSTS.chop,
+      actions: ['chop'],
+    };
+    occupiedPositions.add(positionKey(position));
   }
 
   for (const [id] of Object.entries(state.entities)) {
@@ -124,6 +207,7 @@ export function materializeGeneratedTrees(state: GameState, center: Position, ra
       delete state.entities[id];
     }
   }
+  invalidateEntitySpatialIndex(state);
 }
 
 export function findGeneratedResourcePosition(
@@ -276,13 +360,19 @@ export function createInitialGameState(seed = 20260730): GameState {
   return state;
 }
 
-export function revealAround(state: GameState, center: Position, radius = TORCH_RADIUS): void {
+export function revealAround(state: GameState, center: Position, radius = TORCH_RADIUS): number {
+  let revealed = 0;
   for (let y = center.y - radius; y <= center.y + radius; y += 1) {
     for (let x = center.x - radius; x <= center.x + radius; x += 1) {
       const distanceSquared = (x - center.x) ** 2 + (y - center.y) ** 2;
       if (distanceSquared <= radius ** 2) {
-        state.revealedTiles[positionKey({ x, y })] = true;
+        const key = positionKey({ x, y });
+        if (!state.revealedTiles[key]) {
+          state.revealedTiles[key] = true;
+          revealed += 1;
+        }
       }
     }
   }
+  return revealed;
 }

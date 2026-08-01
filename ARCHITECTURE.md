@@ -60,10 +60,12 @@ Each world has a stable ID, seed, generation/content version, Hero and homestead
 state, generated baseline, and sparse persistent mutations. World generation is
 a pure function of versioned inputs and coordinates.
 
-Only a bounded area around the Hero should be active and rendered. Do not model
-the world as one giant materialized array. Keep generated terrain and entities
-separate from player changes so distant regions can be recreated rather than
-stored wholesale.
+Only the chunks intersecting a bounded tile window around the Hero are active.
+Generated entities dehydrate when they leave that window and deterministically
+rehydrate from the seed plus sparse removal and gathering-progress mutations.
+Position and chunk indexes cover only materialized entities and are derived,
+never saved. Keep generated terrain and entities separate from player changes
+so distant regions can be recreated rather than stored wholesale.
 
 Simulation randomness comes from an injected seeded source. Game outcomes must
 not depend on `Math.random()`, wall-clock time, random IDs, or unstable iteration
@@ -94,6 +96,13 @@ objects, actors, fog, effects, and UI should remain separable enough to update
 bounded work without rebuilding the whole scene. Prefer simple cached or pooled
 rendering when profiling shows it is needed; do not add a specialized rendering
 path preemptively.
+
+The browser entry point constructs and hydrates one `GameRuntime` before mounting
+React or Phaser. Both clients receive that runtime through their composition
+boundary; feature modules do not import a process-global session. The runtime
+exposes read-only action-boundary snapshots, action batches, typed command
+dispatch, and input mode. Persistence codecs and providers remain private to the
+application/platform boundary.
 
 The React Action Hand captures an immutable card-animation snapshot immediately
 before dispatching an action. The snapshot owns the stable presentation key,
@@ -130,26 +139,31 @@ Platform-specific behavior stays behind adapters.
 
 ## Persistence
 
-Use separate, versioned envelopes for profile-wide and world-local data:
+Keep profile-wide and world-local projections separate inside one transactional,
+versioned bundle:
 
 ```text
-ProfileSave
-  account-wide unlocks and meta-progression
-
-WorldSave
-  seed and versions, Hero, homestead, quests, discoveries, and mutations
+SaveBundle
+  revision, projection versions, generation version, and integrity metadata
+  ProfileSave
+    account-wide unlocks and meta-progression
+  WorldSave
+    seed and versions, Hero, homestead, quests, discoveries, and mutations
 ```
 
 Save portable state, not generated data that can be reproduced from its inputs.
-Writes must prevent older asynchronous snapshots from replacing newer ones.
-Storage failures should be recoverable without corrupting the running session.
+The application captures both projections at one action boundary and queues one
+bundle commit. Writes prevent older asynchronous snapshots from replacing newer
+ones. The local provider uses verified primary, temporary, and last-known-good
+backup envelopes; invalid bytes are retained for diagnostics. Storage failures
+do not invalidate the running simulation.
 Cloud storage is an optional provider, not an authority for game rules.
 
 Schema changes require an explicit version and migration or a deliberate reset
 decision. During early development, unsupported older world-save schemas may
-deliberately start a fresh deterministic world; migration and recovery are
-release-hardening work. Keep profile progression separate from world-local
-state.
+deliberately start a fresh deterministic world. The application migrates the
+legacy independent local world/profile keys into a bundle without deleting the
+source payloads. Keep profile progression separate from world-local state.
 
 ## Content and assets
 

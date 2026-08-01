@@ -83,6 +83,12 @@ usually needs the closest Playwright assertion. Save changes need round-trip and
 migration coverage. Update the owning product or architecture document when a
 decision or runtime boundary changes.
 
+The browser composition root creates the `GameRuntime` with its platform save
+provider and awaits `boot()` before mounting input-capable clients. React and
+Phaser receive the hydrated runtime through injection. Tests may construct
+multiple runtimes directly; they should call `flushPersistence()` before
+asserting asynchronous save state.
+
 ## Assets
 
 Add source artwork under `Raw Assets/`, then run the owning pipeline script:

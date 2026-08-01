@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEventHandler, ReactElement } from 'react';
 import {
   Axe,
@@ -37,7 +37,6 @@ import {
   X as CloseIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { gameSession } from '../game/session';
 import { heroAssets } from '../content/hero-assets';
 import { heroDefinitions } from '../content/heroes';
 import { abilities, abilitySlots } from '../content/abilities';
@@ -62,8 +61,9 @@ import {
 import type { InventoryLayout, InventorySort } from './inventory-pagination';
 import { mapFitForViewport } from './responsive-layout';
 import { useElementSize } from './use-element-size';
+import { useGameRuntime } from './runtime-context';
 import { abilityActionDefinition, positionKey, resolvedWaypointPosition, tileAt } from '../sim';
-import type { GameState, Position, ProfileJournalState, SimEvent } from '../sim';
+import type { GameState, Position } from '../sim';
 import { journalEntryDefinition } from '../content/journal';
 import {
   PRESENTATION_SETTINGS_EVENT,
@@ -73,7 +73,6 @@ import {
 } from '../game/presentation-settings';
 import type { PresentationSettings, PresentationSettingKey } from '../game/presentation-settings';
 import { ContextActionHand } from './context-action-hand';
-import { feedbackAnnouncementForBatch } from '../game/feedback-presenter';
 import { CraftingScreen } from './crafting-screen';
 import { JournalScreen } from './journal-screen';
 import {
@@ -97,13 +96,12 @@ import {
   defaultKeyBindings,
   keyBindingDefinitions,
   KEY_BINDINGS_EVENT,
-  OPEN_JOURNAL_EVENT,
-  OPEN_MAP_EVENT,
   readKeyBindings,
   setKeyBindings,
   updateKeyBinding,
 } from '../game/input-bindings';
 import type { KeyBindingAction, KeyBindings } from '../game/input-bindings';
+import { useMenuOverlayController } from './menu-overlay-controller';
 
 type MenuItem = {
   label: string;
@@ -144,33 +142,6 @@ const SCREEN_TITLES: Record<Screen, string> = {
   settings: 'Options',
 };
 
-const SCREEN_TRIGGER_TEST_IDS: Partial<Record<Screen, string>> = {
-  hero: 'hud-hero-button',
-  inventory: 'hud-inventory-button',
-  gear: 'hud-gear-button',
-  abilities: 'hud-abilities-button',
-  menu: 'menu-button',
-};
-
-function menuScreenFocusSelector(screen: Screen): string | undefined {
-  switch (screen) {
-    case 'inventory':
-      return '[data-testid="inventory-filter"]';
-    case 'gear':
-      return '[data-testid="equipment-slot-helm"]';
-    case 'crafting':
-      return '[data-testid="crafting-search"]';
-    case 'abilities':
-      return '[data-testid="ability-card-basic"]';
-    case 'journal':
-      return '[data-testid="journal-tab-overview"]';
-    case 'settings':
-      return '[data-testid="settings-tab-display"]';
-    default:
-      return undefined;
-  }
-}
-
 const sortOptions = [
   { value: 'category', label: 'Default' },
   { value: 'name', label: 'Name' },
@@ -209,163 +180,22 @@ const toolSlotIcons: Record<ToolSlotId, LucideIcon> = {
 };
 
 export function MenuOverlay(): ReactElement {
-  const [open, setOpen] = useState(false);
-  const [screen, setScreen] = useState<Screen>('menu');
-  const [gameState, setGameState] = useState(() => gameSession.state);
-  const [profileJournal, setProfileJournal] = useState<ProfileJournalState>(() => gameSession.profileJournal);
-  const [gameEvents, setGameEvents] = useState<SimEvent[]>([]);
-  const [feedbackAnnouncement, setFeedbackAnnouncement] = useState('');
-  const [heroStatus, setHeroStatus] = useState(() => ({
-    health: gameSession.state.hero.health,
-    maxHealth: gameSession.state.hero.maxHealth,
-  }));
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-  const returnFocusTestIdRef = useRef<string | null>(null);
-  const previousOpenRef = useRef(false);
-  const previousScreenRef = useRef<Screen>(screen);
-  const hasOpenedMenuRef = useRef(false);
-  const focusRestoreFramesRef = useRef<number[]>([]);
-  const focusRestoreTimersRef = useRef<number[]>([]);
+  const {
+    open,
+    screen,
+    setScreen,
+    gameState,
+    profileJournal,
+    gameEvents,
+    feedbackAnnouncement,
+    heroStatus,
+    closeButtonRef,
+    openMenu,
+    handleMenuOpenChange,
+    scheduleMenuFocusRestore,
+  } = useMenuOverlayController();
   const gameplayHudRef = useRef<HTMLDivElement>(null);
   const hudRailRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const unsubscribe = gameSession.subscribe((state, events, profile) => {
-      setGameState(state);
-      setProfileJournal(profile);
-      setGameEvents(events);
-      setHeroStatus({
-        health: state.hero.health,
-        maxHealth: state.hero.maxHealth,
-      });
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = gameSession.subscribeActionBatches((batch) => {
-      const announcement = feedbackAnnouncementForBatch(batch);
-      if (announcement) setFeedbackAnnouncement(announcement);
-    });
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    gameSession.setInputMode(open ? 'ui' : 'world');
-    document.body.dataset.menuOpen = String(open);
-
-    return () => {
-      gameSession.setInputMode('world');
-      delete document.body.dataset.menuOpen;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    const handleOpenMap = (): void => {
-      returnFocusTestIdRef.current = 'menu-button';
-      returnFocusRef.current = document.querySelector<HTMLElement>('[data-testid="menu-button"]');
-      setScreen('map');
-      setOpen(true);
-    };
-    const handleOpenJournal = (): void => {
-      returnFocusTestIdRef.current = 'menu-button';
-      returnFocusRef.current = document.querySelector<HTMLElement>('[data-testid="menu-button"]');
-      gameSession.recordProfileObservation('open-journal');
-      setScreen('journal');
-      setOpen(true);
-    };
-    window.addEventListener(OPEN_MAP_EVENT, handleOpenMap);
-    window.addEventListener(OPEN_JOURNAL_EVENT, handleOpenJournal);
-    return () => {
-      window.removeEventListener(OPEN_MAP_EVENT, handleOpenMap);
-      window.removeEventListener(OPEN_JOURNAL_EVENT, handleOpenJournal);
-    };
-  }, []);
-
-  const openMenu = (nextScreen: Screen = 'menu', invoker?: HTMLElement | null): void => {
-    cancelMenuFocusRestore();
-    const triggerTestId = invoker?.dataset.testid ?? SCREEN_TRIGGER_TEST_IDS[nextScreen] ?? null;
-    returnFocusTestIdRef.current = triggerTestId;
-    returnFocusRef.current =
-      invoker ??
-      (triggerTestId ? document.querySelector<HTMLElement>(`[data-testid="${triggerTestId}"]`) : null) ??
-      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    setScreen(nextScreen);
-    setOpen(true);
-    if (nextScreen === 'inventory') gameSession.recordProfileObservation('open-inventory');
-    if (nextScreen === 'journal') gameSession.recordProfileObservation('open-journal');
-  };
-
-  const restoreMenuFocus = useCallback((): void => {
-    const target =
-      (returnFocusRef.current && document.contains(returnFocusRef.current) ? returnFocusRef.current : null) ??
-      (returnFocusTestIdRef.current
-        ? document.querySelector<HTMLElement>(`[data-testid="${returnFocusTestIdRef.current}"]`)
-        : null);
-    if (!target || !document.contains(target)) return;
-    target.focus({ preventScroll: true });
-  }, []);
-
-  const cancelMenuFocusRestore = useCallback((): void => {
-    focusRestoreFramesRef.current.forEach((frame) => window.cancelAnimationFrame(frame));
-    focusRestoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    focusRestoreFramesRef.current = [];
-    focusRestoreTimersRef.current = [];
-  }, []);
-
-  const scheduleMenuFocusRestore = useCallback((): void => {
-    cancelMenuFocusRestore();
-    const firstFrame = window.requestAnimationFrame(() => {
-      const secondFrame = window.requestAnimationFrame(() => {
-        focusRestoreFramesRef.current = focusRestoreFramesRef.current.filter((frame) => frame !== secondFrame);
-        if (document.body.dataset.menuOpen === 'true') return;
-        restoreMenuFocus();
-        focusRestoreTimersRef.current.push(
-          window.setTimeout(() => {
-            if (document.body.dataset.menuOpen !== 'true') restoreMenuFocus();
-          }, 120),
-          window.setTimeout(() => {
-            if (document.body.dataset.menuOpen !== 'true') restoreMenuFocus();
-          }, 300),
-        );
-      });
-      focusRestoreFramesRef.current.push(secondFrame);
-    });
-    focusRestoreFramesRef.current.push(firstFrame);
-  }, [cancelMenuFocusRestore, restoreMenuFocus]);
-
-  const handleMenuOpenChange = (nextOpen: boolean): void => {
-    if (nextOpen) cancelMenuFocusRestore();
-    setOpen(nextOpen);
-    if (!nextOpen) scheduleMenuFocusRestore();
-  };
-
-  useEffect(() => {
-    if (previousOpenRef.current && !open) scheduleMenuFocusRestore();
-    previousOpenRef.current = open;
-  }, [open, scheduleMenuFocusRestore]);
-
-  useEffect(() => {
-    const previousScreen = previousScreenRef.current;
-    previousScreenRef.current = screen;
-    if (!open || !hasOpenedMenuRef.current || previousScreen === screen || screen === 'menu') {
-      if (open) hasOpenedMenuRef.current = true;
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      if (document.body.dataset.menuOpen !== 'true') return;
-      const selector = menuScreenFocusSelector(screen);
-      const target = (selector ? document.querySelector<HTMLElement>(selector) : null) ?? closeButtonRef.current;
-      target?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [open, screen]);
-
-  useEffect(() => cancelMenuFocusRestore, [cancelMenuFocusRestore]);
 
   useEffect(() => {
     const host = gameplayHudRef.current;
@@ -1049,14 +879,15 @@ function mapBounds(state: GameState): MapBounds {
 }
 
 function MapScreen(): ReactElement {
-  const [mapState, setMapState] = useState(() => gameSession.state);
+  const runtime = useGameRuntime();
+  const [mapState, setMapState] = useState(() => runtime.state);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const measuredMapViewport = useElementSize(mapViewportRef);
 
   useEffect(() => {
-    const unsubscribe = gameSession.subscribe((state) => setMapState(state));
+    const unsubscribe = runtime.subscribeSnapshot((snapshot) => setMapState(snapshot.state));
     return () => unsubscribe();
-  }, []);
+  }, [runtime]);
 
   const mapViewportSize = useMemo(() => {
     const viewport = mapViewportRef.current;
@@ -1159,6 +990,7 @@ function MapScreen(): ReactElement {
 }
 
 function GearPanel({ state }: { state: GameState }): ReactElement {
+  const runtime = useGameRuntime();
   type GearTab = 'equipment' | 'tools';
 
   const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlotId>();
@@ -1218,11 +1050,11 @@ function GearPanel({ state }: { state: GameState }): ReactElement {
         selectedId={equippedId}
         onBack={() => setActiveEquipmentSlot(undefined)}
         onSelect={(itemId) => {
-          gameSession.equipItem(activeEquipmentSlot, itemId);
+          runtime.equipItem(activeEquipmentSlot, itemId);
           setActiveEquipmentSlot(undefined);
         }}
         onUnequip={() => {
-          gameSession.unequipItem(activeEquipmentSlot);
+          runtime.unequipItem(activeEquipmentSlot);
           setActiveEquipmentSlot(undefined);
         }}
       />
@@ -1242,11 +1074,11 @@ function GearPanel({ state }: { state: GameState }): ReactElement {
         selectedId={equippedId}
         onBack={() => setSelectedToolSlot(undefined)}
         onSelect={(toolId) => {
-          gameSession.equipItem(selectedToolSlot, toolId);
+          runtime.equipItem(selectedToolSlot, toolId);
           setSelectedToolSlot(undefined);
         }}
         onUnequip={() => {
-          gameSession.unequipItem(selectedToolSlot);
+          runtime.unequipItem(selectedToolSlot);
           setSelectedToolSlot(undefined);
         }}
       />
@@ -1529,10 +1361,11 @@ function ToolSelectorScreen({
 }
 
 function AbilitiesScreen(): ReactElement {
+  const runtime = useGameRuntime();
   const [pickerSlot, setPickerSlot] = useState<AbilitySlotId>();
   const [detailAbility, setDetailAbility] = useState<(typeof abilities)[number]>();
   const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({
-    ...gameSession.state.hero.equippedAbilities,
+    ...runtime.state.hero.equippedAbilities,
   });
   const previousPickerSlotRef = useRef<AbilitySlotId | undefined>(undefined);
   const abilityFocusFrameRef = useRef<number | undefined>(undefined);
@@ -1540,10 +1373,10 @@ function AbilitiesScreen(): ReactElement {
 
   useEffect(
     () =>
-      gameSession.subscribe((state) => {
-        setEquippedAbilities({ ...state.hero.equippedAbilities });
+      runtime.subscribeSnapshot((snapshot) => {
+        setEquippedAbilities({ ...snapshot.state.hero.equippedAbilities });
       }),
-    [],
+    [runtime],
   );
 
   useEffect(() => {
@@ -1572,7 +1405,7 @@ function AbilitiesScreen(): ReactElement {
   }, [detailAbility, pickerSlot]);
 
   const selectAbility = (slotId: AbilitySlotId, abilityId: string): void => {
-    gameSession.equipAbility(slotId, abilityId);
+    runtime.equipAbility(slotId, abilityId);
     setPickerSlot(undefined);
     setDetailAbility(undefined);
   };

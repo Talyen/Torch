@@ -66,8 +66,8 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [ ] Time-of-day presentation and lightweight weather effects.
 - [ ] Pets with follow, wait, interact, and simple combat behavior.
 - [x] World-local quests, mystery clues, waypoint targets, and Journal progress tracking.
-- [x] Versioned `WorldSave`/`ProfileSave` envelopes with a local provider (recovery, migration, and provider hardening remain future work).
-- [ ] Materialize world chunks and nearby entities with deterministic sleep/wake rules and sparse persistent mutations.
+- [x] Versioned `WorldSave`/`ProfileSave` projections in a checksummed local bundle with crash recovery, legacy migration, and provider hardening.
+- [x] Materialize world chunks and nearby generated entities with deterministic sleep/wake rules and sparse persistent mutations.
 - [ ] Add a visible homestead upgrade graph with repaired rooms, station dependencies, storage expansion, and production improvements.
 - [ ] Add renewable resource and production cadence such as crop cycles, regrowing nodes, and fuel or other recurring resource sinks.
 - [ ] Add a lightweight economy for trading, selling surplus, purchasing seeds or tools, and optionally recruiting a specialist.

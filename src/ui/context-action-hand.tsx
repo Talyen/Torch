@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { abilities } from '../content/abilities';
-import { gameSession } from '../game/session';
 import { availableContextActionsAt, contextActionCardKey, contextualActionTargets, positionKey } from '../sim';
 import type { ContextActionOption, GameState, Position, SimEvent } from '../sim';
 import { setCardPlayPlaybackActive, useCardPlayLabState } from '../dev/card-play-lab-store';
@@ -15,6 +14,7 @@ import {
 } from './card-animation';
 import type { CardAnimationPreset, CardAnimationPresetId, CardAnimationSnapshot, CardRect } from './card-animation';
 import { presentationGate } from '../game/presentation-gate';
+import { useGameRuntime } from './runtime-context';
 
 interface ContextActionHandProps {
   state: GameState;
@@ -44,6 +44,7 @@ interface ActivePlayback {
 }
 
 export function ContextActionHand({ state, events, hidden = false }: ContextActionHandProps): ReactElement | null {
+  const runtime = useGameRuntime();
   const handRef = useRef<HTMLDivElement>(null);
   const [handElement, setHandElement] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
@@ -298,7 +299,7 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
                   sourceRectsRef.current.set(activatedCardKey, rect);
                   pendingSnapshotsRef.current.set(activatedCardKey, snapshot);
                   beginPlayback(snapshot, activePresetId, index);
-                  const result = gameSession.performAction(activatedAction.action);
+                  const result = runtime.performAction(activatedAction.action);
                   if (!result.accepted) {
                     pendingSnapshotsRef.current.delete(activatedCardKey);
                     cancelPlayback();

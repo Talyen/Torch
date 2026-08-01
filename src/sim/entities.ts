@@ -1,5 +1,7 @@
 import { entityOccupiesPosition } from './footprint';
 import { CARDINAL_OFFSETS } from './coords';
+import { entitySpatialIndex } from './spatial-index';
+import { CHUNK_SIZE } from './world';
 import type { EntityState, GameState, Position } from './types';
 
 /**
@@ -8,9 +10,17 @@ import type { EntityState, GameState, Position } from './types';
  * cannot quietly diverge on what counts as an occupied tile.
  */
 export function entityAt(state: GameState, position: Position): EntityState | undefined {
-  return Object.values(state.entities).find(
-    (entity) => (entity.health ?? 1) > 0 && entityOccupiesPosition(entity, position),
-  );
+  const ids = entitySpatialIndex(state, CHUNK_SIZE).byPosition.get(`${position.x},${position.y}`) ?? [];
+  return ids
+    .map((id) => state.entities[id])
+    .find((entity): entity is EntityState =>
+      Boolean(entity && (entity.health ?? 1) > 0 && entityOccupiesPosition(entity, position)),
+    );
+}
+
+/** Stable IDs for the currently materialized entities whose footprints touch a chunk. */
+export function entityIdsInChunk(state: GameState, chunkX: number, chunkY: number): readonly string[] {
+  return entitySpatialIndex(state, CHUNK_SIZE).byChunk.get(`${chunkX},${chunkY}`) ?? [];
 }
 
 export function blockingEntityAt(state: GameState, position: Position): EntityState | undefined {

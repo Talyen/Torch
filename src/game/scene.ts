@@ -6,7 +6,7 @@ import { enemyAssets } from '../content/enemy-assets';
 import { resourceAssets } from '../content/resource-assets';
 import { devFrameMonitor } from '../dev/frame-monitor';
 import { tileSizeForViewport, viewRadiusForViewport } from './layout';
-import { gameSession } from './session';
+import type { GameRuntimePort } from './session';
 import { readBoardPresentationColors } from './presentation-colors';
 import {
   captureVisibilitySnapshot,
@@ -23,26 +23,20 @@ import {
   readReduceMotionPreference,
   readShowGridPreference,
 } from './presentation-settings';
-import {
-  directionForKey,
-  directionForInputAction,
-  keyMatchesBinding,
-  KEY_BINDINGS_EVENT,
-  OPEN_JOURNAL_EVENT,
-  OPEN_MAP_EVENT,
-  readKeyBindings,
-} from './input-bindings';
+import { KEY_BINDINGS_EVENT, readKeyBindings } from './input-bindings';
 import { ControllerInputTracker, readConnectedGamepad } from './controller-input';
-import {
-  backingSizeForViewport,
-  cameraScrollForLogicalViewport,
-  logicalPointerCoordinate,
-  renderScaleForDevicePixelRatio,
-} from './render-resolution';
+import { logicalPointerCoordinate } from './render-resolution';
 import type { ActionBatch } from './session';
 import { attackPoseAt, ATTACK_MOTION } from './attack-motion';
 import { feedbackRequestsForBatch, type FeedbackRequest } from './feedback-presenter';
 import { presentationGate } from './presentation-gate';
+import {
+  canAcceptWorldInput,
+  dispatchBoundKeyboardInput,
+  dispatchWorldInput,
+  moveHeroForAdjacentTile,
+} from './scene-world-input';
+import { SceneViewportCoordinator } from './scene-viewport';
 
 declare global {
   interface Window {
@@ -85,6 +79,7 @@ interface FeedbackChip {
 type EntityToken = Phaser.GameObjects.Graphics | Phaser.GameObjects.Image;
 
 export class TorchScene extends Phaser.Scene {
+  private runtime!: GameRuntimePort;
   private board!: Phaser.GameObjects.Graphics;
   private fogLayer!: Phaser.GameObjects.Container;
   private fogTiles: Phaser.GameObjects.Rectangle[] = [];
@@ -98,11 +93,7 @@ export class TorchScene extends Phaser.Scene {
   private entityMotions = new Map<string, EntityMotion>();
   private unsubscribe?: () => void;
   private unsubscribeBatches?: () => void;
-  private resizeObserver?: ResizeObserver;
-  private resizeFrame?: number;
-  private dprMediaQuery?: MediaQueryList;
-  private viewportSize = { width: 960, height: 640 };
-  private renderScale = 1;
+  private readonly viewport = new SceneViewportCoordinator(this, () => this.redraw(false));
   private heroTween?: Phaser.Tweens.Tween;
   private heroAnimating = false;
   private lastSimulationHeroPosition?: Position;
@@ -143,35 +134,19 @@ export class TorchScene extends Phaser.Scene {
     );
   };
 
-  private handleDevicePixelRatioChange = (): void => {
-    this.bindDevicePixelRatioListener();
-    this.scheduleViewportSync();
-  };
-
   private handleKeyDown = (event: KeyboardEvent): void => {
-    if (gameSession.inputMode !== 'world' || this.heroAnimating || presentationGate.busy) return;
-
-    const direction = directionForKey(this.keyBindings, event.key);
-    if (direction) {
-      event.preventDefault();
-      gameSession.move(direction);
-    } else if (keyMatchesBinding(this.keyBindings, 'wait', event.key)) {
-      event.preventDefault();
-      gameSession.wait();
-    } else if (keyMatchesBinding(this.keyBindings, 'gather', event.key)) {
-      event.preventDefault();
-      gameSession.gather();
-    } else if (keyMatchesBinding(this.keyBindings, 'map', event.key)) {
-      event.preventDefault();
-      window.dispatchEvent(new Event(OPEN_MAP_EVENT));
-    } else if (keyMatchesBinding(this.keyBindings, 'journal', event.key)) {
-      event.preventDefault();
-      window.dispatchEvent(new Event(OPEN_JOURNAL_EVENT));
-    }
+    if (!canAcceptWorldInput(this.runtime, this.heroAnimating)) return;
+    dispatchBoundKeyboardInput(this.runtime, event, this.keyBindings);
   };
 
-  public constructor() {
+  public constructor(runtime?: GameRuntimePort) {
     super('torch-world');
+    if (runtime) this.runtime = runtime;
+  }
+
+  public init(data?: { runtime?: GameRuntimePort }): void {
+    if (data?.runtime) this.runtime = data.runtime;
+    if (!this.runtime) throw new Error('TorchScene requires an injected runtime.');
   }
 
   public preload(): void {
@@ -208,15 +183,10 @@ export class TorchScene extends Phaser.Scene {
       fog: boardPresentationColors.fog,
     };
     this.cameras.main.setBackgroundColor(boardPresentationColors.background);
-    this.unsubscribe = gameSession.subscribe((_state, events) => this.redraw(true, events));
-    this.unsubscribeBatches = gameSession.subscribeActionBatches((batch) => this.handleActionBatch(batch));
+    this.unsubscribe = this.runtime.subscribeSnapshot((snapshot) => this.redraw(true, [...snapshot.events]));
+    this.unsubscribeBatches = this.runtime.subscribeActionBatches((batch) => this.handleActionBatch(batch));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
-    this.bindDevicePixelRatioListener();
-    this.resizeObserver =
-      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(this.scheduleViewportSync);
-    this.resizeObserver?.observe(this.game.canvas.parentElement ?? this.game.canvas);
-    window.addEventListener('resize', this.scheduleViewportSync);
-    window.visualViewport?.addEventListener('resize', this.scheduleViewportSync);
+    this.viewport.connect();
     window.addEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
     window.addEventListener(REDUCE_MOTION_EVENT, this.handleReduceMotionChange);
     window.addEventListener(KEY_BINDINGS_EVENT, this.handleKeyBindingsChange);
@@ -238,18 +208,14 @@ export class TorchScene extends Phaser.Scene {
       this.activeFeedback.clear();
       this.feedbackPool.forEach((chip) => chip.container.destroy());
       this.feedbackPool = [];
-      this.resizeObserver?.disconnect();
-      window.removeEventListener('resize', this.scheduleViewportSync);
-      window.visualViewport?.removeEventListener('resize', this.scheduleViewportSync);
-      this.unbindDevicePixelRatioListener();
-      if (this.resizeFrame !== undefined) window.cancelAnimationFrame(this.resizeFrame);
+      this.viewport.disconnect();
       window.removeEventListener(SHOW_GRID_EVENT, this.handleShowGridChange);
       window.removeEventListener(REDUCE_MOTION_EVENT, this.handleReduceMotionChange);
       window.removeEventListener(KEY_BINDINGS_EVENT, this.handleKeyBindingsChange);
       this.controllerInput.reset();
     });
 
-    this.syncLogicalViewport();
+    this.viewport.sync();
     this.redraw();
     this.updatePresentationDiagnostics();
   }
@@ -258,18 +224,12 @@ export class TorchScene extends Phaser.Scene {
     // Poll even while UI or animation owns input so a held control does not
     // unexpectedly fire when the world becomes available again.
     const action = this.controllerInput.poll(readConnectedGamepad());
-    if (!action || gameSession.inputMode !== 'world' || this.heroAnimating || presentationGate.busy) return;
-
-    const direction = directionForInputAction(action);
-    if (direction) gameSession.move(direction);
-    else if (action === 'wait') gameSession.wait();
-    else if (action === 'gather') gameSession.gather();
-    else if (action === 'map') window.dispatchEvent(new Event(OPEN_MAP_EVENT));
-    else if (action === 'journal') window.dispatchEvent(new Event(OPEN_JOURNAL_EVENT));
+    if (!action || !canAcceptWorldInput(this.runtime, this.heroAnimating)) return;
+    dispatchWorldInput(this.runtime, action);
   }
 
   private handleScaleResize = (): void => {
-    this.syncLogicalViewport();
+    this.viewport.sync();
     this.redraw(false);
   };
 
@@ -297,91 +257,20 @@ export class TorchScene extends Phaser.Scene {
     this.keyBindings = readKeyBindings();
   };
 
-  private scheduleViewportSync = (): void => {
-    if (this.resizeFrame !== undefined) return;
-    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
-      this.syncLogicalViewport();
-      return;
-    }
-    this.resizeFrame = window.requestAnimationFrame(() => {
-      this.resizeFrame = undefined;
-      this.syncLogicalViewport();
-    });
-  };
-
-  private syncLogicalViewport = (): void => {
-    const container = this.game.canvas.parentElement;
-    if (!container) return;
-
-    const bounds = container.getBoundingClientRect();
-    const width = Math.max(1, Math.round(bounds.width || this.scale.width));
-    const height = Math.max(1, Math.round(bounds.height || this.scale.height));
-    const renderScale = renderScaleForDevicePixelRatio(typeof window === 'undefined' ? 1 : window.devicePixelRatio);
-    const backingSize = backingSizeForViewport(width, height, renderScale);
-
-    if (
-      this.viewportSize.width === width &&
-      this.viewportSize.height === height &&
-      this.renderScale === renderScale &&
-      this.scale.width === backingSize.width &&
-      this.scale.height === backingSize.height
-    ) {
-      return;
-    }
-
-    this.viewportSize = { width, height };
-    this.renderScale = renderScale;
-    // ScaleManager.resize updates the canvas, renderer, camera sizing, and
-    // Phaser's input transform together. The camera zoom maps logical world
-    // units onto the denser backing surface without scaling the React overlay.
-    this.scale.resize(backingSize.width, backingSize.height);
-    this.cameras.main.setZoom(renderScale);
-    const cameraScroll = cameraScrollForLogicalViewport(width, height, backingSize.width, backingSize.height);
-    this.cameras.main.setScroll(cameraScroll.x, cameraScroll.y);
-    this.redraw(false);
-  };
-
-  private bindDevicePixelRatioListener(): void {
-    this.unbindDevicePixelRatioListener();
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    this.dprMediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
-    if (typeof this.dprMediaQuery.addEventListener === 'function') {
-      this.dprMediaQuery.addEventListener('change', this.handleDevicePixelRatioChange);
-    } else {
-      this.dprMediaQuery.addListener(this.handleDevicePixelRatioChange);
-    }
-  }
-
-  private unbindDevicePixelRatioListener(): void {
-    if (!this.dprMediaQuery) return;
-    if (typeof this.dprMediaQuery.removeEventListener === 'function') {
-      this.dprMediaQuery.removeEventListener('change', this.handleDevicePixelRatioChange);
-    } else {
-      this.dprMediaQuery.removeListener(this.handleDevicePixelRatioChange);
-    }
-    this.dprMediaQuery = undefined;
+  private get viewportSize(): { width: number; height: number } {
+    return this.viewport.size;
   }
 
   private handlePointer(screenX: number, screenY: number): void {
-    if (gameSession.inputMode !== 'world' || this.heroAnimating || presentationGate.busy) return;
+    if (!canAcceptWorldInput(this.runtime, this.heroAnimating)) return;
 
     const target = this.screenToTile(screenX, screenY);
-    const hero = gameSession.state.hero.position;
-    const distance = Math.abs(target.x - hero.x) + Math.abs(target.y - hero.y);
-
-    if (distance !== 1) return;
-
-    const deltaX = target.x - hero.x;
-    const deltaY = target.y - hero.y;
-    if (deltaX === 1) gameSession.move('east');
-    else if (deltaX === -1) gameSession.move('west');
-    else if (deltaY === 1) gameSession.move('south');
-    else if (deltaY === -1) gameSession.move('north');
+    moveHeroForAdjacentTile(this.runtime, target);
   }
 
   private screenToTile(screenX: number, screenY: number): Position {
     const tileSize = this.tileSize();
-    const hero = gameSession.state.hero.position;
+    const hero = this.runtime.state.hero.position;
     const centerX = this.viewportSize.width / 2;
     const centerY = this.viewportSize.height / 2;
     return {
@@ -393,7 +282,7 @@ export class TorchScene extends Phaser.Scene {
   private tileScreenPosition(
     position: Position,
     tileSize: number,
-    camera = this.cameraPosition ?? gameSession.state.hero.position,
+    camera = this.cameraPosition ?? this.runtime.state.hero.position,
   ): Position {
     return {
       x: this.viewportSize.width / 2 + (position.x - camera.x) * tileSize - tileSize / 2,
@@ -539,7 +428,7 @@ export class TorchScene extends Phaser.Scene {
 
   private renderActorPositions(): void {
     if (!this.board) return;
-    const state = gameSession.state;
+    const state = this.runtime.state;
     const visibility = this.lastVisibilitySnapshot ?? captureVisibilitySnapshot(state);
     this.positionEntityTokens(state, this.tileSize(), false, visibility, visibility, 1);
     this.positionHeroImage(this.tileSize());
@@ -548,7 +437,7 @@ export class TorchScene extends Phaser.Scene {
   private redraw(animateHero = true, events: SimEvent[] = []): void {
     if (!this.board) return;
 
-    const state = gameSession.state;
+    const state = this.runtime.state;
     const hero = state.hero.position;
     const previousHero = this.lastSimulationHeroPosition;
     const heroMoved = previousHero !== undefined && !samePosition(previousHero, hero);
@@ -629,7 +518,7 @@ export class TorchScene extends Phaser.Scene {
         this.visualEntityPositions.set(entityId, interpolatePosition(motion.from, motion.to, progress));
       }
       this.positionEntityTokens(
-        gameSession.state,
+        this.runtime.state,
         tileSize,
         false,
         previousVisibility,
@@ -655,7 +544,7 @@ export class TorchScene extends Phaser.Scene {
     currentVisibility?: VisibilitySnapshot,
     visibilityProgress = 1,
   ): void {
-    const state = gameSession.state;
+    const state = this.runtime.state;
     const hero = state.hero.position;
     const tileSize = this.tileSize();
     const viewRadius = viewRadiusForViewport(this.viewportSize.width, this.viewportSize.height, tileSize);
@@ -693,7 +582,7 @@ export class TorchScene extends Phaser.Scene {
   }
 
   private drawTerrainFrame(baseCamera: Position, tileSize: number): void {
-    const state = gameSession.state;
+    const state = this.runtime.state;
     const viewRadius = viewRadiusForViewport(this.viewportSize.width, this.viewportSize.height, tileSize);
     this.positionBoard(baseCamera, tileSize);
     this.board.clear();
@@ -781,8 +670,8 @@ export class TorchScene extends Phaser.Scene {
   private terrainFrameKey(baseCamera: Position, tileSize: number): string {
     const viewRadius = viewRadiusForViewport(this.viewportSize.width, this.viewportSize.height, tileSize);
     return [
-      gameSession.state.seed,
-      gameSession.state.generationVersion,
+      this.runtime.state.seed,
+      this.runtime.state.generationVersion,
       baseCamera.x,
       baseCamera.y,
       tileSize,
@@ -945,13 +834,13 @@ export class TorchScene extends Phaser.Scene {
 
   private positionHeroImage(
     tileSize: number,
-    visualHero = this.visualHeroPosition ?? gameSession.state.hero.position,
+    visualHero = this.visualHeroPosition ?? this.runtime.state.hero.position,
   ): void {
     const heroScreen = this.tileScreenPosition(visualHero, tileSize);
     this.heroImage
       .setDisplaySize(tileSize, tileSize)
       .setPosition(heroScreen.x + tileSize / 2, heroScreen.y + tileSize / 2);
-    this.applyActorPose(gameSession.state.hero.heroId, this.heroImage, heroScreen, tileSize, tileSize);
+    this.applyActorPose(this.runtime.state.hero.heroId, this.heroImage, heroScreen, tileSize, tileSize);
   }
 
   private applyActorPose(

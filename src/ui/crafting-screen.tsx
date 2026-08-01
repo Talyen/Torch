@@ -17,7 +17,6 @@ import {
   TreePine,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { gameSession } from '../game/session';
 import { itemDefinition } from '../content/items';
 import type { ItemIconId } from '../content/items';
 import type { CraftingCategory, RecipeDefinition } from '../content/recipes';
@@ -25,6 +24,7 @@ import { stationDefinition } from '../content/stations';
 import { availableRecipes, craftingContextForState } from '../sim/crafting';
 import type { GameState, RecipeAvailability, SimEvent } from '../sim';
 import { TorchButton } from './primitives';
+import { useGameRuntime } from './runtime-context';
 
 type CraftingFilterCategory = CraftingCategory | 'all';
 
@@ -48,6 +48,7 @@ const craftingIcons: Record<ItemIconId, LucideIcon> = {
 };
 
 export function CraftingScreen({ state, events }: { state: GameState; events: SimEvent[] }): ReactElement {
+  const runtime = useGameRuntime();
   const [category, setCategory] = useState<CraftingFilterCategory>('all');
   const [search, setSearch] = useState('');
   const [craftableOnly, setCraftableOnly] = useState(false);
@@ -95,7 +96,7 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
 
   const craftSelected = (): void => {
     if (!selectedRecipe || !selectedEntry?.craftable) return;
-    gameSession.craft(selectedRecipe.id, quantity);
+    runtime.craft(selectedRecipe.id, quantity);
   };
 
   return (

@@ -1,54 +1,94 @@
 import { describe, expect, it } from 'vitest';
-import { GameSession } from '../src/game/session';
-import type { SaveProvider } from '../src/game/save-provider';
+import { GameRuntime, createGameRuntime } from '../src/game/session';
+import type { SaveCommitResult, SaveLoadResult, SaveProvider, StoredSaveCandidate } from '../src/game/save-provider';
 
 class MemorySaveProvider implements SaveProvider {
-  public data?: string;
-  public writes: Array<{ revision: number; data: string }> = [];
+  public candidate?: StoredSaveCandidate;
+  public writes: StoredSaveCandidate[] = [];
 
-  public load(): string | undefined {
-    return this.data;
+  public load(): Promise<SaveLoadResult | undefined> {
+    return Promise.resolve(this.candidate ? { candidates: [this.candidate], corruptPayloads: [] } : undefined);
   }
 
-  public save(_slot: string, serialized: string, revision: number): void {
-    this.writes.push({ revision, data: serialized });
-    if (revision >= (this.writes.at(-2)?.revision ?? -1)) this.data = serialized;
+  public commit(_slot: string, serialized: string, revision: number): Promise<SaveCommitResult> {
+    if (this.candidate && revision < this.candidate.revision) return Promise.resolve('stale');
+    const candidate = { revision, serialized, source: 'primary' as const };
+    this.writes.push(candidate);
+    this.candidate = candidate;
+    return Promise.resolve('committed');
   }
 }
 
-describe('GameSession persistence boundary', () => {
-  it('restores a deterministic world from one addressed provider slot', async () => {
+describe('GameRuntime persistence boundary', () => {
+  it('restores one transactional world and profile bundle', async () => {
     const provider = new MemorySaveProvider();
-    const first = new GameSession(1234);
-    first.attachSaveProvider(provider);
+    const first = await createGameRuntime(1234, { saveProvider: provider });
     first.move('east');
-    await Promise.resolve();
+    first.recordProfileObservation('open-inventory');
+    await first.flushPersistence();
 
     expect(first.saveStatus).toBe('saved');
-    expect(provider.writes).toHaveLength(1);
+    expect(provider.writes).toHaveLength(2);
 
-    const restored = new GameSession(9999);
-    restored.attachSaveProvider(provider);
+    const restored = await createGameRuntime(9999, { saveProvider: provider });
 
-    expect(restored.saveStatus).toBe('loaded');
+    expect(restored.runtimeStatus).toBe('ready');
     expect(restored.state.seed).toBe(1234);
     expect(restored.state.hero.position).toEqual({ x: 1, y: 2 });
     expect(restored.state.turn).toBe(1);
+    expect(restored.profileJournal.observations['open-inventory']).toBe(true);
   });
 
-  it('keeps simulation valid when persistence fails', async () => {
+  it('rejects commands while asynchronous hydration is pending', async () => {
+    let finishLoad: ((value: SaveLoadResult | undefined) => void) | undefined;
     const provider: SaveProvider = {
-      load: () => undefined,
-      save: () => {
-        throw new Error('storage unavailable');
-      },
+      load: () => new Promise((resolve) => (finishLoad = resolve)),
+      commit: () => Promise.resolve('committed'),
     };
-    const session = new GameSession(1234);
-    session.attachSaveProvider(provider);
-    session.move('east');
-    await Promise.resolve();
+    const runtime = new GameRuntime(1234, { saveProvider: provider });
+    const boot = runtime.boot();
 
-    expect(session.state.hero.position).toEqual({ x: 1, y: 2 });
-    expect(session.saveStatus).toBe('error');
+    expect(runtime.runtimeStatus).toBe('loading');
+    expect(runtime.dispatch({ type: 'move', direction: 'east' }).accepted).toBe(false);
+    expect(runtime.state.turn).toBe(0);
+
+    finishLoad?.(undefined);
+    await boot;
+    expect(runtime.runtimeStatus).toBe('ready');
+    expect(runtime.dispatch({ type: 'move', direction: 'east' }).accepted).toBe(true);
+  });
+
+  it('keeps the simulation playable when persistence fails', async () => {
+    const provider: SaveProvider = {
+      load: () => Promise.resolve(undefined),
+      commit: () => Promise.reject(new Error('storage unavailable')),
+    };
+    const runtime = await createGameRuntime(1234, { saveProvider: provider });
+    runtime.move('east');
+    await runtime.flushPersistence();
+
+    expect(runtime.state.hero.position).toEqual({ x: 1, y: 2 });
+    expect(runtime.saveStatus).toBe('error');
+  });
+
+  it('isolates independent runtime state, subscriptions, and input modes', async () => {
+    const first = await createGameRuntime(1234);
+    const second = await createGameRuntime(5678);
+    let firstUpdates = 0;
+    let secondUpdates = 0;
+    first.subscribeSnapshot(() => (firstUpdates += 1));
+    second.subscribeSnapshot(() => (secondUpdates += 1));
+
+    first.setInputMode('ui');
+    second.move('east');
+
+    expect(first.state.seed).toBe(1234);
+    expect(first.state.turn).toBe(0);
+    expect(first.inputMode).toBe('ui');
+    expect(second.state.seed).toBe(5678);
+    expect(second.state.turn).toBe(1);
+    expect(second.inputMode).toBe('world');
+    expect(firstUpdates).toBe(2);
+    expect(secondUpdates).toBe(2);
   });
 });

@@ -2,13 +2,14 @@ import Phaser from 'phaser';
 import { Fragment, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TorchScene } from './game/scene';
-import { gameSession } from './game/session';
+import { createGameRuntime } from './game/session';
 import { MenuOverlay } from './ui/menu-overlay';
 import { LocalStorageSaveProvider } from './platform/local-save-provider';
 import { devFrameMonitor } from './dev/frame-monitor';
 import { CardPlayLab } from './dev/card-play-lab';
 import { applyReduceMotionPreference, applyUiScalePreference } from './game/presentation-settings';
 import { BOARD_PRESENTATION_FALLBACKS } from './game/presentation-colors';
+import { RuntimeProvider } from './ui/runtime-context';
 import './index.css';
 import './styles.css';
 
@@ -17,10 +18,15 @@ if (!uiRoot) throw new Error('Torch UI root is missing.');
 
 applyUiScalePreference();
 applyReduceMotionPreference();
-gameSession.attachSaveProvider(new LocalStorageSaveProvider());
+
+const runtime = await createGameRuntime(20260730, { saveProvider: new LocalStorageSaveProvider() });
 
 createRoot(uiRoot).render(
-  createElement(Fragment, null, createElement(MenuOverlay), import.meta.env.DEV ? createElement(CardPlayLab) : null),
+  createElement(
+    RuntimeProvider,
+    { runtime },
+    createElement(Fragment, null, createElement(MenuOverlay), import.meta.env.DEV ? createElement(CardPlayLab) : null),
+  ),
 );
 
 const game = new Phaser.Game({
@@ -42,10 +48,16 @@ const game = new Phaser.Game({
     // a dense renderer without leaking device pixels into world coordinates.
     mode: Phaser.Scale.NONE,
   },
-  scene: [TorchScene],
+  scene: [new TorchScene(runtime)],
 });
+
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') void runtime.flushPersistence();
+});
+window.addEventListener('pagehide', () => void runtime.flushPersistence());
 
 if (import.meta.env.DEV) {
   devFrameMonitor.start(game);
   game.events.once(Phaser.Core.Events.DESTROY, () => devFrameMonitor.stop());
 }
+game.events.once(Phaser.Core.Events.DESTROY, () => void runtime.shutdown());

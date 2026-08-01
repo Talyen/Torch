@@ -14,10 +14,10 @@ import {
 import { journalDefinitionsForScope } from '../content/journal';
 import type { JournalEntryDefinition } from '../content/journal';
 import { itemDefinition } from '../content/items';
-import { gameSession } from '../game/session';
 import { journalEntryDefinitionsForState } from '../sim';
 import type { GameState, JournalEntryRuntime, ProfileJournalState } from '../sim';
 import { TorchButton, TorchTabsContent, TorchTabsList, TorchTabsRoot, TorchTabsTab } from './primitives';
+import { useGameRuntime } from './runtime-context';
 
 type JournalSection = 'overview' | 'quests' | 'mysteries' | 'guide';
 
@@ -50,6 +50,7 @@ function rewardLabel(definition: JournalEntryDefinition): string {
 }
 
 export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps): ReactElement {
+  const gameRuntime = useGameRuntime();
   const [section, setSection] = useState<JournalSection>('overview');
   const [selectedId, setSelectedId] = useState<string>();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -86,8 +87,8 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
   }, [selectedDefinition, selectedId]);
 
   useEffect(() => {
-    if (selectedEntryId && selectedScope) gameSession.markJournalEntrySeen(selectedScope, selectedEntryId);
-  }, [selectedEntryId, selectedScope]);
+    if (selectedEntryId && selectedScope) gameRuntime.markJournalEntrySeen(selectedScope, selectedEntryId);
+  }, [gameRuntime, selectedEntryId, selectedScope]);
 
   useEffect(() => {
     if (!mobileDetailOpen) return;
@@ -122,8 +123,8 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
   };
 
   const trackEntry = (definition: JournalEntryDefinition): void => {
-    gameSession.setJournalFocus(definition.id);
-    if (definition.location) gameSession.setWaypoint(definition.id, definition.location);
+    gameRuntime.setJournalFocus(definition.id);
+    if (definition.location) gameRuntime.setWaypoint(definition.id, definition.location);
   };
 
   return (
@@ -260,6 +261,7 @@ function JournalDetail({
   onTrack: () => void;
   onOpenMap: () => void;
 }): ReactElement {
+  const gameRuntime = useGameRuntime();
   const rewardReady = runtime.status === 'reward-ready';
   return (
     <article className="journal-detail" aria-labelledby="journal-detail-title">
@@ -333,8 +335,8 @@ function JournalDetail({
             type="button"
             data-testid={`journal-claim-${definition.id}`}
             onClick={() => {
-              if (definition.scope === 'world') gameSession.claimJournalReward(definition.id);
-              else gameSession.claimProfileJournalReward(definition.id);
+              if (definition.scope === 'world') gameRuntime.claimJournalReward(definition.id);
+              else gameRuntime.claimProfileJournalReward(definition.id);
             }}
           >
             Claim reward

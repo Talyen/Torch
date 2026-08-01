@@ -1,8 +1,9 @@
 import { isCardinallyAdjacent } from './coords';
 import { entityAt } from './entities';
+import { invalidateEntitySpatialIndex } from './spatial-index';
 import { entityOccupiesPosition } from './footprint';
 import { abilityActionDefinition, DEFAULT_ABILITY_PRIORITY } from './ability-rules';
-import { GATHERING_ACTION_COSTS } from './gathering';
+import { GATHERING_ACTION_COSTS, isGeneratedGatherable, remainingGatheringActionsFor } from './gathering';
 import type { ActionKind, ActionRequest, CombatantSnapshot, EntityState, GameState, Position, SimEvent } from './types';
 
 export interface ActionOption extends ActionRequest {
@@ -146,6 +147,7 @@ export function resolveAction(
     );
     if (entity.health === 0) {
       delete state.entities[entity.id];
+      invalidateEntitySpatialIndex(state);
       events.push({ type: 'enemy-defeated', entityId: entity.id });
       events.push({ type: 'message', text: `${entity.name} is defeated.` });
     } else {
@@ -156,13 +158,13 @@ export function resolveAction(
 
   const resource = entity.resourceType ?? (action.kind === 'chop' ? 'wood' : 'ore');
   const requiredActions = Math.max(1, entity.gatheringActionCost ?? GATHERING_ACTION_COSTS[action.kind]);
-  const remainingActions = Math.max(0, (entity.remainingGatheringActions ?? requiredActions) - 1);
+  const generated = isGeneratedGatherable(entity);
+  const remainingActions = Math.max(0, remainingGatheringActionsFor(state, entity, requiredActions) - 1);
   entity.gatheringActionCost = requiredActions;
-  entity.remainingGatheringActions = remainingActions;
+  if (!generated) entity.remainingGatheringActions = remainingActions;
 
   if (remainingActions > 0) {
-    state.gatheringProgress ??= {};
-    state.gatheringProgress[entity.id] = remainingActions;
+    if (generated) state.gatheringProgress = { ...state.gatheringProgress, [entity.id]: remainingActions };
     events.push({
       type: 'message',
       text: `${action.kind === 'chop' ? 'Chop' : 'Mine'} ${requiredActions - remainingActions}/${requiredActions}.`,
@@ -170,13 +172,17 @@ export function resolveAction(
     return true;
   }
 
-  state.gatheringProgress ??= {};
-  delete state.gatheringProgress[entity.id];
+  if (generated && state.gatheringProgress[entity.id] !== undefined) {
+    const remainingProgress = { ...state.gatheringProgress };
+    delete remainingProgress[entity.id];
+    state.gatheringProgress = remainingProgress;
+  }
   state.hero.inventory[resource] = (state.hero.inventory[resource] ?? 0) + 1;
-  if (entity.id.startsWith('generated-tree:')) {
-    state.removedGeneratedEntities[entity.id] = true;
+  if (generated) {
+    state.removedGeneratedEntities = { ...state.removedGeneratedEntities, [entity.id]: true };
   }
   delete state.entities[entity.id];
+  invalidateEntitySpatialIndex(state);
   events.push({ type: 'resource-gathered', resource, amount: 1, collectorPosition: { ...state.hero.position } });
   events.push({ type: 'message', text: `${action.kind === 'chop' ? 'Chopped' : 'Mined'} 1 ${resource}.` });
   return true;

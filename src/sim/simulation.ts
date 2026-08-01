@@ -6,7 +6,8 @@ import { craftingContextForState, resolveCraft } from './crafting';
 import { applyLoadoutCommand } from './loadout';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
 import { advanceWorldJournal, claimWorldJournalReward, resolveWaypointPosition } from './journal';
-import { cloneSerializable } from './state';
+import { cloneGameStateForCommand } from './state';
+import { invalidateEntitySpatialIndex } from './spatial-index';
 import type { Command, CommandResult, Direction, GameState, Position, SimEvent, WaypointTarget } from './types';
 
 function directionToward(from: Position, to: Position): Direction | undefined {
@@ -29,9 +30,8 @@ function respawnHero(state: GameState, events: SimEvent[]): void {
 }
 
 function revealAroundWithEvent(state: GameState, center: Position, events: SimEvent[]): void {
-  const before = Object.keys(state.revealedTiles).length;
-  revealAround(state, center);
-  const count = Object.keys(state.revealedTiles).length - before;
+  state.revealedTiles = { ...state.revealedTiles };
+  const count = revealAround(state, center);
   if (count > 0) events.push({ type: 'tiles-revealed', count });
 }
 
@@ -102,6 +102,7 @@ function advanceEnemies(state: GameState, events: SimEvent[], combatContext: Com
 
     const from = { ...enemy.position };
     enemy.position = destination;
+    invalidateEntitySpatialIndex(state);
     events.push({ type: 'enemy-moved', entityId: enemy.id, from, to: { ...destination } });
   }
 }
@@ -136,7 +137,7 @@ function advanceTurn(
 }
 
 export function applyCommand(state: GameState, command: Command): CommandResult {
-  const next = cloneSerializable(state);
+  const next = cloneGameStateForCommand(state);
   const events: SimEvent[] = [];
   const consumedAbilityIds = new Set<string>();
   const combatContext: CombatEventContext = { attackOrdinal: 0 };

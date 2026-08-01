@@ -103,7 +103,7 @@ export interface EntityState {
   stunnedActions?: number;
   /** Number of one-action gathering steps this entity requires. */
   gatheringActionCost?: number;
-  /** Remaining gathering steps for this world-local entity. */
+  /** Remaining gathering steps for authored entities; generated entities derive this from gatheringProgress. */
   remainingGatheringActions?: number;
   attack?: number;
   assetId?: string;
@@ -151,7 +151,7 @@ export interface GameState {
   unlockedStations: Record<string, true>;
   entities: Record<string, EntityState>;
   removedGeneratedEntities: Record<string, true>;
-  /** Partial work on generated gatherables survives active-ring pruning. */
+  /** Canonical partial work on generated gatherables; survives active-window dehydration. */
   gatheringProgress: Record<string, number>;
   /** World-local discovery flags; profile/meta progression is intentionally separate. */
   discoveries: Record<string, true>;

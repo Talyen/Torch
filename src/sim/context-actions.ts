@@ -2,6 +2,7 @@ import { CARDINAL_OFFSETS, isCardinallyAdjacent } from './coords';
 import { abilityActionDefinition } from './ability-rules';
 import { actionLabel, actionOptionsForEntity } from './actions';
 import { entityAt } from './entities';
+import { remainingGatheringActionsFor } from './gathering';
 import type { AbilitySlotId, ActionKind, ActionRequest, EntityState, GameState, Position } from './types';
 
 const ABILITY_SLOT_ORDER: readonly AbilitySlotId[] = ['basic', 'skill', 'ultimate'];
@@ -59,7 +60,7 @@ export function availableContextActionsAt(state: GameState, target?: Position): 
     if (abilityCards.length > 0) return abilityCards;
   }
 
-  return actionOptionsForEntity(entity).map((kind) => entityActionCard(entity, focusedTarget, kind));
+  return actionOptionsForEntity(entity).map((kind) => entityActionCard(state, entity, focusedTarget, kind));
 }
 
 function equippedAbilityCards(state: GameState, entity: EntityState, target: Position): ContextActionOption[] {
@@ -91,9 +92,14 @@ function equippedAbilityCards(state: GameState, entity: EntityState, target: Pos
   });
 }
 
-function entityActionCard(entity: EntityState, target: Position, kind: ActionKind): ContextActionOption {
+function entityActionCard(
+  state: GameState,
+  entity: EntityState,
+  target: Position,
+  kind: ActionKind,
+): ContextActionOption {
   const required = Math.max(1, entity.gatheringActionCost ?? 1);
-  const remaining = Math.max(0, entity.remainingGatheringActions ?? required);
+  const remaining = Math.max(0, remainingGatheringActionsFor(state, entity, required));
   const isGathering = kind === 'chop' || kind === 'mine';
   return {
     id: `context:entity:${entity.id}:${kind}`,

@@ -15,6 +15,7 @@ import {
   Search,
   Sparkles,
   TreePine,
+  X as ClearIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { itemDefinition } from '../content/items';
@@ -23,7 +24,7 @@ import type { CraftingCategory, RecipeDefinition } from '../content/recipes';
 import { stationDefinition } from '../content/stations';
 import { availableRecipes, craftingContextForState } from '../sim/crafting';
 import type { GameState, RecipeAvailability, SimEvent } from '../sim';
-import { TorchButton } from './primitives';
+import { TorchButton, TorchIconButton } from './primitives';
 import { useGameRuntime } from './runtime-context';
 
 type CraftingFilterCategory = CraftingCategory | 'all';
@@ -55,7 +56,7 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
   const [showLocked, setShowLocked] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>();
   const [quantity, setQuantity] = useState(1);
-  const [feedback, setFeedback] = useState('Select a recipe to inspect its ingredients.');
+  const [feedback, setFeedback] = useState('');
   const tabScrollInitializedRef = useRef(false);
 
   const craftingContext = useMemo(() => craftingContextForState(state), [state]);
@@ -117,19 +118,18 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
     <div className="crafting-screen" data-testid="crafting-screen">
       <header className="crafting-heading">
         <div>
-          <p className="crafting-kicker">Workshop</p>
-          <h2>Crafting</h2>
-          <p className="crafting-subtitle">Turn gathered resources into supplies for the next expedition.</p>
           <p className="crafting-location" data-testid="crafting-station-status">
             {craftingContext.stationIds?.includes('workbench')
               ? 'At the homestead workbench'
               : 'Expedition crafting · return to the homestead for station recipes'}
           </p>
         </div>
-        <div className="crafting-feedback" role="status" aria-live="polite">
-          <CheckCircle2 aria-hidden="true" />
-          <span>{feedback}</span>
-        </div>
+        {feedback ? (
+          <div className="crafting-feedback" role="status" aria-live="polite">
+            <CheckCircle2 aria-hidden="true" />
+            <span>{feedback}</span>
+          </div>
+        ) : null}
       </header>
 
       <div className="crafting-toolbar">
@@ -144,6 +144,16 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
             aria-label="Search recipes"
             data-testid="crafting-search"
           />
+          {search ? (
+            <TorchIconButton
+              label="Clear search"
+              className="crafting-search-clear"
+              data-testid="crafting-search-clear"
+              onClick={() => setSearch('')}
+            >
+              <ClearIcon aria-hidden="true" />
+            </TorchIconButton>
+          ) : null}
         </label>
         <TorchButton
           variant="outline"
@@ -193,7 +203,6 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
         <section className="crafting-recipe-panel" aria-labelledby="crafting-recipe-list-title">
           <div className="crafting-panel-heading">
             <div>
-              <p className="crafting-kicker">Catalog</p>
               <h3 id="crafting-recipe-list-title">Recipes</h3>
             </div>
             <span className="crafting-count" aria-live="polite">
@@ -212,8 +221,7 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
             {visibleRecipes.length === 0 ? (
               <div className="crafting-empty" role="status">
                 <PackageOpen aria-hidden="true" />
-                <strong>No recipes match those filters.</strong>
-                <span>Try another category or show locked recipes.</span>
+                <strong>No recipes match.</strong>
               </div>
             ) : null}
           </div>
@@ -235,7 +243,6 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
             <div className="crafting-empty crafting-empty-inspector">
               <Hammer aria-hidden="true" />
               <strong id="crafting-inspector-title">Choose a recipe</strong>
-              <span>Ingredient requirements and the craft action will appear here.</span>
             </div>
           )}
         </aside>
@@ -306,7 +313,6 @@ function RecipeInspector({
           <OutputIcon />
         </div>
         <div>
-          <p className="crafting-kicker">Recipe detail</p>
           <h3 id="crafting-inspector-title">{recipe.name}</h3>
           <span className={`crafting-status ${canCraft ? 'is-ready' : 'is-blocked'}`}>
             {canCraft ? <CheckCircle2 aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}

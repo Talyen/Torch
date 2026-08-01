@@ -389,9 +389,14 @@ export function MenuOverlay(): ReactElement {
                           </span>
                           <span className="menu-item-label">{item.label}</span>
                           {!item.available ? (
-                            <span className="menu-item-status" id={`menu-${item.label.toLowerCase()}-status`}>
-                              {item.disabledReason ?? 'Coming soon'}
-                            </span>
+                            <>
+                              <span className="menu-item-status" aria-hidden="true">
+                                Coming soon
+                              </span>
+                              <span className="sr-only" id={`menu-${item.label.toLowerCase()}-status`}>
+                                {item.disabledReason ?? 'Coming soon'}
+                              </span>
+                            </>
                           ) : null}
                         </TorchButton>
                       );
@@ -428,10 +433,11 @@ function JournalTracker({ state, onOpen }: { state: GameState; onOpen: () => voi
   if (!entryId) return null;
   const definition = journalEntryDefinition(entryId);
   const runtime = state.journal.entries[entryId];
-  if (!definition || !runtime || runtime.status === 'locked') return null;
+  if (!definition || !runtime || runtime.status === 'locked' || runtime.status === 'claimed') return null;
+  const isRewardReady = runtime.status === 'reward-ready';
   const objective = definition.objectives.find((candidate) => (runtime.progress[candidate.id] ?? 0) < candidate.target);
-  if (!objective) return null;
-  const current = runtime.progress[objective.id] ?? 0;
+  if (!isRewardReady && !objective) return null;
+  const current = objective ? (runtime.progress[objective.id] ?? 0) : 0;
 
   return (
     <TorchButton
@@ -446,7 +452,11 @@ function JournalTracker({ state, onOpen }: { state: GameState; onOpen: () => voi
       <span>
         <strong>{definition.title}</strong>
         <small>
-          {objective.label} · {current}/{objective.target}
+          {isRewardReady
+            ? 'Reward ready · Claim in Journal'
+            : objective
+              ? `${objective.label} · ${current}/${objective.target}`
+              : 'Complete'}
         </small>
       </span>
       <ChevronRight aria-hidden="true" />
@@ -756,7 +766,6 @@ function InventoryItemsPanel({ items }: { items: InventoryItemDefinition[] }): R
                   ? `No ${inventoryCategories.find((item) => item.id === category)?.label.toLowerCase() ?? 'items'} yet`
                   : 'Your inventory is empty'}
               </strong>
-              <span>{category ? 'Items you find will appear here.' : 'Items you discover will appear here.'}</span>
               {category ? (
                 <TorchButton variant="outline" size="sm" type="button" onClick={() => selectCategory(category)}>
                   View all items
@@ -1620,17 +1629,7 @@ function AbilitySelectorScreen({
           <p className="stats-kicker">Abilities → {slot?.label ?? 'Slot'}</p>
           <h2>Choose an ability</h2>
         </div>
-        <SelectorBackButton
-          ariaLabel="Back to Abilities"
-          testId="ability-picker-back"
-          onBack={onBack}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              onBack();
-            }
-          }}
-        />
+        <SelectorBackButton ariaLabel="Back to Abilities" testId="ability-picker-back" onBack={onBack} />
       </header>
       <div className="ability-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Ability'} choices`}>
         {choices.length > 0 ? (

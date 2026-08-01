@@ -135,6 +135,7 @@ export function TorchArtworkCard({
       className={cn('torch-artwork-card', selected && 'is-selected', className)}
       aria-label={ariaLabel}
       aria-pressed={selected}
+      data-selected={selected ? 'true' : undefined}
       data-testid={testId}
       onClick={onClick}
     >

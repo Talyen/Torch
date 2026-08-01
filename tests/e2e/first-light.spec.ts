@@ -29,20 +29,8 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   const expectedRenderScale = Math.min(2, Math.max(1, canvasResolution.devicePixelRatio));
   expect(canvasResolution.backingWidth / canvasResolution.cssWidth).toBeCloseTo(expectedRenderScale, 1);
   expect(canvasResolution.backingHeight / canvasResolution.cssHeight).toBeCloseTo(expectedRenderScale, 1);
-  // The performance panel is intentionally development-only; production
-  // preview smoke proves the playable surface without relying on diagnostics.
-  const performancePanel = page.getByTestId('dev-performance');
-  if (await performancePanel.count()) {
-    await expect(performancePanel).toBeVisible();
-    await expect(performancePanel).toHaveText(/^\d+ FPS$/);
-  }
-  const cardPlayLab = page.getByTestId('card-play-lab');
-  if (process.env.TORCH_E2E_PROD === '1') {
-    await expect(performancePanel).toHaveCount(0);
-    await expect(cardPlayLab).toHaveCount(0);
-  } else {
-    await expect(cardPlayLab).toBeVisible();
-  }
+  await expect(page.getByTestId('dev-performance')).toHaveCount(0);
+  await expect(page.getByTestId('card-play-lab')).toHaveCount(0);
   await expect(page.getByTestId('hud-hero-button')).toBeVisible();
   await expect(page.getByTestId('hud-hero-button').locator('img')).toBeVisible();
   await expect(page.getByTestId('hud-hero-button').locator('img')).toHaveAttribute('src', /knight-hud\.png/);
@@ -786,38 +774,6 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await page.goto('/');
   await expect(page.getByTestId('hud-hero-button')).toBeVisible();
   await page.waitForTimeout(400);
-  const cardPlayLab = page.getByTestId('card-play-lab');
-  const hasCardPlayLab = (await cardPlayLab.count()) > 0;
-  if (hasCardPlayLab) {
-    await expect(cardPlayLab).toBeVisible();
-    await expect(page.getByTestId('card-play-preset-trinket')).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByTestId('card-play-replay')).toHaveCount(0);
-    await expect(page.getByTestId('card-play-compare')).toHaveCount(0);
-    await expect(page.getByTestId('card-play-slow-motion')).toHaveCount(0);
-    for (const presetId of ['alchemy']) {
-      const preset = page.getByTestId(`card-play-preset-${presetId}`);
-      await preset.click();
-      await expect(preset).toHaveAttribute('aria-checked', 'true');
-    }
-    await page.getByTestId('card-play-preset-trinket').click();
-    const labPlacement = await page.evaluate(() => {
-      const lab = document.querySelector<HTMLElement>('[data-testid="card-play-lab"]')?.getBoundingClientRect();
-      const perf = document.querySelector<HTMLElement>('[data-testid="dev-performance"]')?.getBoundingClientRect();
-      return {
-        labLeft: lab?.left ?? 0,
-        labTop: lab?.top ?? 0,
-        labRight: lab?.right ?? 0,
-        labBottom: lab?.bottom ?? 0,
-        perfBottom: perf?.bottom ?? 0,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-      };
-    });
-    expect(labPlacement.labLeft).toBeGreaterThanOrEqual(0);
-    expect(labPlacement.labTop).toBeGreaterThanOrEqual(labPlacement.perfBottom);
-    expect(labPlacement.labRight).toBeLessThanOrEqual(labPlacement.viewportWidth);
-    expect(labPlacement.labBottom).toBeLessThanOrEqual(labPlacement.viewportHeight);
-  }
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(300);
   await page.keyboard.press('ArrowRight');
@@ -850,22 +806,28 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await chopCard.evaluate((element) => {
     (window as Window & { __torchCardNode?: HTMLElement }).__torchCardNode = element as HTMLElement;
   });
-  await chopCard.click();
-  await expect(chopCard).toHaveClass(/is-playing/);
-  const playingCardAnimation = await chopCard.evaluate((element) => {
+  // The fan intentionally overlaps cards; activate the semantic button
+  // directly so this animation contract does not depend on hit-testing while
+  // the neighboring cards are reflowing.
+  await chopCard.click({ force: true });
+  const playingCardSnapshot = await page.evaluate(() => {
+    const element = document.querySelector<HTMLElement>(
+      '[data-testid="context-action-card-context-entity-resource-tree-chop"]',
+    );
+    if (!element) throw new Error('The resolving action card was not mounted.');
     const style = getComputedStyle(element);
-    return {
-      name: style.animationName,
-      duration: style.animationDuration,
-    };
-  });
-  expect(playingCardAnimation.name).toBe('torch-card-play-trinket');
-  expect(playingCardAnimation.duration).not.toBe('0s');
-  const playingCardGeometry = await chopCard.evaluate((element) => {
     const rect = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
     const hand = document.querySelector<HTMLElement>('.context-action-hand')?.getBoundingClientRect();
     return {
+      isPlaying: element.classList.contains('is-playing'),
+      animationName: style.animationName,
+      animationDuration: style.animationDuration,
+      playState: element.getAttribute('data-card-play-state'),
+      animationPreset: element.getAttribute('data-card-animation-preset'),
+      animationPhase: element.getAttribute('data-card-animation-phase'),
+      playKey: element.getAttribute('data-card-play-key'),
+      status: element.querySelector('[role="status"]')?.textContent ?? '',
+      text: element.textContent ?? '',
       left: rect.left,
       right: rect.right,
       top: rect.top,
@@ -877,6 +839,14 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
       sameNode: (window as Window & { __torchCardNode?: HTMLElement }).__torchCardNode === element,
     };
   });
+  const playingCardAnimation = {
+    name: playingCardSnapshot.animationName,
+    duration: playingCardSnapshot.animationDuration,
+  };
+  const playingCardGeometry = playingCardSnapshot;
+  expect(playingCardSnapshot.isPlaying).toBe(true);
+  expect(playingCardAnimation.name).toBe('torch-card-play-trinket');
+  expect(playingCardAnimation.duration).not.toBe('0s');
   expect(playingCardGeometry.sameNode).toBe(true);
   expect(playingCardGeometry.radius).toBeGreaterThanOrEqual(12);
   expect(playingCardGeometry.left).toBeGreaterThanOrEqual(-1);
@@ -884,14 +854,14 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   expect(playingCardGeometry.top).toBeGreaterThanOrEqual(-1);
   expect(playingCardGeometry.bottom).toBeLessThanOrEqual(playingCardGeometry.viewportHeight + 1);
   expect(playingCardGeometry.handBottom).toBeGreaterThanOrEqual(playingCardGeometry.bottom - 2);
-  await expect(chopCard).toHaveAttribute('data-card-play-state', 'playing');
-  await expect(chopCard).toHaveAttribute('data-card-animation-preset', 'trinket');
-  await expect(chopCard).toHaveAttribute('data-card-animation-phase', 'play');
-  await expect(chopCard).toHaveAttribute('data-card-play-key', 'entity:chop');
-  await expect(chopCard.getByRole('status')).toHaveText('Resolving…');
+  expect(playingCardSnapshot.playState).toBe('playing');
+  expect(playingCardSnapshot.animationPreset).toBe('trinket');
+  expect(playingCardSnapshot.animationPhase).toBe('play');
+  expect(playingCardSnapshot.playKey).toBe('entity:chop');
+  expect(playingCardSnapshot.status).toBe('Resolving…');
   await expect(page.getByTestId('card-animation-transfer')).toHaveCount(0);
-  await expect(chopCard).toContainText('Old Pine');
-  await expect(chopCard).not.toContainText('Target');
+  expect(playingCardSnapshot.text).toContain('Old Pine');
+  expect(playingCardSnapshot.text).not.toContain('Target');
 
   await page.evaluate(() => {
     document.documentElement.dataset.reduceMotion = 'true';

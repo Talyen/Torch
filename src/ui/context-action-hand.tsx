@@ -34,6 +34,10 @@ const MIN_CARD_WIDTH = 72;
 const MAX_CARD_WIDTH = 132;
 const CARD_ASPECT_HEIGHT = 4 / 3;
 const CARD_TUCK_RATIO = 0.1;
+// Keep the keyed slot mounted through the final compositor frame. The card is
+// already visually dissolved and non-interactive by this point, but retaining
+// the node prevents slow input delivery from racing its cleanup.
+const PLAYBACK_SETTLE_MS = 240;
 
 interface ActivePlayback {
   cardKey: string;
@@ -419,7 +423,7 @@ function ContextActionCard({
   useEffect(() => {
     if (!playing || playToken === undefined) return;
     const durationMs = animationDurationForPhase(preset, 'play', reduced);
-    const timeout = window.setTimeout(() => onPlayComplete(playToken), durationMs + 60);
+    const timeout = window.setTimeout(() => onPlayComplete(playToken), durationMs + 60 + PLAYBACK_SETTLE_MS);
     return () => window.clearTimeout(timeout);
   }, [onPlayComplete, playToken, playing, preset, reduced]);
 

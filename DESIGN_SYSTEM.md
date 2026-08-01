@@ -39,11 +39,37 @@ selector, icon-control, authored-art-card, dialog-close, and pagination
 contracts. Dropdowns use one charcoal popover surface with flat option rows;
 gold is reserved for focus, selection indicators, and intentional emphasis.
 `npm run check:ui-system` enforces the boundary and checks the contrast of body
-text, muted text, charcoal controls, selected states, and gold emphasis.
+text, muted text, charcoal controls, selected states, and gold emphasis. This
+static check is a guardrail, not proof of rendered contrast or correct behavior;
+opacity, artwork, overlays, blur, disabled styling, and nested surfaces still
+require inspection in the rendered application.
 
 Phaser may consume board-safe tokens through
 `src/game/presentation-colors.ts`. Terrain, entities, resources, feedback, and
 artwork keep the colors needed to communicate their game meaning.
+
+## Shared primitive contracts
+
+Torch-owned controls centralize styling without weakening platform behavior.
+Every shared interactive primitive must have focused browser coverage for its
+applicable contract:
+
+- Semantic role, accessible name, and exposed selected, expanded, checked,
+  disabled, loading, or error state.
+- Keyboard navigation, visible focus, activation, and expected Escape behavior.
+- Pointer and touch activation with a minimum 42 px interaction footprint.
+- Outside-click or backdrop dismissal where appropriate, with focus restored to
+  the control that opened the surface.
+- Long labels, empty content, disabled options, viewport-edge positioning,
+  compact layouts, and short viewports.
+- Portal, stacking, scroll, and reduced-motion behavior without clipped content
+  or focus indicators.
+
+Feature code must not repair a shared primitive with local event handlers,
+spacing patches, z-index values, or accessibility overrides. Fix the primitive
+or add an explicit feature-specific composition when the interaction is
+meaningfully different. A primitive contract change requires updating its
+browser coverage and every affected semantic owner.
 
 ## Color, type, and motion
 
@@ -75,13 +101,19 @@ preserve useful feedback and meaning.
   devices.
 - Prefer a single owning scroll region. On small or short viewports, stack or
   scroll instead of shrinking text, art, or controls below useful sizes.
+- Overlays lock unintended page or world scrolling. A tall dialog owns its
+  internal scroll region, keeps its title and dismissal path reachable, scrolls
+  focused controls into view, and contains overscroll.
+- Portaled surfaces use named layer tokens and remain inside the usable viewport.
+  Do not fix stacking failures with feature-local z-index values.
 - Keep readable content on opaque surfaces. Blur and atmosphere belong behind
   the content surface.
 - Keep map cells and equipment slots square, and preserve authored art ratios.
 
-Review changed surfaces at representative wide, narrow, tall, and short sizes,
-including live resize. Fix clipping, overflow, unreachable controls, layout
-shifts, and clipped focus rings.
+Review changed surfaces at `1280x720`, `1170x624`, `390x844`, and `320x568`,
+including live resize across every layout transition. Fix page-level accidental
+overflow, clipped controls or focus rings, unreachable content, layout shifts,
+and overlays that obstruct important board actions.
 
 ## Interaction and accessibility
 
@@ -97,7 +129,24 @@ Meaningful artwork has an accessible name; decorative artwork is hidden from
 assistive technology.
 
 Opening a menu or dialog switches the session to UI input mode, prevents world
-input, and restores the previous input and focus context when dismissed.
+input and simulation advancement, and restores the previous input and focus
+context when dismissed. All overlays use the central session input-mode
+mechanism rather than feature-local flags. Nested overlays retain the lock until
+the final overlay closes. These behaviors require browser regression coverage
+for keyboard, pointer, and dismissal paths.
+
+## Required surface states
+
+Before styling or reviewing a changed surface, enumerate its applicable states:
+default, hover, focus-visible, pressed, selected, disabled, loading, empty,
+error or feedback, long-content, keyboard, pointer or touch, reduced-motion,
+portrait, landscape, and short viewport. Exercise every applicable state and
+record important states that do not apply; do not silently omit them.
+
+State combinations matter. In particular, inspect disabled and selected
+controls, errors with long content, loading on a short viewport, focused items
+inside scroll regions, and overlays opened near viewport edges. A polished
+default state does not compensate for a broken secondary state.
 
 ## Common surface patterns
 
@@ -120,7 +169,31 @@ system document.
 
 ## Verification
 
-For meaningful UI changes, check the rendered result with keyboard and pointer
-input at representative viewport sizes. Add or update the closest browser test
-for behavior that matters. Check reduced motion, touch, long content, and real
-mobile hardware when the change actually depends on them.
+Every user-visible UI change must be rendered and visually inspected at
+`1280x720`, `1170x624`, `390x844`, and `320x568`. Review the required surface
+states, exercise keyboard and pointer input, and exercise touch behavior on
+compact layouts. Check live resize, reduced motion, and long content. Use real
+mobile hardware when behavior depends on mobile browser or device behavior.
+
+For overlays and interactive controls, verify tab order, focus visibility,
+keyboard activation, Escape and backdrop dismissal, focus restoration, scroll
+reachability, world-input suppression, and accessible role, name, and state.
+Inspect screenshots and computed geometry in addition to semantic DOM state.
+
+Treat any console error or uncaught warning, accidental overflow, clipped focus
+indicator or control, unreachable action, unintended layout shift, unreadable
+contrast, duplicate affordance, broken dismissal, focus loss, or leaked world
+input as a failed UI change.
+
+Add or update the closest Playwright coverage for meaningful behavior. Use
+geometry assertions or stable screenshots when role and state assertions cannot
+catch visible breakage. Shared primitives, persistent HUD surfaces, major
+dialogs, and compact layouts require screenshot review for their meaningful
+states; update an intentional baseline only after inspecting the rendered
+change.
+
+Before handoff, run `npm run check:ui-system`, the closest browser tests, and
+`npm run verify`. Report exactly which surfaces, states, viewport sizes, input
+methods, screenshots, and commands were checked, along with any known
+limitations or deliberately excluded states. A UI change is not complete when
+required evidence is missing or any listed defect remains.

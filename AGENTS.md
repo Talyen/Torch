@@ -10,8 +10,15 @@ React application overlay. Keep changes focused, understandable, and complete.
 - Stay on the current branch. Do not stage, commit, push, create branches, or
   open pull requests unless the user asks.
 - Never expose credentials or private local data.
-- Prefer extending or simplifying the owning module over adding wrappers,
-  managers, compatibility paths, or dependencies.
+- Choose the simplest implementation that fully satisfies the current
+  requirements. Prefer extending or simplifying the owning module over adding
+  wrappers, managers, or parallel abstractions.
+- Do not preserve backward compatibility unless the current product or saved-data
+  contract explicitly requires it. Remove superseded paths instead of carrying
+  legacy behavior forward by default.
+- When a dependency is warranted, prefer an established, actively maintained
+  library over a custom implementation. Avoid adding dependencies when the
+  platform or existing stack already provides a clear, simple solution.
 
 ## Read what is relevant
 

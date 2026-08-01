@@ -168,9 +168,7 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
           <TorchTabsContent value={tab} key={tab} className="journal-tab-content">
             <div className={`journal-body${mobileDetailOpen ? ' is-detail-open' : ''}`}>
               <div className="journal-list" aria-label={`${tab} Journal entries`}>
-                {visibleDefinitions.length === 0 ? (
-                  <p className="journal-empty">New entries will appear here as you explore.</p>
-                ) : null}
+                {visibleDefinitions.length === 0 ? <p className="journal-empty">No entries yet.</p> : null}
                 {visibleDefinitions.map((definition) => {
                   const runtime = runtimeFor(definition);
                   const expanded = expandedIds.has(definition.id);
@@ -189,6 +187,7 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
                         type="button"
                         aria-expanded={expanded}
                         aria-controls={entryPanelId}
+                        aria-label={`${definition.title}, ${statusLabel(runtime.status)}, ${completeCount} of ${definition.objectives.length} objectives complete`}
                         data-testid={`journal-entry-${definition.id}`}
                         onClick={() => chooseEntry(definition)}
                       >
@@ -203,7 +202,6 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
                         </span>
                         <span className="journal-entry-heading">
                           <span className="journal-entry-title">{definition.title}</span>
-                          <span className="journal-entry-summary">{definition.summary}</span>
                         </span>
                         <span className={`journal-entry-status is-${runtime.status}`}>
                           {statusLabel(runtime.status)}

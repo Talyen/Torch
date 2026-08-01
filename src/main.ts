@@ -16,6 +16,9 @@ import './styles.css';
 const uiRoot = document.querySelector<HTMLDivElement>('#ui-root');
 if (!uiRoot) throw new Error('Torch UI root is missing.');
 
+const enabledDevTools = new Set(new URLSearchParams(window.location.search).getAll('dev'));
+const isDevToolEnabled = (tool: string): boolean => import.meta.env.DEV && enabledDevTools.has(tool);
+
 applyUiScalePreference();
 applyReduceMotionPreference();
 
@@ -25,7 +28,12 @@ createRoot(uiRoot).render(
   createElement(
     RuntimeProvider,
     { runtime },
-    createElement(Fragment, null, createElement(MenuOverlay), import.meta.env.DEV ? createElement(CardPlayLab) : null),
+    createElement(
+      Fragment,
+      null,
+      createElement(MenuOverlay),
+      isDevToolEnabled('card-play-lab') ? createElement(CardPlayLab) : null,
+    ),
   ),
 );
 
@@ -56,7 +64,7 @@ window.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => void runtime.flushPersistence());
 
-if (import.meta.env.DEV) {
+if (isDevToolEnabled('frame-monitor')) {
   devFrameMonitor.start(game);
   game.events.once(Phaser.Core.Events.DESTROY, () => devFrameMonitor.stop());
 }

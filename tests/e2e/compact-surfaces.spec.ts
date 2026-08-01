@@ -17,6 +17,22 @@ async function expectActiveTabVisible(page: Page, selector: string) {
   expect(metrics.active).toBeTruthy();
 }
 
+async function expectSurfaceTitle(page: Page, title: string): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: title, exact: true });
+  await expect(dialog).toBeVisible();
+  const heading = dialog.locator('.menu-header').getByRole('heading', { name: title, exact: true });
+  await expect(heading).toHaveCount(1);
+  await expect(heading).toBeVisible();
+}
+
+async function expectNoBodyOverflow(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => ({
+    bodyScrollWidth: document.body.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
+  expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+}
+
 test('keeps compact tabs discoverable and active tabs visible', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/');
@@ -91,4 +107,69 @@ test('uses surface-specific close names and Torch focus styling', async ({ page 
   });
   expect(sliderFocus.active).toBe(true);
   expect(sliderFocus.boxShadow).toContain('rgba(242, 196, 99');
+});
+
+test('keeps the menu and key surfaces titled once at the compact width', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+
+  await expectNoBodyOverflow(page);
+  await page.getByTestId('menu-button').click();
+  await expectSurfaceTitle(page, 'Menu');
+  await expectNoBodyOverflow(page);
+
+  const hudSurfaces = [
+    ['hud-hero-button', 'Hero'],
+    ['hud-inventory-button', 'Inventory'],
+    ['hud-gear-button', 'Equipment'],
+    ['hud-abilities-button', 'Abilities'],
+  ] as const;
+  await page.getByTestId('close-menu').click();
+  for (const [testId, title] of hudSurfaces) {
+    await page.getByTestId(testId).click();
+    await expectSurfaceTitle(page, title);
+    await expectNoBodyOverflow(page);
+    await page.getByTestId('close-menu').click();
+  }
+
+  const menuSurfaces = [
+    ['menu-map', 'Map'],
+    ['menu-crafting', 'Crafting'],
+    ['menu-journal', 'Journal'],
+    ['menu-settings', 'Options'],
+  ] as const;
+  for (const [testId, title] of menuSurfaces) {
+    await page.getByTestId('menu-button').click();
+    await page.getByTestId(testId).click();
+    await expectSurfaceTitle(page, title);
+    await expectNoBodyOverflow(page);
+    await page.getByTestId('close-menu').click();
+  }
+});
+
+test('keeps development diagnostics hidden unless explicitly enabled', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByTestId('card-play-lab')).toHaveCount(0);
+  await expect(page.getByTestId('dev-performance')).toHaveCount(0);
+
+  test.skip(process.env.TORCH_E2E_PROD === '1', 'Development diagnostics are not available in production previews.');
+
+  await page.goto('/?dev=card-play-lab');
+  const cardPlayLab = page.getByTestId('card-play-lab');
+  await expect(cardPlayLab).toBeVisible();
+  await expect(page.getByTestId('dev-performance')).toHaveCount(0);
+  await expect(page.getByTestId('card-play-preset-trinket')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('card-play-preset-alchemy').click();
+  await expect(page.getByTestId('card-play-preset-alchemy')).toHaveAttribute('aria-checked', 'true');
+
+  await page.goto('/?dev=frame-monitor');
+  await expect(page.getByTestId('card-play-lab')).toHaveCount(0);
+  const performancePanel = page.getByTestId('dev-performance');
+  await expect(performancePanel).toBeVisible();
+  await expect.poll(async () => performancePanel.textContent()).toMatch(/^\d+ FPS$/);
+
+  await page.goto('/?dev=card-play-lab&dev=frame-monitor');
+  await expect(page.getByTestId('card-play-lab')).toBeVisible();
+  await expect(page.getByTestId('dev-performance')).toBeVisible();
 });

@@ -1,5 +1,5 @@
 import { PROFILE_SAVE_SCHEMA_VERSION, WORLD_SAVE_SCHEMA_VERSION, decodeProfileSave, decodeWorldSave } from '../sim';
-import type { ProfileSaveV1, WorldSave } from '../sim';
+import type { ProfileSaveV1, WorldSaveV2 } from '../sim';
 
 export const SAVE_BUNDLE_SCHEMA_VERSION = 1 as const;
 export const SAVE_INTEGRITY_ALGORITHM = 'fnv1a32' as const;
@@ -12,7 +12,7 @@ interface SaveBundlePayload {
   generationVersion: number;
   worldSaveSchemaVersion: number;
   profileSaveSchemaVersion: number;
-  world: WorldSave;
+  world: WorldSaveV2;
   profile: ProfileSaveV1;
 }
 
@@ -33,7 +33,7 @@ export function checksumSerialized(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-function payloadFor(world: WorldSave, profile: ProfileSaveV1, revision: number): SaveBundlePayload {
+function payloadFor(world: WorldSaveV2, profile: ProfileSaveV1, revision: number): SaveBundlePayload {
   return {
     schemaVersion: SAVE_BUNDLE_SCHEMA_VERSION,
     revision,
@@ -47,7 +47,7 @@ function payloadFor(world: WorldSave, profile: ProfileSaveV1, revision: number):
   };
 }
 
-export function createSaveBundle(world: WorldSave, profile: ProfileSaveV1, revision: number): SaveBundle {
+export function createSaveBundle(world: WorldSaveV2, profile: ProfileSaveV1, revision: number): SaveBundle {
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('Save bundle revision must be non-negative.');
   const payload = payloadFor(world, profile, revision);
   return {

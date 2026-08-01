@@ -1,5 +1,5 @@
 /** A small deterministic integer hash for world generation and simulation fixtures. */
-export function hashCoordinates(seed: number, x: number, y: number, salt = 0): number {
+function hashCoordinates(seed: number, x: number, y: number, salt = 0): number {
   let hash = seed | 0;
   hash = Math.imul(hash ^ Math.imul(x, 374761393), 668265263);
   hash = Math.imul(hash ^ Math.imul(y, 1274126177), 2246822519);

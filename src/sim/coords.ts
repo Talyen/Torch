@@ -7,7 +7,7 @@ export const CARDINAL_OFFSETS = [
   { x: -1, y: 0 },
 ] as const satisfies readonly Position[];
 
-export const DIRECTION_DELTAS: Record<Direction, Position> = {
+const DIRECTION_DELTAS: Record<Direction, Position> = {
   north: { x: 0, y: -1 },
   south: { x: 0, y: 1 },
   west: { x: -1, y: 0 },

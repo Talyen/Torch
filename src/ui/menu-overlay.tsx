@@ -102,17 +102,16 @@ import {
 } from '../game/input-bindings';
 import type { KeyBindingAction, KeyBindings } from '../game/input-bindings';
 import { useMenuOverlayController } from './menu-overlay-controller';
+import type { MenuScreen } from './menu-overlay-controller';
 
 type MenuItem = {
   label: string;
   icon: LucideIcon;
-  screen: Screen;
+  screen: MenuScreen;
   available?: boolean;
   disabledReason?: string;
   testId?: string;
 };
-
-type Screen = 'menu' | 'hero' | 'inventory' | 'gear' | 'crafting' | 'abilities' | 'journal' | 'map' | 'settings';
 
 const menuItems: MenuItem[] = [
   { label: 'Map', icon: MapIcon, screen: 'map', available: true },
@@ -130,7 +129,7 @@ const HERO_STAT_LABELS = {
   intellect: 'Intellect',
 } as const;
 
-const SCREEN_TITLES: Record<Screen, string> = {
+const SCREEN_TITLES: Record<MenuScreen, string> = {
   menu: 'Menu',
   hero: 'Hero',
   inventory: 'Inventory',
@@ -179,6 +178,48 @@ const toolSlotIcons: Record<ToolSlotId, LucideIcon> = {
   shovel: Shovel,
 };
 
+type HudNavigationButtonConfig = {
+  screen: MenuScreen;
+  ariaLabel: string;
+  title: string;
+  testId: string;
+  content: ReactElement;
+  className?: string;
+  hasExpandedState?: boolean;
+};
+
+type HudNavigationButtonProps = HudNavigationButtonConfig & {
+  open: boolean;
+  onOpen: (screen: MenuScreen, invoker: HTMLButtonElement) => void;
+};
+
+function HudNavigationButton({
+  screen,
+  ariaLabel,
+  title,
+  testId,
+  content,
+  className,
+  hasExpandedState,
+  open,
+  onOpen,
+}: HudNavigationButtonProps): ReactElement {
+  return (
+    <TorchButton
+      className={`hud-icon-button${className ? ` ${className}` : ''}`}
+      type="button"
+      aria-label={ariaLabel}
+      title={title}
+      aria-controls="torch-menu"
+      aria-expanded={hasExpandedState ? open : undefined}
+      data-testid={testId}
+      onClick={(event) => onOpen(screen, event.currentTarget)}
+    >
+      {content}
+    </TorchButton>
+  );
+}
+
 export function MenuOverlay(): ReactElement {
   const {
     open,
@@ -216,6 +257,45 @@ export function MenuOverlay(): ReactElement {
   }, [open]);
 
   const hpRatio = heroStatus.maxHealth > 0 ? Math.max(0, Math.min(1, heroStatus.health / heroStatus.maxHealth)) : 0;
+  const hudNavigationButtons: readonly HudNavigationButtonConfig[] = [
+    {
+      screen: 'hero',
+      ariaLabel: 'Open hero',
+      title: 'Hero',
+      testId: 'hud-hero-button',
+      className: 'hud-hero-button',
+      content: <img src={heroAssets.knight.hud} alt="" />,
+    },
+    {
+      screen: 'inventory',
+      ariaLabel: 'Open inventory',
+      title: 'Inventory',
+      testId: 'hud-inventory-button',
+      content: <Backpack aria-hidden="true" />,
+    },
+    {
+      screen: 'gear',
+      ariaLabel: 'Open gear',
+      title: 'Equipment',
+      testId: 'hud-gear-button',
+      content: <Swords aria-hidden="true" />,
+    },
+    {
+      screen: 'abilities',
+      ariaLabel: 'Open abilities',
+      title: 'Abilities',
+      testId: 'hud-abilities-button',
+      content: <Sparkles aria-hidden="true" />,
+    },
+    {
+      screen: 'menu',
+      ariaLabel: 'Open menu',
+      title: 'Menu',
+      testId: 'menu-button',
+      hasExpandedState: true,
+      content: <MenuIcon aria-hidden="true" />,
+    },
+  ];
 
   return (
     <>
@@ -228,17 +308,7 @@ export function MenuOverlay(): ReactElement {
           <>
             <JournalTracker state={gameState} onOpen={() => openMenu('journal')} />
             <div ref={hudRailRef} className="hud-rail" data-testid="hud-rail" aria-label="Hero controls">
-              <TorchButton
-                className="hud-icon-button hud-hero-button"
-                type="button"
-                aria-label="Open hero"
-                title="Hero"
-                aria-controls="torch-menu"
-                data-testid="hud-hero-button"
-                onClick={(event) => openMenu('hero', event.currentTarget)}
-              >
-                <img src={heroAssets.knight.hud} alt="" />
-              </TorchButton>
+              <HudNavigationButton {...hudNavigationButtons[0]} open={open} onOpen={openMenu} />
 
               <div
                 className="hud-hp"
@@ -256,54 +326,9 @@ export function MenuOverlay(): ReactElement {
                 </div>
               </div>
 
-              <TorchButton
-                className="hud-icon-button"
-                type="button"
-                aria-label="Open inventory"
-                title="Inventory"
-                aria-controls="torch-menu"
-                data-testid="hud-inventory-button"
-                onClick={(event) => openMenu('inventory', event.currentTarget)}
-              >
-                <Backpack aria-hidden="true" />
-              </TorchButton>
-
-              <TorchButton
-                className="hud-icon-button"
-                type="button"
-                aria-label="Open gear"
-                title="Equipment"
-                aria-controls="torch-menu"
-                data-testid="hud-gear-button"
-                onClick={(event) => openMenu('gear', event.currentTarget)}
-              >
-                <Swords aria-hidden="true" />
-              </TorchButton>
-
-              <TorchButton
-                className="hud-icon-button"
-                type="button"
-                aria-label="Open abilities"
-                title="Abilities"
-                aria-controls="torch-menu"
-                data-testid="hud-abilities-button"
-                onClick={(event) => openMenu('abilities', event.currentTarget)}
-              >
-                <Sparkles aria-hidden="true" />
-              </TorchButton>
-
-              <TorchButton
-                className="hud-icon-button"
-                type="button"
-                aria-label="Open menu"
-                title="Menu"
-                aria-controls="torch-menu"
-                aria-expanded={open}
-                data-testid="menu-button"
-                onClick={(event) => openMenu('menu', event.currentTarget)}
-              >
-                <MenuIcon aria-hidden="true" />
-              </TorchButton>
+              {hudNavigationButtons.slice(1).map((button) => (
+                <HudNavigationButton {...button} key={button.testId} open={open} onOpen={openMenu} />
+              ))}
             </div>
           </>
         ) : null}
@@ -1368,6 +1393,7 @@ function AbilitiesScreen(): ReactElement {
     ...runtime.state.hero.equippedAbilities,
   });
   const previousPickerSlotRef = useRef<AbilitySlotId | undefined>(undefined);
+  const previousDetailAbilityIdRef = useRef<string | undefined>(undefined);
   const abilityFocusFrameRef = useRef<number | undefined>(undefined);
   const abilityFocusTimerRef = useRef<number | undefined>(undefined);
 
@@ -1381,19 +1407,24 @@ function AbilitiesScreen(): ReactElement {
 
   useEffect(() => {
     const previousPickerSlot = previousPickerSlotRef.current;
+    const previousDetailAbilityId = previousDetailAbilityIdRef.current;
     previousPickerSlotRef.current = pickerSlot;
-    if (!previousPickerSlot && !pickerSlot) return;
+    previousDetailAbilityIdRef.current = detailAbility?.id;
+    if (!previousPickerSlot && !pickerSlot && !previousDetailAbilityId && !detailAbility) return;
     if (detailAbility) return;
 
     if (abilityFocusFrameRef.current !== undefined) window.cancelAnimationFrame(abilityFocusFrameRef.current);
     if (abilityFocusTimerRef.current !== undefined) window.clearTimeout(abilityFocusTimerRef.current);
     abilityFocusFrameRef.current = window.requestAnimationFrame(() => {
       abilityFocusTimerRef.current = window.setTimeout(() => {
-        const selector = pickerSlot
-          ? '[data-testid="ability-picker-back"]'
-          : previousPickerSlot
-            ? `[data-testid="ability-card-${previousPickerSlot}"]`
-            : undefined;
+        const selector =
+          previousDetailAbilityId && pickerSlot
+            ? `[data-testid="ability-choice-${previousDetailAbilityId.replace('ability.', '')}"]`
+            : pickerSlot
+              ? '[data-testid="ability-picker-back"]'
+              : previousPickerSlot
+                ? `[data-testid="ability-card-${previousPickerSlot}"]`
+                : undefined;
         if (selector) document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
       }, 0);
     });
@@ -1671,11 +1702,13 @@ function SettingsScreen(): ReactElement {
   const [fullscreenBusy, setFullscreenBusy] = useState(false);
   const [status, setStatus] = useState('Changes save locally; connected adapters update immediately.');
   const [confirmReset, setConfirmReset] = useState(false);
+  const mountedRef = useRef(false);
   const optionsBodyRef = useRef<HTMLDivElement>(null);
   const optionsBodySize = useElementSize(optionsBodyRef);
   const optionsOrientation = optionsBodySize.width > 0 && optionsBodySize.width <= 720 ? 'horizontal' : 'vertical';
 
   useEffect(() => {
+    mountedRef.current = true;
     const handleSettingsChange = (event: Event): void => {
       const detail = (event as CustomEvent<PresentationSettings>).detail;
       setSettings(detail ?? readPresentationSettings());
@@ -1684,6 +1717,7 @@ function SettingsScreen(): ReactElement {
     window.addEventListener(PRESENTATION_SETTINGS_EVENT, handleSettingsChange);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
+      mountedRef.current = false;
       window.removeEventListener(PRESENTATION_SETTINGS_EVENT, handleSettingsChange);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
@@ -1706,12 +1740,14 @@ function SettingsScreen(): ReactElement {
       } else if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
       }
+      if (!mountedRef.current) return;
       setStatus('Display mode updated.');
     } catch {
+      if (!mountedRef.current) return;
       setFullscreen(Boolean(document.fullscreenElement));
       setStatus('Fullscreen is unavailable in this browser window.');
     } finally {
-      setFullscreenBusy(false);
+      if (mountedRef.current) setFullscreenBusy(false);
     }
   };
 
@@ -2028,7 +2064,7 @@ function SettingSwitch({
 const keyBindingGroups: readonly { label: string; actions: readonly KeyBindingAction[] }[] = [
   { label: 'Movement', actions: ['move-north', 'move-south', 'move-west', 'move-east'] },
   { label: 'Actions', actions: ['wait', 'gather'] },
-  { label: 'Navigation', actions: ['map'] },
+  { label: 'Navigation', actions: ['map', 'journal'] },
 ];
 
 function KeyBindingsPanel({ onStatus }: { onStatus: (message: string) => void }): ReactElement {

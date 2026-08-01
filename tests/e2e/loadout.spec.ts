@@ -88,3 +88,71 @@ test('keeps canonical Gear readable across supported viewports', async ({ page }
     await page.getByTestId('close-menu').click();
   }
 });
+
+test('keeps selector and Unequip controls at least 42px across supported viewports', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 1170, height: 624 },
+    { width: 390, height: 844 },
+    { width: 320, height: 568 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await page.getByTestId('hud-gear-button').click();
+    await expect(page.getByTestId('equipment-screen')).toBeVisible();
+
+    await page.getByTestId('equipment-slot-main-hand').click();
+    await expect(page.getByTestId('equipment-picker')).toBeVisible();
+    const equipmentSelectorHitAreas = await page
+      .getByTestId('equipment-picker')
+      .locator('button')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const rect = button.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }),
+      );
+    expect(equipmentSelectorHitAreas.length).toBeGreaterThan(0);
+    expect(equipmentSelectorHitAreas.every(({ width, height }) => width >= 42 && height >= 42)).toBe(true);
+
+    await page.getByTestId('equipment-choice-iron-sword').click();
+    await page.getByTestId('equipment-slot-main-hand').click();
+    await expect(page.getByTestId('equipment-unequip')).toBeVisible();
+    const equipmentUnequipHitArea = await page.getByTestId('equipment-unequip').evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    expect(equipmentUnequipHitArea.width).toBeGreaterThanOrEqual(42);
+    expect(equipmentUnequipHitArea.height).toBeGreaterThanOrEqual(42);
+    await page.getByTestId('equipment-unequip').click();
+    await expect(page.getByTestId('equipment-picker')).toHaveCount(0);
+
+    await page.getByTestId('tools-tab').click();
+    await page.getByTestId('tool-slot-axe').click();
+    await expect(page.getByTestId('tool-picker')).toBeVisible();
+    const toolSelectorHitAreas = await page
+      .getByTestId('tool-picker')
+      .locator('button')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const rect = button.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }),
+      );
+    expect(toolSelectorHitAreas.length).toBeGreaterThan(0);
+    expect(toolSelectorHitAreas.every(({ width, height }) => width >= 42 && height >= 42)).toBe(true);
+
+    await page.getByTestId('tool-choice-iron-axe').click();
+    await page.getByTestId('tool-slot-axe').click();
+    await expect(page.getByTestId('tool-unequip')).toBeVisible();
+    const toolUnequipHitArea = await page.getByTestId('tool-unequip').evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    expect(toolUnequipHitArea.width).toBeGreaterThanOrEqual(42);
+    expect(toolUnequipHitArea.height).toBeGreaterThanOrEqual(42);
+    await page.getByTestId('tool-unequip').click();
+    await expect(page.getByTestId('tool-picker')).toHaveCount(0);
+    await page.getByTestId('close-menu').click();
+  }
+});

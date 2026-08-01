@@ -27,7 +27,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add a minimal asset/content manifest convention.
 - [x] Document the development verification workflow and deterministic replay contract.
 - [ ] Add content and schema validation for stable IDs, orphaned references, and generated test fixtures.
-- [ ] Add save fault-injection coverage for interrupted writes, corrupted envelopes, last-known-good recovery, and migrations.
+- [ ] Complete save hardening for interrupted-write fault injection, unsupported-schema/migration policy, and broader provider behavior.
 - [ ] Add seed/replay export and import, including a small developer state and event inspector.
 - [ ] Establish shared contracts for input rebinding, audio, haptics, reduced motion, and larger text.
 
@@ -66,7 +66,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [ ] Time-of-day presentation and lightweight weather effects.
 - [ ] Pets with follow, wait, interact, and simple combat behavior.
 - [x] World-local quests, mystery clues, waypoint targets, and Journal progress tracking.
-- [x] Versioned `WorldSave`/`ProfileSave` projections in a checksummed local bundle with crash recovery, legacy migration, and provider hardening.
+- [x] Add baseline versioned `WorldSave`/`ProfileSave` projections in a checksummed local bundle, with crash recovery and legacy local-key migration.
 - [x] Materialize world chunks and nearby generated entities with deterministic sleep/wake rules and sparse persistent mutations.
 - [ ] Add a visible homestead upgrade graph with repaired rooms, station dependencies, storage expansion, and production improvements.
 - [ ] Add renewable resource and production cadence such as crop cycles, regrowing nodes, and fuel or other recurring resource sinks.
@@ -147,9 +147,10 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 
 ## Current next milestone
 
-Complete the remaining Phase 2 survival loop around the Journal slice: homestead
-production, chunk/entity materialization, save-provider hardening, and profile
-progression while preserving deterministic saves and browser coverage.
+Complete the remaining Journal-adjacent work: homestead production and richer
+progression, plus save hardening for interrupted writes, unsupported
+schema/migration policy, and broader provider behavior while preserving
+deterministic saves and browser coverage.
 
 ## Deferred plan follow-ups
 
@@ -161,9 +162,9 @@ work:
 
 ### Persistence, release, and verification
 
-- Define the save-recovery contract for interrupted writes, last-known-good
-  snapshots, migration policy, and multiple world slots before implementing
-  recovery, migration, backup, or multi-slot behavior.
+- Define and test the remaining save contract for interrupted writes, unsupported
+  schemas and migrations, broader provider hardening, and multiple world slots;
+  baseline envelopes, crash recovery, and legacy-key migration are implemented.
 - Choose the desktop shell, native lifecycle/filesystem adapter contract, and
   whether cloud saves or telemetry are release requirements.
 - Add a scheduled browser matrix for Mobile Chrome and WebKit after supported

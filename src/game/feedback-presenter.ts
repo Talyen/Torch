@@ -2,8 +2,8 @@ import type { ActionBatch } from './session';
 import type { Position } from '../sim';
 import { ATTACK_MOTION } from './attack-motion';
 
-export type FeedbackKind = 'damage' | 'resource' | 'defeat';
-export type HomesteadResource = 'wood' | 'stone' | 'iron' | 'food' | 'herbs' | 'hide' | 'crystal' | 'gold';
+type FeedbackKind = 'damage' | 'resource' | 'defeat';
+type HomesteadResource = 'wood' | 'stone' | 'iron' | 'food' | 'herbs' | 'hide' | 'crystal' | 'gold';
 
 export interface FeedbackRequest {
   id: string;
@@ -26,7 +26,7 @@ const resourceIconKeys: Record<HomesteadResource, `resource.homestead.${Homestea
   gold: 'resource.homestead.gold',
 };
 
-export function iconKeyForResource(resource: 'wood' | 'ore'): FeedbackRequest['iconKey'] {
+function iconKeyForResource(resource: 'wood' | 'ore'): FeedbackRequest['iconKey'] {
   // Torch currently calls the mining resource “ore”; keep that domain name in
   // the announcement and use the closest authored Homestead material only for
   // the visual chip. Wood has an exact source match.

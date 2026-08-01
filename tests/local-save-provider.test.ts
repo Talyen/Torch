@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PersistenceCoordinator } from '../src/game/persistence-coordinator';
-import { createSaveBundle, encodeSaveBundle } from '../src/game/save-bundle';
+import { checksumSerialized, createSaveBundle, encodeSaveBundle } from '../src/game/save-bundle';
 import { LocalStorageSaveProvider } from '../src/platform/local-save-provider';
 import {
   createInitialGameState,
@@ -47,6 +47,16 @@ function serializedBundle(revision: number, turn = 0): string {
   );
 }
 
+function serializedEnvelope(revision: number, turn = 0): string {
+  const data = serializedBundle(revision, turn);
+  return JSON.stringify({
+    formatVersion: 1,
+    revision,
+    data,
+    checksum: checksumSerialized(data),
+  });
+}
+
 describe('LocalStorageSaveProvider', () => {
   it('round-trips one checksummed bundle and rejects an older write', async () => {
     const storage = new MemoryStorage();
@@ -60,6 +70,29 @@ describe('LocalStorageSaveProvider', () => {
     expect(loaded?.candidates[0]?.revision).toBe(2);
     expect(loaded?.corruptPayloads).toEqual([]);
   });
+
+  it.each(['backup', 'temporary'] as const)(
+    'rejects a stale write when %s contains a newer valid envelope without destroying recovery',
+    async (source) => {
+      const storage = new MemoryStorage();
+      const provider = new LocalStorageSaveProvider(storage);
+      await provider.commit('primary', serializedBundle(1, 1), 1);
+
+      const recoveryKey = `torch.save.bundle.primary.${source}`;
+      const newerRecovery = serializedEnvelope(3, 3);
+      storage.setItem(recoveryKey, newerRecovery);
+
+      expect(await provider.commit('primary', serializedBundle(2, 2), 2)).toBe('stale');
+      expect(storage.getItem(recoveryKey)).toBe(newerRecovery);
+
+      const loaded = await provider.load('primary');
+      expect(loaded?.candidates).toContainEqual({
+        revision: 3,
+        serialized: serializedBundle(3, 3),
+        source,
+      });
+    },
+  );
 
   it('recovers the last-known-good backup and retains corrupt primary bytes', async () => {
     const storage = new MemoryStorage();

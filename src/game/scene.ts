@@ -7,7 +7,7 @@ import { resourceAssets } from '../content/resource-assets';
 import { devFrameMonitor } from '../dev/frame-monitor';
 import { tileSizeForViewport, viewRadiusForViewport } from './layout';
 import type { GameRuntimePort } from './session';
-import { readBoardPresentationColors } from './presentation-colors';
+import { readBoardPresentationColors, type BoardPresentationColors } from './presentation-colors';
 import {
   captureVisibilitySnapshot,
   entityVisibilityAlpha,
@@ -104,6 +104,7 @@ export class TorchScene extends Phaser.Scene {
   private attackProgress = { value: 0 };
   private attackQueue: AttackResolvedEvent[] = [];
   private activeAttack?: AttackResolvedEvent;
+  private attackTween?: Phaser.Tweens.Tween;
   private attackRelease?: () => void;
   private actorPoses = new Map<string, ActorPose>();
   private feedbackPool: FeedbackChip[] = [];
@@ -121,10 +122,7 @@ export class TorchScene extends Phaser.Scene {
   private controllerInput = new ControllerInputTracker();
   private terrainDrawKey?: string;
   private fogDrawKey?: string;
-  private presentationColors = {
-    grid: 0x3a3328,
-    fog: 0x15130f,
-  };
+  private presentationColors!: BoardPresentationColors;
 
   private handlePointerDown = (pointer: Phaser.Input.Pointer): void => {
     const displayScale = this.scale.displayScale;
@@ -178,10 +176,7 @@ export class TorchScene extends Phaser.Scene {
     this.heroImage = this.add.image(0, 0, 'hero-knight-marker').setDepth(2);
     this.effectsLayer.add(this.heroImage);
     const boardPresentationColors = readBoardPresentationColors();
-    this.presentationColors = {
-      grid: boardPresentationColors.grid,
-      fog: boardPresentationColors.fog,
-    };
+    this.presentationColors = boardPresentationColors;
     this.cameras.main.setBackgroundColor(boardPresentationColors.background);
     this.unsubscribe = this.runtime.subscribeSnapshot((snapshot) => this.redraw(true, [...snapshot.events]));
     this.unsubscribeBatches = this.runtime.subscribeActionBatches((batch) => this.handleActionBatch(batch));
@@ -201,9 +196,14 @@ export class TorchScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown', this.handleKeyDown);
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
       this.heroTween?.stop();
-      this.attackRelease?.();
+      const attackTween = this.attackTween;
+      this.attackTween = undefined;
+      attackTween?.stop();
+      const attackRelease = this.attackRelease;
       this.attackRelease = undefined;
+      attackRelease?.();
       this.attackQueue = [];
+      this.activeAttack = undefined;
       this.actorPoses.clear();
       this.activeFeedback.clear();
       this.feedbackPool.forEach((chip) => chip.container.destroy());
@@ -245,10 +245,14 @@ export class TorchScene extends Phaser.Scene {
     this.heroTween?.stop();
     this.heroTween = undefined;
     this.heroAnimating = false;
+    const attackTween = this.attackTween;
+    this.attackTween = undefined;
+    attackTween?.stop();
     this.attackQueue = [];
     this.activeAttack = undefined;
-    this.attackRelease?.();
+    const attackRelease = this.attackRelease;
     this.attackRelease = undefined;
+    attackRelease?.();
     this.actorPoses.clear();
     this.redraw(false);
   };
@@ -326,27 +330,32 @@ export class TorchScene extends Phaser.Scene {
     });
     this.updatePresentationDiagnostics();
 
-    this.tweens.add({
+    const attackTween = this.tweens.add({
       targets: this.attackProgress,
       value: 1,
       duration: this.reduceMotion ? 80 : ATTACK_MOTION.durationMs,
       ease: 'Linear',
       onUpdate: () => {
+        if (this.activeAttack !== attack || this.attackTween !== attackTween) return;
         const pose = this.actorPoses.get(attack.attacker.id);
         if (!pose) return;
         pose.progress = this.attackProgress.value;
         this.renderActorPositions();
       },
       onComplete: () => {
+        if (this.activeAttack !== attack || this.attackTween !== attackTween) return;
+        this.attackTween = undefined;
         this.actorPoses.delete(attack.attacker.id);
         this.activeAttack = undefined;
-        this.attackRelease?.();
+        const attackRelease = this.attackRelease;
         this.attackRelease = undefined;
+        attackRelease?.();
         this.renderActorPositions();
         this.updatePresentationDiagnostics();
         this.drainAttackQueue();
       },
     });
+    this.attackTween = attackTween;
   }
 
   private scheduleFeedback(request: FeedbackRequest): void {

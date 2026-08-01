@@ -8,7 +8,7 @@ import { useGameRuntime } from './runtime-context';
 export type MenuScreen =
   'menu' | 'hero' | 'inventory' | 'gear' | 'crafting' | 'abilities' | 'journal' | 'map' | 'settings';
 
-export const menuScreenFocusSelector = (screen: MenuScreen): string | undefined => {
+const menuScreenFocusSelector = (screen: MenuScreen): string | undefined => {
   switch (screen) {
     case 'inventory':
       return '[data-testid="inventory-filter"]';

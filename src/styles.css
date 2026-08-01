@@ -199,9 +199,9 @@ button:not([data-slot='button']):disabled {
   flex: 0 0 44px;
   padding: 0;
   place-items: center;
-  border-color: rgb(206 169 88 / 20%);
+  border-color: var(--ui-border-subtle);
   border-radius: var(--ui-control-radius);
-  background: rgb(255 255 255 / 5%);
+  background: var(--ui-color-control);
 }
 
 .hud-icon-button svg,
@@ -217,7 +217,7 @@ button:not([data-slot='button']):disabled {
 
 .hud-hero-button {
   overflow: hidden;
-  border-color: rgb(242 196 99 / 34%);
+  border-color: var(--ui-border-strong);
 }
 
 .hud-hero-button img {
@@ -362,8 +362,8 @@ button:not([data-slot='button']):disabled {
   min-height: 38px;
   padding: 0;
   place-items: center;
-  border-color: rgb(206 169 88 / 18%);
-  background: rgb(255 255 255 / 4%);
+  border-color: var(--ui-border-subtle);
+  background: var(--ui-color-control);
 }
 
 .menu-list {
@@ -2944,15 +2944,15 @@ button:focus-visible,
   width: 46px;
   height: 46px;
   flex-basis: 46px;
-  border-color: rgb(242 196 99 / 20%);
+  border-color: var(--ui-border-subtle);
   border-radius: 14px;
-  background: rgb(255 255 255 / 5%);
+  background: var(--ui-color-control);
 }
 
 .hud-icon-button:hover,
 .hud-icon-button:focus-visible {
-  border-color: var(--gold);
-  background: rgb(242 196 99 / 12%);
+  border-color: var(--ui-border-strong);
+  background: var(--ui-color-control-hover);
 }
 
 .hud-hp-track {
@@ -3012,17 +3012,17 @@ button:focus-visible,
   width: 42px;
   height: 42px;
   min-height: 42px;
-  border-color: rgb(242 196 99 / 22%);
+  border-color: var(--ui-border-subtle);
   border-radius: 50%;
-  background: rgb(255 255 255 / 5%);
+  background: var(--ui-color-control);
 }
 
 .menu-close:hover,
 .menu-close:focus-visible,
 .ability-detail-close:hover,
 .ability-detail-close:focus-visible {
-  border-color: var(--gold);
-  background: rgb(242 196 99 / 12%);
+  border-color: var(--ui-border-strong);
+  background: var(--ui-color-control-hover);
 }
 
 .menu-grid {
@@ -5543,15 +5543,15 @@ html[data-reduce-motion='true'] *::after {
   height: 46px;
   min-height: 46px;
   flex-basis: 46px;
-  border-color: rgb(242 196 99 / 20%);
+  border-color: var(--ui-border-subtle);
   border-radius: 14px;
-  background: rgb(255 255 255 / 5%);
+  background: var(--ui-color-control);
 }
 
 .hud-icon-button:hover,
 .hud-icon-button:focus-visible {
-  border-color: var(--gold);
-  background: rgb(242 196 99 / 12%);
+  border-color: var(--ui-border-strong);
+  background: var(--ui-color-control-hover);
 }
 
 .menu-backdrop,
@@ -5605,17 +5605,17 @@ html[data-reduce-motion='true'] *::after {
   width: 42px;
   height: 42px;
   min-height: 42px;
-  border-color: rgb(242 196 99 / 22%);
+  border-color: var(--ui-border-subtle);
   border-radius: 50%;
-  background: rgb(255 255 255 / 5%);
+  background: var(--ui-color-control);
 }
 
 .menu-close:hover,
 .menu-close:focus-visible,
 .ability-detail-close:hover,
 .ability-detail-close:focus-visible {
-  border-color: var(--gold);
-  background: rgb(242 196 99 / 12%);
+  border-color: var(--ui-border-strong);
+  background: var(--ui-color-control-hover);
 }
 
 .menu-grid {
@@ -6863,6 +6863,7 @@ html[data-reduce-motion='true'] *::after {
 
 .selector-unequip {
   align-self: flex-start;
+  min-height: var(--ui-hit-target);
   margin: 0 var(--ui-space-2) var(--ui-space-2);
 }
 
@@ -6890,6 +6891,10 @@ html[data-reduce-motion='true'] *::after {
 
 .selector-grid .equipment-choice,
 .selector-grid .tool-choice {
+  width: 100%;
+  height: auto !important;
+  min-width: var(--ui-hit-target) !important;
+  min-height: var(--ui-hit-target) !important;
   aspect-ratio: 1;
 }
 

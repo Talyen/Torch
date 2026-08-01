@@ -1,11 +1,11 @@
-export const MAX_RENDER_SCALE = 2;
+const MAX_RENDER_SCALE = 2;
 
-export interface BackingSize {
+interface BackingSize {
   width: number;
   height: number;
 }
 
-export interface CameraScroll {
+interface CameraScroll {
   x: number;
   y: number;
 }

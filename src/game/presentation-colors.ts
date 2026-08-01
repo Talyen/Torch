@@ -16,7 +16,7 @@ const BOARD_PRESENTATION_FALLBACK_NUMBERS = {
   fog: 0x15130f,
 } as const;
 
-export function readCssColorToken(name: string, fallback: string): string {
+function readCssColorToken(name: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback;
 
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();

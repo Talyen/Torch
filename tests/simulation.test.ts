@@ -17,6 +17,13 @@ import {
   tileAt,
 } from '../src/sim';
 
+const SEED_1234_TERRAIN = {
+  seed: 1234,
+  positions: Array.from({ length: 129 }, (_, index) => index - 64).flatMap((x) =>
+    Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })),
+  ),
+} as const;
+
 describe('Torch simulation', () => {
   it('generates the same chunk for the same seed and coordinates', () => {
     const first = generateChunk(1234, -2, 4);
@@ -26,10 +33,7 @@ describe('Torch simulation', () => {
   });
 
   it('generates grassland and mountain terrain with deterministic tree groves and ore candidates', () => {
-    const seed = 1234;
-    const positions = Array.from({ length: 129 }, (_, index) => index - 64).flatMap((x) =>
-      Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })),
-    );
+    const { seed, positions } = SEED_1234_TERRAIN;
     const mountain = positions.find((position) => tileAt(seed, position) === 'mountain');
     const ore = positions.find((position) => generatedResourceAt(seed, position) === 'ore');
     const treeCount = positions.filter((position) => generatedTreeAt(seed, position)).length;
@@ -44,10 +48,8 @@ describe('Torch simulation', () => {
   });
 
   it('places ore on every walkable tile adjacent to a mountain', () => {
-    const seed = 1234;
-    const mountain = Array.from({ length: 129 }, (_, index) => index - 64)
-      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
-      .find((position) => tileAt(seed, position) === 'mountain');
+    const { seed, positions } = SEED_1234_TERRAIN;
+    const mountain = positions.find((position) => tileAt(seed, position) === 'mountain');
     const adjacent = [
       { x: mountain!.x, y: mountain!.y - 1 },
       { x: mountain!.x + 1, y: mountain!.y },
@@ -61,10 +63,8 @@ describe('Torch simulation', () => {
   });
 
   it('materializes generated trees as chop actions and remembers removed groves', () => {
-    const state = createInitialGameState(1234);
-    const position = Array.from({ length: 129 }, (_, index) => index - 64)
-      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
-      .find((candidate) => generatedTreeAt(state.seed, candidate));
+    const state = createInitialGameState(SEED_1234_TERRAIN.seed);
+    const position = SEED_1234_TERRAIN.positions.find((candidate) => generatedTreeAt(state.seed, candidate));
 
     expect(position).toBeDefined();
     materializeGeneratedTrees(state, position!);
@@ -111,28 +111,26 @@ describe('Torch simulation', () => {
   });
 
   it('treats generated mountains as impassable terrain', () => {
-    const state = createInitialGameState(1234);
+    const state = createInitialGameState(SEED_1234_TERRAIN.seed);
     const offsets = [
       { x: -1, y: 0, direction: 'east' as const },
       { x: 1, y: 0, direction: 'west' as const },
       { x: 0, y: -1, direction: 'south' as const },
       { x: 0, y: 1, direction: 'north' as const },
     ];
-    const mountainAndStart = Array.from({ length: 129 }, (_, index) => index - 64)
-      .flatMap((x) => Array.from({ length: 129 }, (_, index) => ({ x, y: index - 64 })))
-      .flatMap((position) =>
-        offsets
-          .filter(
-            (offset) =>
-              tileAt(state.seed, position) === 'mountain' &&
-              isTerrainWalkable(tileAt(state.seed, { x: position.x + offset.x, y: position.y + offset.y })),
-          )
-          .map((offset) => ({
-            mountain: position,
-            start: { x: position.x + offset.x, y: position.y + offset.y },
-            direction: offset.direction,
-          })),
-      )[0];
+    const mountainAndStart = SEED_1234_TERRAIN.positions.flatMap((position) =>
+      offsets
+        .filter(
+          (offset) =>
+            tileAt(state.seed, position) === 'mountain' &&
+            isTerrainWalkable(tileAt(state.seed, { x: position.x + offset.x, y: position.y + offset.y })),
+        )
+        .map((offset) => ({
+          mountain: position,
+          start: { x: position.x + offset.x, y: position.y + offset.y },
+          direction: offset.direction,
+        })),
+    )[0];
 
     expect(mountainAndStart).toBeDefined();
     const { start, direction } = mountainAndStart!;
@@ -292,14 +290,82 @@ describe('Torch simulation', () => {
 
     const cards = availableContextActionsAt(state, { x: 5, y: 2 });
 
-    expect(cards.map((card) => card.abilityId)).toEqual(['ability.bash', 'ability.avatar']);
-    expect(cards.some((card) => card.abilityId === 'ability.sunder')).toBe(false);
+    expect(cards.map((card) => card.abilityId)).toEqual(['ability.bash', 'ability.sunder', 'ability.avatar']);
+    expect(cards).toEqual([
+      expect.objectContaining({
+        abilityId: 'ability.bash',
+        cooldownRemaining: 0,
+        disabledReason: undefined,
+      }),
+      expect.objectContaining({
+        abilityId: 'ability.sunder',
+        cooldownRemaining: 2,
+        disabledReason: 'Ready in 2 actions.',
+      }),
+      expect.objectContaining({
+        abilityId: 'ability.avatar',
+        cooldownRemaining: 0,
+        disabledReason: undefined,
+      }),
+    ]);
     expect(cards[0]?.action).toEqual({
       kind: 'ability',
       abilityId: 'ability.bash',
       entityId: 'slime',
       target: { x: 5, y: 2 },
     });
+  });
+
+  it('keeps all cooling abilities disabled while exposing a ready entity fallback', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 4, y: 2 };
+    state.hero.abilityCooldowns = {
+      'ability.bash': 1,
+      'ability.sunder': 2,
+      'ability.avatar': 3,
+    };
+
+    const cards = availableContextActionsAt(state, { x: 5, y: 2 });
+
+    expect(cards.slice(0, 3)).toEqual([
+      expect.objectContaining({
+        abilityId: 'ability.bash',
+        cooldownRemaining: 1,
+        disabledReason: 'Ready in 1 action.',
+      }),
+      expect.objectContaining({
+        abilityId: 'ability.sunder',
+        cooldownRemaining: 2,
+        disabledReason: 'Ready in 2 actions.',
+      }),
+      expect.objectContaining({
+        abilityId: 'ability.avatar',
+        cooldownRemaining: 3,
+        disabledReason: 'Ready in 3 actions.',
+      }),
+    ]);
+    expect(cards[3]).toEqual({
+      id: 'context:entity:slime:attack',
+      label: 'Attack',
+      source: 'entity',
+      entityName: 'Forest Slime',
+      action: { kind: 'attack', entityId: 'slime', target: { x: 5, y: 2 } },
+    });
+
+    const blockedCooldownAction = applyCommand(state, {
+      type: 'action',
+      action: cards[1]!.action,
+    });
+    expect(blockedCooldownAction.accepted).toBe(false);
+    expect(blockedCooldownAction.state.turn).toBe(0);
+    expect(blockedCooldownAction.state.entities.slime.health).toBe(state.entities.slime.health);
+    expect(blockedCooldownAction.events.some((event) => event.type === 'blocked')).toBe(true);
+
+    const fallback = applyCommand(state, { type: 'action', action: cards[3]!.action });
+    expect(fallback.accepted).toBe(true);
+    expect(fallback.state.turn).toBe(1);
+    expect(fallback.state.entities.slime.health).toBe(3);
+    expect(fallback.events.some((event) => event.type === 'action-resolved' && event.action === 'attack')).toBe(true);
   });
 
   it('keeps ability card identity stable when the adjacent enemy target changes', () => {

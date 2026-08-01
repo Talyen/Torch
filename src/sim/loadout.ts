@@ -9,11 +9,11 @@ function isEquipmentLoadoutSlot(slot: string): slot is EquipmentSlotId {
   return equipmentSlotIds.has(slot);
 }
 
-export function equippedItemForSlot(state: GameState, slot: LoadoutSlotId): string | undefined {
+function equippedItemForSlot(state: GameState, slot: LoadoutSlotId): string | undefined {
   return isEquipmentLoadoutSlot(slot) ? state.hero.equippedItems[slot] : state.hero.equippedTools[slot];
 }
 
-export function itemCanOccupySlot(itemId: string, slot: LoadoutSlotId): boolean {
+function itemCanOccupySlot(itemId: string, slot: LoadoutSlotId): boolean {
   const definition = itemDefinition(itemId);
   if (!definition) return false;
   if (isEquipmentLoadoutSlot(slot)) return definition.equipmentSlot === slot;

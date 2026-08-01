@@ -18,11 +18,6 @@ interface StoredBundleEnvelope {
   checksum: string;
 }
 
-interface LegacyStoredSave {
-  revision: number;
-  data: string;
-}
-
 function decodeEnvelope(raw: string): StoredBundleEnvelope | undefined {
   try {
     const value: unknown = JSON.parse(raw);
@@ -56,7 +51,7 @@ function unwrapLegacy(raw: string | null): string | undefined {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return raw;
     const record = value as Record<string, unknown>;
     if (Number.isSafeInteger(record.revision) && typeof record.data === 'string') {
-      return (record as unknown as LegacyStoredSave).data;
+      return record.data;
     }
     return raw;
   } catch {
@@ -140,9 +135,11 @@ export class LocalStorageSaveProvider implements SaveProvider {
 
   private latestRevision(storage: Storage, slot: string): number {
     const remembered = this.acceptedRevisions.get(slot) ?? -1;
-    const primaryRaw = storage.getItem(this.bundleKey(slot, 'primary'));
-    const primary = primaryRaw ? decodeEnvelope(primaryRaw) : undefined;
-    return Math.max(remembered, primary?.revision ?? -1);
+    const storedRevisions = (['primary', 'temporary', 'backup'] as const).map((source) => {
+      const raw = storage.getItem(this.bundleKey(slot, source));
+      return raw ? (decodeEnvelope(raw)?.revision ?? -1) : -1;
+    });
+    return Math.max(remembered, ...storedRevisions);
   }
 
   private bundleKey(slot: string, source: 'primary' | 'temporary' | 'backup'): string {

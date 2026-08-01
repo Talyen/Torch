@@ -3,10 +3,9 @@ import { layoutProfileForSize } from './responsive-layout';
 import type { LayoutProfile } from './responsive-layout';
 
 export type InventorySort = 'category' | 'name' | 'quantity';
-export type InventoryLayoutProfile = LayoutProfile;
 
 export interface InventoryLayout {
-  profile: InventoryLayoutProfile;
+  profile: LayoutProfile;
   columns: number;
   rows: number;
   pageSize: number;

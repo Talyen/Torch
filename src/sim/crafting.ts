@@ -5,9 +5,9 @@ import { samePosition } from './coords';
 import type { RecipeDefinition } from '../content/recipes';
 import type { CraftBlockedReason, CraftingCommand, GameState, SimEvent } from './types';
 
-export const MAX_CRAFT_BATCH = 99;
+const MAX_CRAFT_BATCH = 99;
 
-export interface CraftingContext {
+interface CraftingContext {
   /** Station IDs are derived from simulation state, never authored by React. */
   stationIds?: readonly string[];
 }
@@ -18,7 +18,7 @@ export function craftingContextForState(state: GameState): CraftingContext {
   };
 }
 
-export interface MissingIngredient {
+interface MissingIngredient {
   itemId: string;
   quantity: number;
 }
@@ -32,15 +32,11 @@ export interface RecipeAvailability {
   reason?: CraftBlockedReason;
 }
 
-export function orderedRecipes(source: readonly RecipeDefinition[] = recipes): RecipeDefinition[] {
+function orderedRecipes(source: readonly RecipeDefinition[] = recipes): RecipeDefinition[] {
   return [...source].sort((left, right) => left.displayOrder - right.displayOrder || compareIds(left.id, right.id));
 }
 
-export function maxCraftableQuantity(
-  state: GameState,
-  recipe: RecipeDefinition,
-  context: CraftingContext = {},
-): number {
+function maxCraftableQuantity(state: GameState, recipe: RecipeDefinition, context: CraftingContext = {}): number {
   if (!recipeKnown(state, recipe) || !stationAvailable(recipe, context)) return 0;
   if (recipe.ingredients.length === 0) return Math.min(recipe.maxBatch, MAX_CRAFT_BATCH);
 

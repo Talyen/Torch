@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { GameSession } from '../src/game/session';
+import { GameRuntime } from '../src/game/session';
 import type { ActionBatch } from '../src/game/session';
 
-describe('GameSession action batches', () => {
+describe('GameRuntime action batches', () => {
   it('does not replay a prior event array and emits one batch per dispatch', () => {
-    const session = new GameSession(1234);
+    const session = new GameRuntime(1234);
     const batches: Array<Pick<ActionBatch, 'batchId' | 'events'>> = [];
     const unsubscribe = session.subscribeActionBatches((batch) => batches.push(batch));
 
@@ -23,7 +23,7 @@ describe('GameSession action batches', () => {
   });
 
   it('keeps the previous state separate from the resolved next state', () => {
-    const session = new GameSession(1234);
+    const session = new GameRuntime(1234);
     let previousTurn = -1;
     let nextTurn = -1;
     session.subscribeActionBatches((batch) => {

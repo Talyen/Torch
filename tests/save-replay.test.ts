@@ -85,6 +85,38 @@ describe('WorldSave v2', () => {
     expect(() => restoreWorldSave({ ...valid, worldId: 'world:other' })).toThrow(/Cannot load world world:other/);
   });
 
+  it('validates hero health bounds while allowing zero health with positive maxHealth', () => {
+    const valid = createWorldSave(createInitialGameState(1234));
+    const invalidCases = [
+      {
+        hero: { health: -1 },
+        message: /worldSave\.hero\.health: expected a non-negative number/,
+      },
+      {
+        hero: { maxHealth: 0 },
+        message: /worldSave\.hero\.maxHealth: expected a positive number/,
+      },
+      {
+        hero: { maxHealth: -1 },
+        message: /worldSave\.hero\.maxHealth: expected a positive number/,
+      },
+      {
+        hero: { health: 11 },
+        message: /worldSave\.hero\.health: must not exceed maxHealth/,
+      },
+    ] as const;
+
+    for (const invalidCase of invalidCases) {
+      expect(() => decodeWorldSave({ ...valid, hero: { ...valid.hero, ...invalidCase.hero } })).toThrow(
+        invalidCase.message,
+      );
+    }
+
+    const zeroHealth = decodeWorldSave({ ...valid, hero: { ...valid.hero, health: 0, maxHealth: 10 } });
+    expect(zeroHealth.hero.health).toBe(0);
+    expect(zeroHealth.hero.maxHealth).toBe(10);
+  });
+
   it('decodes the portable JSON representation and preserves discoveries', () => {
     const state = createInitialGameState(1234);
     state.discoveries['discovery:homestead'] = true;

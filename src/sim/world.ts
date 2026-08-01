@@ -16,17 +16,17 @@ export function worldIdForSeed(seed: number): string {
   return `world:${seed}`;
 }
 
-export interface GeneratedTile {
+interface GeneratedTile {
   position: Position;
   kind: TileKind;
 }
 
-export interface ChunkCoordinate {
+interface ChunkCoordinate {
   x: number;
   y: number;
 }
 
-export interface ActiveTileBounds {
+interface ActiveTileBounds {
   minX: number;
   minY: number;
   maxX: number;
@@ -79,7 +79,7 @@ export function isTerrainWalkable(kind: TileKind): boolean {
   return kind !== 'mountain';
 }
 
-export type GeneratedResourceKind = 'ore';
+type GeneratedResourceKind = 'ore';
 
 /** Every walkable tile directly beside mountain terrain contains ore by default. */
 export function generatedResourceAt(seed: number, position: Position): GeneratedResourceKind | undefined {
@@ -105,7 +105,7 @@ export function generatedTreeId(position: Position): string {
   return `generated-tree:${positionKey(position)}`;
 }
 
-export function activeTileBounds(center: Position, radius = TORCH_RADIUS + 5): ActiveTileBounds {
+function activeTileBounds(center: Position, radius = TORCH_RADIUS + 5): ActiveTileBounds {
   return {
     minX: center.x - radius,
     minY: center.y - radius,
@@ -128,23 +128,6 @@ export function activeChunkCoordinates(
     }
   }
   return chunks;
-}
-
-/** Pure generated-entity projection for one chunk. Persistent mutations stay outside it. */
-export function generateChunkTreePositions(
-  seed: number,
-  chunkX: number,
-  chunkY: number,
-  chunkSize = CHUNK_SIZE,
-): Position[] {
-  const startX = chunkX * chunkSize;
-  const startY = chunkY * chunkSize;
-  return generateChunkTreePositionsWithin(seed, {
-    minX: startX,
-    minY: startY,
-    maxX: startX + chunkSize - 1,
-    maxY: startY + chunkSize - 1,
-  });
 }
 
 function generateChunkTreePositionsWithin(seed: number, bounds: ActiveTileBounds): Position[] {

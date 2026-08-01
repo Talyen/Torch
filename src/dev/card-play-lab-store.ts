@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { DEFAULT_CARD_ANIMATION_PRESET, type CardAnimationPresetId } from '../ui/card-animation';
 
 /** The lab is intentionally a selector, not a second playback system. */
-export interface CardPlayLabState {
+interface CardPlayLabState {
   activePreset: CardAnimationPresetId;
   isPlaying: boolean;
 }
@@ -22,11 +22,11 @@ function update(next: CardPlayLabState): void {
   notify();
 }
 
-export function getCardPlayLabState(): CardPlayLabState {
+function getCardPlayLabState(): CardPlayLabState {
   return state;
 }
 
-export function subscribeToCardPlayLab(listener: () => void): () => void {
+function subscribeToCardPlayLab(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

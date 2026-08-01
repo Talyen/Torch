@@ -352,6 +352,3 @@ export async function createGameRuntime(seed = 20260730, options: GameRuntimeOpt
   await runtime.boot();
   return runtime;
 }
-
-/** @deprecated Use GameRuntime. Retained temporarily for downstream test compatibility. */
-export class GameSession extends GameRuntime {}

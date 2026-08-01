@@ -12,11 +12,7 @@ import { presentationGate } from './presentation-gate';
 
 export function canAcceptWorldInput(runtime: GameRuntimePort, heroAnimating: boolean): boolean {
   return (
-    runtime.inputMode === 'world' &&
-    runtime.runtimeStatus !== 'loading' &&
-    runtime.runtimeStatus !== 'error' &&
-    !heroAnimating &&
-    !presentationGate.busy
+    runtime.inputMode === 'world' && runtime.runtimeStatus !== 'loading' && !heroAnimating && !presentationGate.busy
   );
 }
 

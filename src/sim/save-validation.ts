@@ -79,7 +79,7 @@ export function booleanAt(value: unknown, path: string): boolean {
   return value;
 }
 
-export function finiteNumberAt(value: unknown, path: string): number {
+function finiteNumberAt(value: unknown, path: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fail(path, 'expected a finite number');
   return value;
 }
@@ -107,7 +107,7 @@ function enumAt<T extends string>(value: unknown, options: ReadonlySet<T>, path:
   return value as T;
 }
 
-export function positionAt(value: unknown, path: string): Position {
+function positionAt(value: unknown, path: string): Position {
   const record = recordAt(value, path);
   exactKeys(record, ['x', 'y'], [], path);
   return {
@@ -200,13 +200,18 @@ export function heroStateAt(value: unknown, path: string): HeroState {
   );
   const effects = record.activeAbilityEffects;
   if (!Array.isArray(effects)) fail(`${path}.activeAbilityEffects`, 'expected an array');
+  const health = finiteNumberAt(record.health, `${path}.health`);
+  const maxHealth = finiteNumberAt(record.maxHealth, `${path}.maxHealth`);
+  if (maxHealth <= 0) fail(`${path}.maxHealth`, 'expected a positive number');
+  if (health < 0) fail(`${path}.health`, 'expected a non-negative number');
+  if (health > maxHealth) fail(`${path}.health`, 'must not exceed maxHealth');
 
   return {
     heroId: stringAt(record.heroId, `${path}.heroId`),
     position: positionAt(record.position, `${path}.position`),
     boundPosition: positionAt(record.boundPosition, `${path}.boundPosition`),
-    health: finiteNumberAt(record.health, `${path}.health`),
-    maxHealth: finiteNumberAt(record.maxHealth, `${path}.maxHealth`),
+    health,
+    maxHealth,
     deaths: nonNegativeIntegerAt(record.deaths, `${path}.deaths`),
     inventory: numberRecordAt(record.inventory, `${path}.inventory`),
     ...(Object.hasOwn(record, 'block') ? { block: finiteNumberAt(record.block, `${path}.block`) } : {}),

@@ -46,10 +46,6 @@ export interface WorldSaveV2 {
   journal: WorldJournalState;
 }
 
-/** Current development save shape. Older development saves are intentionally
- * invalidated rather than migrated while the game is still changing quickly. */
-export type WorldSave = WorldSaveV2;
-
 function isGeneratedEntityId(id: string): boolean {
   return id.startsWith('generated-tree:');
 }

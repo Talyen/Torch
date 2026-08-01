@@ -1,6 +1,6 @@
 import type { EntityState, Footprint, Position } from './types';
 
-export const DEFAULT_FOOTPRINT: Footprint = { width: 1, height: 1 };
+const DEFAULT_FOOTPRINT: Footprint = { width: 1, height: 1 };
 
 export function entityFootprint(entity: EntityState): Footprint {
   return entity.footprint ?? DEFAULT_FOOTPRINT;

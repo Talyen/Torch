@@ -138,7 +138,23 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await page.getByTestId('key-binding-move-north-0').click();
   await page.keyboard.press('i');
   await expect(page.getByTestId('key-binding-move-north-0')).toHaveText('I');
+  const journalBinding = page.getByTestId('key-binding-journal-0');
+  await expect(page.getByText('Open Journal', { exact: true })).toBeVisible();
+  await expect(journalBinding).toBeVisible();
+  await expect(journalBinding).toHaveText('J');
+  await expect(journalBinding).toHaveAccessibleName('Open Journal key J');
+  await journalBinding.click();
+  await expect(journalBinding).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByText('Press a replacement key for Open Journal. Escape cancels.', { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press('l');
+  await expect(journalBinding).toHaveText('L');
+  await expect(journalBinding).toHaveAttribute('aria-pressed', 'false');
+  await expect(journalBinding).toHaveAccessibleName('Open Journal key L');
+  await expect(page.getByRole('status').filter({ hasText: 'Controls saved locally.' })).toBeVisible();
   await page.getByTestId('reset-key-bindings').click();
+  await expect(journalBinding).toHaveText('J');
   await page.getByTestId('settings-tab-audio').click();
   await expect(page.getByTestId('settings-master-volume')).toBeVisible();
   await expect(page.getByText('Changes apply immediately and are saved locally.')).toHaveCount(0);
@@ -331,7 +347,7 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('tool-slot-pickaxe')).toBeVisible();
   await expect(page.getByTestId('tool-slot-hammer')).toBeVisible();
   await expect(page.getByTestId('tool-slot-shovel')).toBeVisible();
-  await page.getByTestId('tool-slot-axe').click({ force: true });
+  await page.getByTestId('tool-slot-axe').click();
   await expect(page.getByTestId('tool-picker')).toBeVisible();
   await expect(page.getByTestId('tool-choice-iron-axe')).toBeVisible();
   await page.getByTestId('tool-choice-iron-axe').click();
@@ -369,10 +385,17 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await page.getByTestId('ability-card-basic').click();
   await expect(page.getByTestId('ability-picker')).toBeVisible();
   await expect(page.getByTestId('ability-picker-back')).toBeFocused();
-  await page.getByTestId('ability-choice-bash').click();
+  const bashChoice = page.getByTestId('ability-choice-bash');
+  await bashChoice.click();
   await expect(page.getByTestId('ability-detail')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Bash' })).toContainText('Deal 2 Stun damage.');
   await expect(page.getByTestId('ability-detail')).toContainText('No cooldown');
+  await expect(page.getByTestId('ability-detail-close')).toBeFocused();
+  await page.getByTestId('ability-detail-close').click();
+  await expect(page.getByTestId('ability-detail')).toHaveCount(0);
+  await expect(bashChoice).toBeFocused();
+  await bashChoice.click();
+  await expect(page.getByTestId('ability-detail')).toBeVisible();
   await page.getByTestId('ability-detail-select').click();
   await expect(page.getByTestId('ability-picker')).toHaveCount(0);
   await expect(page.getByTestId('ability-detail')).toHaveCount(0);
@@ -881,17 +904,31 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await expect(page.getByRole('button', { name: 'Sunder against Forest Slime' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Avatar against Forest Slime' })).toBeVisible();
 
-  const sunderCard = page.getByRole('button', { name: 'Sunder against Forest Slime' });
+  const sunderCard = page.getByTestId('context-action-card-context-ability-ability.sunder');
+  await expect(sunderCard).toHaveAccessibleName('Sunder against Forest Slime');
   await sunderCard.click();
   await expect(sunderCard).toHaveAttribute('data-card-animation-preset', 'trinket');
   await expect(sunderCard).toHaveAttribute('data-card-animation-phase', 'play');
-  await expect(sunderCard).toHaveCount(0, { timeout: 2500 });
+  await expect(sunderCard).toHaveAttribute('data-card-animation-phase', 'idle', { timeout: 2500 });
+  await expect(sunderCard).toBeVisible();
+  await expect(sunderCard).toBeDisabled();
+  await expect(sunderCard).toHaveAttribute('aria-disabled', 'true');
+  await expect(sunderCard).toHaveClass(/is-disabled/);
+  await expect(sunderCard).toHaveAccessibleName(/Sunder, Ready in \d+ actions\./);
+  await expect(sunderCard.locator('.context-action-card__cooldown')).toHaveText('3');
   const defaultAbilityCard = page.getByTestId('context-action-card-context-ability-ability.avatar');
   await expect(defaultAbilityCard).toBeVisible();
+  await expect(defaultAbilityCard).toBeEnabled();
+  await expect(defaultAbilityCard).toHaveAttribute('aria-disabled', 'false');
   await defaultAbilityCard.click();
   await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-phase', 'play');
   await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-preset', 'trinket');
-  await expect(defaultAbilityCard).toHaveCount(0, { timeout: 2500 });
+  await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-phase', 'idle', { timeout: 2500 });
+  await expect(defaultAbilityCard).toBeVisible();
+  await expect(defaultAbilityCard).toBeDisabled();
+  await expect(defaultAbilityCard).toHaveAttribute('aria-disabled', 'true');
+  await expect(defaultAbilityCard).toHaveClass(/is-disabled/);
+  await expect(defaultAbilityCard).toHaveAccessibleName(/Avatar, Ready in \d+ actions\./);
 });
 
 test('persists an action-boundary world and restores it after reload', async ({ page }) => {

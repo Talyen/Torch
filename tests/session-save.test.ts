@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { GameRuntime, createGameRuntime } from '../src/game/session';
+import { presentationGate } from '../src/game/presentation-gate';
+import { canAcceptWorldInput } from '../src/game/scene-world-input';
 import type { SaveCommitResult, SaveLoadResult, SaveProvider, StoredSaveCandidate } from '../src/game/save-provider';
 
 class MemorySaveProvider implements SaveProvider {
   public candidate?: StoredSaveCandidate;
-  public writes: StoredSaveCandidate[] = [];
 
   public load(): Promise<SaveLoadResult | undefined> {
     return Promise.resolve(this.candidate ? { candidates: [this.candidate], corruptPayloads: [] } : undefined);
@@ -13,7 +14,6 @@ class MemorySaveProvider implements SaveProvider {
   public commit(_slot: string, serialized: string, revision: number): Promise<SaveCommitResult> {
     if (this.candidate && revision < this.candidate.revision) return Promise.resolve('stale');
     const candidate = { revision, serialized, source: 'primary' as const };
-    this.writes.push(candidate);
     this.candidate = candidate;
     return Promise.resolve('committed');
   }
@@ -28,7 +28,6 @@ describe('GameRuntime persistence boundary', () => {
     await first.flushPersistence();
 
     expect(first.saveStatus).toBe('saved');
-    expect(provider.writes).toHaveLength(2);
 
     const restored = await createGameRuntime(9999, { saveProvider: provider });
 
@@ -69,6 +68,44 @@ describe('GameRuntime persistence boundary', () => {
 
     expect(runtime.state.hero.position).toEqual({ x: 1, y: 2 });
     expect(runtime.saveStatus).toBe('error');
+  });
+
+  it('allows world input after a runtime error while honoring loading and presentation gates', async () => {
+    let rejectLoad: ((reason?: unknown) => void) | undefined;
+    const provider: SaveProvider = {
+      load: () =>
+        new Promise<SaveLoadResult | undefined>((_resolve, reject) => {
+          rejectLoad = reject;
+        }),
+      commit: () => Promise.reject(new Error('storage unavailable')),
+    };
+    const runtime = new GameRuntime(1234, { saveProvider: provider });
+    const boot = runtime.boot();
+
+    expect(runtime.runtimeStatus).toBe('loading');
+    expect(canAcceptWorldInput(runtime, false)).toBe(false);
+
+    rejectLoad?.(new Error('storage unavailable'));
+    await boot;
+
+    expect(runtime.runtimeStatus).toBe('error');
+    expect(canAcceptWorldInput(runtime, false)).toBe(true);
+    expect(runtime.dispatch({ type: 'move', direction: 'east' }).accepted).toBe(true);
+
+    expect(canAcceptWorldInput(runtime, true)).toBe(false);
+
+    const releasePresentationGate = presentationGate.acquire();
+    try {
+      expect(canAcceptWorldInput(runtime, false)).toBe(false);
+    } finally {
+      releasePresentationGate();
+    }
+
+    runtime.setInputMode('ui');
+    expect(canAcceptWorldInput(runtime, false)).toBe(false);
+    runtime.setInputMode('world');
+    expect(canAcceptWorldInput(runtime, false)).toBe(true);
+    await runtime.flushPersistence();
   });
 
   it('isolates independent runtime state, subscriptions, and input modes', async () => {

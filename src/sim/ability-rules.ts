@@ -5,7 +5,7 @@ import type { AbilityEffectKind, AbilitySlotId } from './types';
  * concerns. Content definitions use the same stable ids to attach art and
  * descriptions in the React layer.
  */
-export interface AbilityActionDefinition {
+interface AbilityActionDefinition {
   id: string;
   name: string;
   slot: AbilitySlotId;
@@ -16,7 +16,7 @@ export interface AbilityActionDefinition {
   effectDuration: number;
 }
 
-export const abilityActionDefinitions: readonly AbilityActionDefinition[] = [
+const abilityActionDefinitions: readonly AbilityActionDefinition[] = [
   {
     id: 'ability.bash',
     name: 'Bash',

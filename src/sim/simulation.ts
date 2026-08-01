@@ -13,7 +13,7 @@ import { craftingContextForState, resolveCraft } from './crafting';
 import { applyLoadoutCommand } from './loadout';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
 import { advanceWorldJournal, claimWorldJournalReward, resolveWaypointPosition } from './journal';
-import { cloneGameState } from './state';
+import { cloneSerializable } from './state';
 import type { Command, CommandResult, Direction, GameState, Position, SimEvent, WaypointStatus } from './types';
 
 function directionToward(from: Position, to: Position): Direction | undefined {
@@ -144,7 +144,7 @@ function advanceTurn(
 }
 
 export function applyCommand(state: GameState, command: Command): CommandResult {
-  const next = cloneGameState(state);
+  const next = cloneSerializable(state);
   const events: SimEvent[] = [];
   const consumedAbilityIds = new Set<string>();
   const combatContext: CombatEventContext = { attackOrdinal: 0 };

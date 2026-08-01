@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactElement } from 'react';
+import type { CSSProperties, KeyboardEventHandler, ReactElement } from 'react';
 import {
   Axe,
   Accessibility,
@@ -1361,6 +1361,32 @@ function GearPanel({ state }: { state: GameState }): ReactElement {
   );
 }
 
+type SelectorBackButtonProps = {
+  ariaLabel: string;
+  testId: string;
+  onBack: () => void;
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
+};
+
+/**
+ * Selector screens share one icon-only back contract while keeping their
+ * headers, choice semantics, and empty states intentionally local.
+ */
+function SelectorBackButton({ ariaLabel, testId, onBack, onKeyDown }: SelectorBackButtonProps): ReactElement {
+  return (
+    <TorchButton
+      type="button"
+      className="selector-back"
+      aria-label={ariaLabel}
+      data-testid={testId}
+      onClick={onBack}
+      onKeyDown={onKeyDown}
+    >
+      <ArrowLeft aria-hidden="true" />
+    </TorchButton>
+  );
+}
+
 function EquipmentSelectorScreen({
   slot,
   items,
@@ -1383,15 +1409,7 @@ function EquipmentSelectorScreen({
       aria-label={`Choose ${slot?.label ?? 'Equipment'}`}
     >
       <header className="selector-header">
-        <TorchButton
-          type="button"
-          className="selector-back"
-          aria-label="Back to Equipment"
-          data-testid="equipment-picker-back"
-          onClick={onBack}
-        >
-          <ArrowLeft aria-hidden="true" />
-        </TorchButton>
+        <SelectorBackButton ariaLabel="Back to Equipment" testId="equipment-picker-back" onBack={onBack} />
         <h2>{slot?.label}</h2>
       </header>
       {selectedId ? (
@@ -1466,15 +1484,7 @@ function ToolSelectorScreen({
       aria-label={`Choose ${slot?.label ?? 'Tool'}`}
     >
       <header className="selector-header">
-        <TorchButton
-          type="button"
-          className="selector-back"
-          aria-label="Back to Equipment"
-          data-testid="tool-picker-back"
-          onClick={onBack}
-        >
-          <ArrowLeft aria-hidden="true" />
-        </TorchButton>
+        <SelectorBackButton ariaLabel="Back to Equipment" testId="tool-picker-back" onBack={onBack} />
         <h2>{slot?.label}</h2>
       </header>
       {selectedId ? (
@@ -1745,21 +1755,17 @@ function AbilitySelectorScreen({
           <p className="stats-kicker">Abilities → {slot?.label ?? 'Slot'}</p>
           <h2>Choose an ability</h2>
         </div>
-        <TorchButton
-          type="button"
-          className="selector-back"
-          aria-label="Back to Abilities"
-          data-testid="ability-picker-back"
-          onClick={onBack}
+        <SelectorBackButton
+          ariaLabel="Back to Abilities"
+          testId="ability-picker-back"
+          onBack={onBack}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
               onBack();
             }
           }}
-        >
-          <ArrowLeft aria-hidden="true" />
-        </TorchButton>
+        />
       </header>
       <div className="ability-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Ability'} choices`}>
         {choices.length > 0 ? (

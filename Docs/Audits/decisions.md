@@ -13,6 +13,4 @@ Dispositions: **keep** (intentional — do not re-flag), **rejected** (proposal 
 
 ## Ledger
 
-No Torch audit dispositions have been recorded yet. Add a row only when a
-candidate is intentionally kept, rejected, or deferred after a Torch audit
-pass; do not carry dispositions over from another project.
+| `src/game/presentation-settings.ts` individual preference keys/events | deferred — `TorchScene` still has live consumers and the settings tests preserve the existing preference migration path; re-audit after those consumers move to the combined settings event and the compatibility window closes |

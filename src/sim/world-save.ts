@@ -11,7 +11,7 @@ import {
   safeRecordKey,
   stringAt,
 } from './save-validation';
-import { cloneGameState, cloneSerializable } from './state';
+import { cloneSerializable } from './state';
 import type {
   EntityState,
   GameState,
@@ -376,5 +376,5 @@ export function restoreWorldSave(value: unknown): GameState {
   }
 
   materializeGeneratedTrees(state, state.hero.position);
-  return cloneGameState(state);
+  return cloneSerializable(state);
 }

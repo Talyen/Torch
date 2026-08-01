@@ -79,9 +79,9 @@ export function readPresentationSettings(): PresentationSettings {
     ...stored,
     // Keep the legacy individual preference keys authoritative when present so
     // existing saves migrate without a visible preference reset.
-    showGrid: readShowGridPreference(),
-    uiScale: readUiScalePreference(),
-    reduceMotion: readReduceMotionPreference(),
+    showGrid: readStoredShowGridPreference() ?? stored.showGrid ?? DEFAULT_PRESENTATION_SETTINGS.showGrid,
+    uiScale: readStoredUiScalePreference() ?? stored.uiScale ?? DEFAULT_PRESENTATION_SETTINGS.uiScale,
+    reduceMotion: readStoredReduceMotionPreference() ?? stored.reduceMotion ?? readReduceMotionPreference(),
   };
 }
 
@@ -122,14 +122,20 @@ export function resetPresentationSettings(): PresentationSettings {
 }
 
 export function readShowGridPreference(): boolean {
-  if (typeof window === 'undefined') return DEFAULT_SHOW_GRID;
+  return readStoredShowGridPreference() ?? DEFAULT_SHOW_GRID;
+}
+
+function readStoredShowGridPreference(): boolean | undefined {
+  if (typeof window === 'undefined') return undefined;
 
   try {
     const storedValue = window.localStorage.getItem(SHOW_GRID_STORAGE_KEY);
-    return storedValue === null ? DEFAULT_SHOW_GRID : storedValue === 'true';
+    if (storedValue === 'true') return true;
+    if (storedValue === 'false') return false;
   } catch {
-    return DEFAULT_SHOW_GRID;
+    return undefined;
   }
+  return undefined;
 }
 
 export function setShowGridPreference(enabled: boolean): void {
@@ -145,12 +151,16 @@ export function setShowGridPreference(enabled: boolean): void {
 }
 
 export function readUiScalePreference(): UiScale {
-  if (typeof window === 'undefined') return DEFAULT_UI_SCALE;
+  return readStoredUiScalePreference() ?? DEFAULT_UI_SCALE;
+}
+
+function readStoredUiScalePreference(): UiScale | undefined {
+  if (typeof window === 'undefined') return undefined;
   try {
     const value = window.localStorage.getItem(UI_SCALE_STORAGE_KEY);
-    return value === 'compact' || value === 'large' ? value : DEFAULT_UI_SCALE;
+    return value === 'compact' || value === 'large' ? value : undefined;
   } catch {
-    return DEFAULT_UI_SCALE;
+    return undefined;
   }
 }
 
@@ -171,18 +181,25 @@ export function setUiScalePreference(scale: UiScale): void {
 }
 
 export function readReduceMotionPreference(): boolean {
-  if (typeof window === 'undefined') return DEFAULT_REDUCE_MOTION;
+  const stored = readStoredReduceMotionPreference();
+  if (stored !== undefined) return stored;
+
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : DEFAULT_REDUCE_MOTION;
+}
+
+function readStoredReduceMotionPreference(): boolean | undefined {
+  if (typeof window === 'undefined') return undefined;
 
   try {
     const storedValue = window.localStorage.getItem(REDUCE_MOTION_STORAGE_KEY);
-    if (storedValue !== null) return storedValue === 'true';
+    if (storedValue === 'true') return true;
+    if (storedValue === 'false') return false;
   } catch {
     // Fall through to the platform preference when storage is unavailable.
   }
-
-  return typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : DEFAULT_REDUCE_MOTION;
+  return undefined;
 }
 
 export function applyReduceMotionPreference(enabled: boolean = readReduceMotionPreference()): void {

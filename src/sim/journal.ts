@@ -209,6 +209,12 @@ export function recordProfileObservation(
   return next;
 }
 
+export function markJournalEntrySeen(state: WorldJournalState, entryId: string): WorldJournalState;
+export function markJournalEntrySeen(state: ProfileJournalState, entryId: string): ProfileJournalState;
+export function markJournalEntrySeen(
+  state: WorldJournalState | ProfileJournalState,
+  entryId: string,
+): WorldJournalState | ProfileJournalState;
 export function markJournalEntrySeen(
   state: WorldJournalState | ProfileJournalState,
   entryId: string,

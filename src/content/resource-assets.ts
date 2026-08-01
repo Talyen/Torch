@@ -13,7 +13,11 @@ export const resourceAssets = {
 
 export type ResourceAssetKey = keyof typeof resourceAssets;
 
+function isResourceAssetKey(value: string): value is ResourceAssetKey {
+  return Object.hasOwn(resourceAssets, value);
+}
+
 export function resourceAssetForFeedback(iconKey: string | undefined): string | undefined {
-  const resource = iconKey?.replace('resource.homestead.', '') as ResourceAssetKey | undefined;
-  return resource && resource in resourceAssets ? resourceAssets[resource] : undefined;
+  const resource = iconKey?.startsWith('resource.homestead.') ? iconKey.slice('resource.homestead.'.length) : undefined;
+  return resource && isResourceAssetKey(resource) ? resourceAssets[resource] : undefined;
 }

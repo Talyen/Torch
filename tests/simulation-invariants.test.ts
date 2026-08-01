@@ -4,6 +4,7 @@ import { chunkForPosition, floorDiv, manhattanDistance, samePosition } from '../
 import {
   createInitialGameState,
   generatedResourceAt,
+  generatedTreeId,
   generateChunk,
   isTerrainWalkable,
   tileAt,
@@ -47,6 +48,24 @@ describe('deterministic simulation invariants', () => {
         expect(result.state.turn).toBe(state.turn);
       }
     }
+  });
+
+  it('does not materialize generated entities for a rejected movement', () => {
+    const state = createInitialGameState(1234);
+    // This fixed-seed tile is adjacent to a mountain while the active ring
+    // also contains a generated tree. The mountain rejection must not expose
+    // that unrelated tree in the returned state.
+    state.hero.position = { x: 18, y: -64 };
+    for (const id of Object.keys(state.entities)) {
+      if (id.startsWith('generated-tree:')) delete state.entities[id];
+    }
+    const before = structuredClone(state);
+
+    const result = applyCommand(state, { type: 'move', direction: 'north' });
+
+    expect(result.accepted).toBe(false);
+    expect(result.state).toEqual(before);
+    expect(result.state.entities[generatedTreeId({ x: 10, y: -72 })]).toBeUndefined();
   });
 
   it('preserves cardinal movement and distance invariants for accepted moves', () => {

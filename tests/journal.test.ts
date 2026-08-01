@@ -10,6 +10,7 @@ import {
   decodeProfileSave,
   encodeProfileSave,
   createWorldSave,
+  markJournalEntrySeen,
   restoreWorldSave,
 } from '../src/sim';
 
@@ -67,5 +68,13 @@ describe('Journal progression', () => {
     const decoded = decodeProfileSave(JSON.parse(encodeProfileSave(createProfileSave(progressed))));
     expect(decoded.journal).toEqual(progressed);
     expect(decoded.profileId).toBe('profile:primary');
+  });
+
+  it('preserves the journal state type when marking a profile entry seen', () => {
+    const profile = createInitialProfileJournalState();
+    const next = markJournalEntrySeen(profile, 'guide.first-move');
+
+    expect(next.entries['guide.first-move'].seen).toBe(true);
+    expect(next.unlocks).toEqual(profile.unlocks);
   });
 });

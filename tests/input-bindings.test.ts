@@ -4,8 +4,20 @@ import {
   directionForKey,
   keyMatchesBinding,
   normalizeBindingKey,
+  readKeyBindings,
+  setKeyBindings,
   updateKeyBinding,
 } from '../src/game/input-bindings';
+
+class ThrowingStorage {
+  getItem(): string {
+    throw new Error('storage unavailable');
+  }
+
+  setItem(): void {
+    throw new Error('storage unavailable');
+  }
+}
 
 describe('keyboard bindings', () => {
   it('normalizes browser key names while preserving arrow bindings', () => {
@@ -43,5 +55,24 @@ describe('keyboard bindings', () => {
     const next = updateKeyBinding(bindings, 'move-north', 0, 'm');
     expect(next['move-north']).toEqual(['m', 'ArrowUp']);
     expect(next.map).toEqual(['w']);
+  });
+
+  it('keeps a rebind usable in memory when browser storage is unavailable', () => {
+    const originalWindow = globalThis.window;
+    const eventTarget = new EventTarget();
+    globalThis.window = Object.assign(eventTarget, {
+      localStorage: new ThrowingStorage(),
+    }) as unknown as Window & typeof globalThis;
+
+    try {
+      const bindings = defaultKeyBindings();
+      bindings.map = ['x'];
+      setKeyBindings(bindings);
+
+      expect(readKeyBindings().map).toEqual(['x']);
+      expect(keyMatchesBinding(readKeyBindings(), 'map', 'x')).toBe(true);
+    } finally {
+      globalThis.window = originalWindow;
+    }
   });
 });

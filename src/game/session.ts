@@ -235,8 +235,7 @@ export class GameSession {
   }
 
   public markJournalEntrySeen(scope: 'profile' | 'world', entryId: string): void {
-    if (scope === 'profile')
-      this._profileJournal = markJournalEntrySeen(this._profileJournal, entryId) as ProfileJournalState;
+    if (scope === 'profile') this._profileJournal = markJournalEntrySeen(this._profileJournal, entryId);
     else this._state = { ...this._state, journal: markJournalEntrySeen(this._state.journal, entryId) };
     this.persistAtActionBoundary();
     this.notifyListeners();

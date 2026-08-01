@@ -197,8 +197,6 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
   } else if (command.type === 'claim-journal-reward') {
     accepted = claimWorldJournalReward(next, command.entryId, events);
   } else {
-    materializeGeneratedTrees(next, next.hero.position);
-
     switch (command.type) {
       case 'move': {
         const destination = addPosition(next.hero.position, directionDelta(command.direction));
@@ -209,6 +207,11 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
           events.push({ type: 'blocked', reason: `${terrainName} blocks the way.` });
           events.push({ type: 'message', text: `${terrainName} blocks the way.` });
         } else {
+          // Generated trees are part of movement validation because a tree in
+          // the destination tile resolves its default chop action. Delay the
+          // materialization until after terrain validation so a rejected move
+          // cannot expose or remove unrelated generated entities.
+          materializeGeneratedTrees(next, next.hero.position);
           const blocker = blockingEntityAt(next, destination);
 
           if (blocker) {
@@ -283,6 +286,10 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
   }
 
   if (accepted && !isStateOnlyCommand(command)) {
+    // Keep the active generated ring current only after the command has been
+    // accepted. Rejected interactions and actions must return the untouched
+    // cloned state, including its sparse generated-entity mutations.
+    materializeGeneratedTrees(next, next.hero.position);
     advanceTurn(next, events, consumedAbilityIds, combatContext);
     refreshWaypointStatus(next, events);
   }

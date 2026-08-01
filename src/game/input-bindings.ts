@@ -10,6 +10,11 @@ export const OPEN_MAP_EVENT = 'torch:open-map';
 export const OPEN_JOURNAL_EVENT = 'torch:open-journal';
 const KEY_BINDINGS_STORAGE_KEY = 'torch.key-bindings';
 
+// Keep the latest valid bindings in memory so a private or embedded browser
+// can still apply a rebind for the lifetime of the client when storage writes
+// are unavailable.
+let inMemoryKeyBindings: KeyBindings | undefined;
+
 export type KeyBindingAction =
   'move-north' | 'move-south' | 'move-west' | 'move-east' | 'wait' | 'gather' | 'map' | 'journal';
 
@@ -71,12 +76,19 @@ export function formatBindingKey(key: string): string {
 }
 
 export function readKeyBindings(): KeyBindings {
-  const fallback = defaultKeyBindings();
-  if (typeof window === 'undefined') return fallback;
+  const memoryFallback = inMemoryKeyBindings ? cloneKeyBindings(inMemoryKeyBindings) : defaultKeyBindings();
+  if (typeof window === 'undefined') return memoryFallback;
 
+  let stored: string | null;
   try {
-    const stored = window.localStorage.getItem(KEY_BINDINGS_STORAGE_KEY);
-    if (!stored) return fallback;
+    stored = window.localStorage.getItem(KEY_BINDINGS_STORAGE_KEY);
+  } catch {
+    return memoryFallback;
+  }
+  if (!stored) return memoryFallback;
+
+  const fallback = defaultKeyBindings();
+  try {
     const parsed = JSON.parse(stored) as Partial<Record<KeyBindingAction, unknown>>;
     for (const definition of keyBindingDefinitions) {
       const keys = parsed[definition.id];
@@ -88,20 +100,33 @@ export function readKeyBindings(): KeyBindings {
       }
     }
   } catch {
-    return fallback;
+    return defaultKeyBindings();
   }
+  inMemoryKeyBindings = cloneKeyBindings(fallback);
   return fallback;
 }
 
 export function setKeyBindings(bindings: KeyBindings): void {
   if (typeof window === 'undefined') return;
 
+  const next = cloneKeyBindings(bindings);
+  inMemoryKeyBindings = next;
+
   try {
-    window.localStorage.setItem(KEY_BINDINGS_STORAGE_KEY, JSON.stringify(bindings));
+    window.localStorage.setItem(KEY_BINDINGS_STORAGE_KEY, JSON.stringify(next));
   } catch {
     // Embedded/private browser contexts may not expose local storage.
   }
-  window.dispatchEvent(new CustomEvent(KEY_BINDINGS_EVENT, { detail: bindings }));
+  window.dispatchEvent(new CustomEvent(KEY_BINDINGS_EVENT, { detail: next }));
+}
+
+function cloneKeyBindings(bindings: KeyBindings): KeyBindings {
+  return Object.fromEntries(
+    keyBindingDefinitions.map((definition) => [
+      definition.id,
+      [...(bindings[definition.id] ?? definition.defaultKeys)],
+    ]),
+  ) as KeyBindings;
 }
 
 export function updateKeyBinding(

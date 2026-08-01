@@ -58,6 +58,32 @@ describe('presentation settings', () => {
     });
   });
 
+  it('honors canonical settings when legacy preference keys are absent', () => {
+    storage.setItem(
+      'torch.presentation-settings',
+      JSON.stringify({ showGrid: false, uiScale: 'large', reduceMotion: true }),
+    );
+
+    expect(readPresentationSettings()).toMatchObject({ showGrid: false, uiScale: 'large', reduceMotion: true });
+  });
+
+  it('falls back to the declared defaults for unknown stored preference values', () => {
+    storage.setItem('torch.show-grid', 'sometimes');
+    storage.setItem('torch.reduce-motion', 'sometimes');
+
+    expect(readPresentationSettings().showGrid).toBe(DEFAULT_PRESENTATION_SETTINGS.showGrid);
+    expect(readPresentationSettings().reduceMotion).toBe(DEFAULT_PRESENTATION_SETTINGS.reduceMotion);
+  });
+
+  it('uses the platform motion preference when the stored value is unknown', () => {
+    globalThis.window = Object.assign(window, {
+      matchMedia: () => ({ matches: true }),
+    }) as unknown as Window & typeof globalThis;
+    storage.setItem('torch.reduce-motion', 'sometimes');
+
+    expect(readPresentationSettings().reduceMotion).toBe(true);
+  });
+
   it('persists a changed setting and keeps legacy preference consumers in sync', () => {
     const next = setPresentationSetting('showGrid', false);
 

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('keeps canonical Gear readable across supported viewports', async ({ page }) => {
   for (const viewport of [

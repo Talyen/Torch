@@ -29,9 +29,13 @@ describe('inventory pagination', () => {
     const firstPage = inventoryPageItems(items, 0, 3);
     const secondPage = inventoryPageItems(items, 1, 3);
 
-    expect(firstPage).toHaveLength(3);
-    expect(secondPage).toHaveLength(3);
-    expect(inventoryPageItems(items, 2, 3)).toHaveLength(3);
+    expect(firstPage.map((item) => item.id)).toEqual(['iron-sword', 'steel-dagger', 'wood']);
+    expect(secondPage.map((item) => item.id)).toEqual(['copper-ore', 'silver-ore', 'bark']);
+    expect(inventoryPageItems(items, 2, 3).map((item) => item.id)).toEqual([
+      'healing-potion',
+      'antidote',
+      'trail-ration',
+    ]);
     expect(items[0]?.id).toBe(inventoryItems[0]?.id);
     expect(inventoryPageCount(items.length, 3)).toBe(5);
   });

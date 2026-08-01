@@ -152,6 +152,25 @@ const SCREEN_TRIGGER_TEST_IDS: Partial<Record<Screen, string>> = {
   menu: 'menu-button',
 };
 
+function menuScreenFocusSelector(screen: Screen): string | undefined {
+  switch (screen) {
+    case 'inventory':
+      return '[data-testid="inventory-filter"]';
+    case 'gear':
+      return '[data-testid="equipment-slot-helm"]';
+    case 'crafting':
+      return '[data-testid="crafting-search"]';
+    case 'abilities':
+      return '[data-testid="ability-card-basic"]';
+    case 'journal':
+      return '[data-testid="journal-tab-overview"]';
+    case 'settings':
+      return '[data-testid="settings-tab-display"]';
+    default:
+      return undefined;
+  }
+}
+
 const sortOptions = [
   { value: 'category', label: 'Default' },
   { value: 'name', label: 'Name' },
@@ -204,6 +223,10 @@ export function MenuOverlay(): ReactElement {
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const returnFocusTestIdRef = useRef<string | null>(null);
   const previousOpenRef = useRef(false);
+  const previousScreenRef = useRef<Screen>(screen);
+  const hasOpenedMenuRef = useRef(false);
+  const focusRestoreFramesRef = useRef<number[]>([]);
+  const focusRestoreTimersRef = useRef<number[]>([]);
   const gameplayHudRef = useRef<HTMLDivElement>(null);
   const hudRailRef = useRef<HTMLDivElement>(null);
 
@@ -242,10 +265,14 @@ export function MenuOverlay(): ReactElement {
 
   useEffect(() => {
     const handleOpenMap = (): void => {
+      returnFocusTestIdRef.current = 'menu-button';
+      returnFocusRef.current = document.querySelector<HTMLElement>('[data-testid="menu-button"]');
       setScreen('map');
       setOpen(true);
     };
     const handleOpenJournal = (): void => {
+      returnFocusTestIdRef.current = 'menu-button';
+      returnFocusRef.current = document.querySelector<HTMLElement>('[data-testid="menu-button"]');
       gameSession.recordProfileObservation('open-journal');
       setScreen('journal');
       setOpen(true);
@@ -259,6 +286,7 @@ export function MenuOverlay(): ReactElement {
   }, []);
 
   const openMenu = (nextScreen: Screen = 'menu', invoker?: HTMLElement | null): void => {
+    cancelMenuFocusRestore();
     const triggerTestId = invoker?.dataset.testid ?? SCREEN_TRIGGER_TEST_IDS[nextScreen] ?? null;
     returnFocusTestIdRef.current = triggerTestId;
     returnFocusRef.current =
@@ -273,7 +301,7 @@ export function MenuOverlay(): ReactElement {
 
   const restoreMenuFocus = useCallback((): void => {
     const target =
-      returnFocusRef.current ??
+      (returnFocusRef.current && document.contains(returnFocusRef.current) ? returnFocusRef.current : null) ??
       (returnFocusTestIdRef.current
         ? document.querySelector<HTMLElement>(`[data-testid="${returnFocusTestIdRef.current}"]`)
         : null);
@@ -281,17 +309,36 @@ export function MenuOverlay(): ReactElement {
     target.focus({ preventScroll: true });
   }, []);
 
+  const cancelMenuFocusRestore = useCallback((): void => {
+    focusRestoreFramesRef.current.forEach((frame) => window.cancelAnimationFrame(frame));
+    focusRestoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    focusRestoreFramesRef.current = [];
+    focusRestoreTimersRef.current = [];
+  }, []);
+
   const scheduleMenuFocusRestore = useCallback((): void => {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
+    cancelMenuFocusRestore();
+    const firstFrame = window.requestAnimationFrame(() => {
+      const secondFrame = window.requestAnimationFrame(() => {
+        focusRestoreFramesRef.current = focusRestoreFramesRef.current.filter((frame) => frame !== secondFrame);
+        if (document.body.dataset.menuOpen === 'true') return;
         restoreMenuFocus();
-        window.setTimeout(restoreMenuFocus, 120);
-        window.setTimeout(restoreMenuFocus, 300);
+        focusRestoreTimersRef.current.push(
+          window.setTimeout(() => {
+            if (document.body.dataset.menuOpen !== 'true') restoreMenuFocus();
+          }, 120),
+          window.setTimeout(() => {
+            if (document.body.dataset.menuOpen !== 'true') restoreMenuFocus();
+          }, 300),
+        );
       });
+      focusRestoreFramesRef.current.push(secondFrame);
     });
-  }, [restoreMenuFocus]);
+    focusRestoreFramesRef.current.push(firstFrame);
+  }, [cancelMenuFocusRestore, restoreMenuFocus]);
 
   const handleMenuOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) cancelMenuFocusRestore();
     setOpen(nextOpen);
     if (!nextOpen) scheduleMenuFocusRestore();
   };
@@ -300,6 +347,25 @@ export function MenuOverlay(): ReactElement {
     if (previousOpenRef.current && !open) scheduleMenuFocusRestore();
     previousOpenRef.current = open;
   }, [open, scheduleMenuFocusRestore]);
+
+  useEffect(() => {
+    const previousScreen = previousScreenRef.current;
+    previousScreenRef.current = screen;
+    if (!open || !hasOpenedMenuRef.current || previousScreen === screen || screen === 'menu') {
+      if (open) hasOpenedMenuRef.current = true;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (document.body.dataset.menuOpen !== 'true') return;
+      const selector = menuScreenFocusSelector(screen);
+      const target = (selector ? document.querySelector<HTMLElement>(selector) : null) ?? closeButtonRef.current;
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, screen]);
+
+  useEffect(() => cancelMenuFocusRestore, [cancelMenuFocusRestore]);
 
   useEffect(() => {
     const host = gameplayHudRef.current;
@@ -438,14 +504,6 @@ export function MenuOverlay(): ReactElement {
                         data-testid="close-menu"
                       />
                     }
-                    onPointerDown={() => {
-                      const triggerTestId = returnFocusTestIdRef.current;
-                      if (triggerTestId) {
-                        window.setTimeout(() => {
-                          document.querySelector<HTMLElement>(`[data-testid="${triggerTestId}"]`)?.focus();
-                        }, 180);
-                      }
-                    }}
                     onClick={scheduleMenuFocusRestore}
                   >
                     <CloseIcon aria-hidden="true" />
@@ -575,6 +633,8 @@ function InventoryItemsPanel({ items }: { items: InventoryItemDefinition[] }): R
   const inventoryScreenRef = useRef<HTMLDivElement>(null);
   const measuredInventorySize = useElementSize(inventoryScreenRef);
   const itemButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const detailFocusFrameRef = useRef<number | undefined>(undefined);
+  const detailFocusTimerRef = useRef<number | undefined>(undefined);
 
   const viewport =
     measuredInventorySize.width > 0 && measuredInventorySize.height > 0
@@ -603,6 +663,26 @@ function InventoryItemsPanel({ items }: { items: InventoryItemDefinition[] }): R
       setDetailOpen(false);
     }
   }, [pageIndex, safePageIndex, selectedId, selectedItemFromFilteredItems]);
+
+  useEffect(
+    () => () => {
+      if (detailFocusFrameRef.current !== undefined) window.cancelAnimationFrame(detailFocusFrameRef.current);
+      if (detailFocusTimerRef.current !== undefined) window.clearTimeout(detailFocusTimerRef.current);
+    },
+    [],
+  );
+
+  const closeCompactDetail = (): void => {
+    setDetailOpen(false);
+    if (!selectedId) return;
+    if (detailFocusFrameRef.current !== undefined) window.cancelAnimationFrame(detailFocusFrameRef.current);
+    if (detailFocusTimerRef.current !== undefined) window.clearTimeout(detailFocusTimerRef.current);
+    detailFocusFrameRef.current = window.requestAnimationFrame(() => {
+      detailFocusTimerRef.current = window.setTimeout(() => {
+        itemButtonRefs.current[selectedId]?.focus({ preventScroll: true });
+      }, 0);
+    });
+  };
 
   const selectCategory = (nextCategory: InventoryCategory): void => {
     setCategory((currentCategory) => (currentCategory === nextCategory ? undefined : nextCategory));
@@ -844,7 +924,7 @@ function InventoryItemsPanel({ items }: { items: InventoryItemDefinition[] }): R
                 className="inventory-detail-back"
                 type="button"
                 data-testid="inventory-detail-back"
-                onClick={() => setDetailOpen(false)}
+                onClick={closeCompactDetail}
               >
                 <ArrowLeft aria-hidden="true" />
                 Back to items
@@ -1084,7 +1164,41 @@ function GearPanel({ state }: { state: GameState }): ReactElement {
   const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlotId>();
   const [selectedToolSlot, setSelectedToolSlot] = useState<ToolSlotId>();
   const [activeTab, setActiveTab] = useState<GearTab>('equipment');
+  const previousEquipmentSlotRef = useRef<EquipmentSlotId | undefined>(undefined);
+  const previousToolSlotRef = useRef<ToolSlotId | undefined>(undefined);
+  const selectorFocusFrameRef = useRef<number | undefined>(undefined);
+  const selectorFocusTimerRef = useRef<number | undefined>(undefined);
   const ownedItems = inventoryItemsForState(state);
+
+  useEffect(() => {
+    const previousEquipmentSlot = previousEquipmentSlotRef.current;
+    const previousToolSlot = previousToolSlotRef.current;
+    previousEquipmentSlotRef.current = activeEquipmentSlot;
+    previousToolSlotRef.current = selectedToolSlot;
+    if (!previousEquipmentSlot && !previousToolSlot && !activeEquipmentSlot && !selectedToolSlot) return;
+
+    if (selectorFocusFrameRef.current !== undefined) window.cancelAnimationFrame(selectorFocusFrameRef.current);
+    if (selectorFocusTimerRef.current !== undefined) window.clearTimeout(selectorFocusTimerRef.current);
+    selectorFocusFrameRef.current = window.requestAnimationFrame(() => {
+      selectorFocusTimerRef.current = window.setTimeout(() => {
+        const selector = activeEquipmentSlot
+          ? '[data-testid="equipment-picker-back"]'
+          : selectedToolSlot
+            ? '[data-testid="tool-picker-back"]'
+            : previousEquipmentSlot
+              ? `[data-testid="equipment-slot-${previousEquipmentSlot}"]`
+              : previousToolSlot
+                ? `[data-testid="tool-slot-${previousToolSlot}"]`
+                : undefined;
+        if (selector) document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+      }, 0);
+    });
+
+    return () => {
+      if (selectorFocusFrameRef.current !== undefined) window.cancelAnimationFrame(selectorFocusFrameRef.current);
+      if (selectorFocusTimerRef.current !== undefined) window.clearTimeout(selectorFocusTimerRef.current);
+    };
+  }, [activeEquipmentSlot, selectedToolSlot]);
 
   if (activeEquipmentSlot) {
     const activeSlot = equipmentSlots.find((slot) => slot.id === activeEquipmentSlot);
@@ -1410,6 +1524,9 @@ function AbilitiesScreen(): ReactElement {
   const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({
     ...gameSession.state.hero.equippedAbilities,
   });
+  const previousPickerSlotRef = useRef<AbilitySlotId | undefined>(undefined);
+  const abilityFocusFrameRef = useRef<number | undefined>(undefined);
+  const abilityFocusTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(
     () =>
@@ -1418,6 +1535,31 @@ function AbilitiesScreen(): ReactElement {
       }),
     [],
   );
+
+  useEffect(() => {
+    const previousPickerSlot = previousPickerSlotRef.current;
+    previousPickerSlotRef.current = pickerSlot;
+    if (!previousPickerSlot && !pickerSlot) return;
+    if (detailAbility) return;
+
+    if (abilityFocusFrameRef.current !== undefined) window.cancelAnimationFrame(abilityFocusFrameRef.current);
+    if (abilityFocusTimerRef.current !== undefined) window.clearTimeout(abilityFocusTimerRef.current);
+    abilityFocusFrameRef.current = window.requestAnimationFrame(() => {
+      abilityFocusTimerRef.current = window.setTimeout(() => {
+        const selector = pickerSlot
+          ? '[data-testid="ability-picker-back"]'
+          : previousPickerSlot
+            ? `[data-testid="ability-card-${previousPickerSlot}"]`
+            : undefined;
+        if (selector) document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+      }, 0);
+    });
+
+    return () => {
+      if (abilityFocusFrameRef.current !== undefined) window.cancelAnimationFrame(abilityFocusFrameRef.current);
+      if (abilityFocusTimerRef.current !== undefined) window.clearTimeout(abilityFocusTimerRef.current);
+    };
+  }, [detailAbility, pickerSlot]);
 
   const selectAbility = (slotId: AbilitySlotId, abilityId: string): void => {
     gameSession.equipAbility(slotId, abilityId);
@@ -1687,6 +1829,7 @@ function SettingsScreen(): ReactElement {
   const [fullscreen, setFullscreen] = useState(
     () => typeof document !== 'undefined' && Boolean(document.fullscreenElement),
   );
+  const [fullscreenBusy, setFullscreenBusy] = useState(false);
   const [status, setStatus] = useState('Changes save locally; connected adapters update immediately.');
   const [confirmReset, setConfirmReset] = useState(false);
   const optionsBodyRef = useRef<HTMLDivElement>(null);
@@ -1715,6 +1858,9 @@ function SettingsScreen(): ReactElement {
   };
 
   const toggleFullscreen = async (): Promise<void> => {
+    if (fullscreenBusy) return;
+    setFullscreenBusy(true);
+    setStatus('Updating display mode…');
     try {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
@@ -1725,6 +1871,8 @@ function SettingsScreen(): ReactElement {
     } catch {
       setFullscreen(Boolean(document.fullscreenElement));
       setStatus('Fullscreen is unavailable in this browser window.');
+    } finally {
+      setFullscreenBusy(false);
     }
   };
 
@@ -1782,6 +1930,8 @@ function SettingsScreen(): ReactElement {
                   label="Fullscreen"
                   value={fullscreen}
                   onChange={toggleFullscreen}
+                  disabled={fullscreenBusy}
+                  busy={fullscreenBusy}
                   testId="settings-fullscreen"
                 />
               </SettingRow>
@@ -2004,11 +2154,15 @@ function SettingSwitch({
   value,
   onChange,
   testId,
+  disabled = false,
+  busy = false,
 }: {
   label: string;
   value: boolean;
   onChange: () => void;
   testId?: string;
+  disabled?: boolean;
+  busy?: boolean;
 }): ReactElement {
   return (
     <TorchButton
@@ -2019,6 +2173,8 @@ function SettingSwitch({
       role="switch"
       aria-label={label}
       aria-checked={value}
+      aria-busy={busy || undefined}
+      disabled={disabled}
       data-testid={testId}
       onClick={onChange}
     >

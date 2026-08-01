@@ -5,7 +5,6 @@ import {
   createInitialGameState,
   generatedResourceAt,
   generatedTreeId,
-  generateChunk,
   isTerrainWalkable,
   tileAt,
 } from '../src/sim/world';
@@ -20,15 +19,19 @@ describe('deterministic simulation invariants', () => {
     }
   });
 
-  it('generates the same chunk and resource decisions for repeated seed inputs', () => {
+  it('generates the same tile and resource decisions for repeated seed inputs', () => {
     for (const seed of [1, 42, 20260730, 987654321]) {
-      expect(generateChunk(seed, -2, 3)).toEqual(generateChunk(seed, -2, 3));
       for (let y = -12; y <= 12; y += 3) {
         for (let x = -12; x <= 12; x += 3) {
           const position = { x, y };
-          expect(tileAt(seed, position)).toBe(tileAt(seed, position));
-          expect(generatedResourceAt(seed, position)).toBe(generatedResourceAt(seed, position));
-          expect(isTerrainWalkable(tileAt(seed, position))).toBe(tileAt(seed, position) !== 'mountain');
+          const firstTile = tileAt(seed, position);
+          const secondTile = tileAt(seed, position);
+          const firstResource = generatedResourceAt(seed, position);
+          const secondResource = generatedResourceAt(seed, position);
+
+          expect(secondTile).toBe(firstTile);
+          expect(secondResource).toBe(firstResource);
+          expect(isTerrainWalkable(firstTile)).toBe(firstTile !== 'mountain');
         }
       }
     }

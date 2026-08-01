@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   ArrowLeft,
@@ -54,6 +54,8 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
   const [selectedId, setSelectedId] = useState<string>();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const detailFocusFrameRef = useRef<number | undefined>(undefined);
+  const backFocusFrameRef = useRef<number | undefined>(undefined);
 
   const allDefinitions = useMemo(
     () => [...journalEntryDefinitionsForState('world', state), ...journalEntryDefinitionsForState('profile', profile)],
@@ -89,8 +91,21 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
 
   useEffect(() => {
     if (!mobileDetailOpen) return;
-    window.requestAnimationFrame(() => document.getElementById('journal-detail-title')?.focus({ preventScroll: true }));
+    detailFocusFrameRef.current = window.requestAnimationFrame(() =>
+      document.getElementById('journal-detail-title')?.focus({ preventScroll: true }),
+    );
+    return () => {
+      if (detailFocusFrameRef.current !== undefined) window.cancelAnimationFrame(detailFocusFrameRef.current);
+    };
   }, [mobileDetailOpen, selectedEntryId]);
+
+  useEffect(
+    () => () => {
+      if (detailFocusFrameRef.current !== undefined) window.cancelAnimationFrame(detailFocusFrameRef.current);
+      if (backFocusFrameRef.current !== undefined) window.cancelAnimationFrame(backFocusFrameRef.current);
+    },
+    [],
+  );
 
   const runtimeFor = (definition: JournalEntryDefinition): JournalEntryRuntime =>
     definition.scope === 'world' ? state.journal.entries[definition.id] : profile.entries[definition.id];
@@ -205,12 +220,11 @@ export function JournalScreen({ state, profile, onOpenMap }: JournalScreenProps)
                   runtime={runtimeFor(selectedDefinition)}
                   onBack={() => {
                     setMobileDetailOpen(false);
-                    window.requestAnimationFrame(() =>
+                    if (backFocusFrameRef.current !== undefined) window.cancelAnimationFrame(backFocusFrameRef.current);
+                    backFocusFrameRef.current = window.requestAnimationFrame(() =>
                       document
                         .querySelector<HTMLElement>(`[data-testid="journal-entry-${selectedDefinition.id}"]`)
-                        ?.focus({
-                          preventScroll: true,
-                        }),
+                        ?.focus({ preventScroll: true }),
                     );
                   }}
                   onTrack={() => trackEntry(selectedDefinition)}

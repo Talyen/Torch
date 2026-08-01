@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { GameSession } from '../src/game/session';
+import type { ActionBatch } from '../src/game/session';
 
 describe('GameSession action batches', () => {
   it('does not replay a prior event array and emits one batch per dispatch', () => {
     const session = new GameSession(1234);
-    const batches: number[] = [];
-    const unsubscribe = session.subscribeActionBatches((batch) => batches.push(batch.batchId));
+    const batches: Array<Pick<ActionBatch, 'batchId' | 'events'>> = [];
+    const unsubscribe = session.subscribeActionBatches((batch) => batches.push(batch));
 
     session.wait();
     session.wait();
     unsubscribe();
 
-    expect(batches).toEqual([1, 2]);
+    expect(batches.map((batch) => batch.batchId)).toEqual([1, 2]);
+    expect(
+      batches.map((batch) =>
+        batch.events
+          .filter((event): event is Extract<typeof event, { type: 'turn-advanced' }> => event.type === 'turn-advanced')
+          .map((event) => event.turn),
+      ),
+    ).toEqual([[1], [2]]);
   });
 
   it('keeps the previous state separate from the resolved next state', () => {

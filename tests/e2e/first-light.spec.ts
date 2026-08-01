@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('loads the Torch vertical slice with a minimal menu overlay', async ({ page }) => {
   await page.goto('/');
@@ -321,8 +321,10 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await page.getByTestId('equipment-slot-main-hand').click();
   await expect(page.getByTestId('equipment-picker')).toBeVisible();
   await expect(page.getByTestId('equipment-picker-back')).toBeVisible();
+  await expect(page.getByTestId('equipment-picker-back')).toBeFocused();
   await page.getByTestId('equipment-choice-iron-sword').click();
   await expect(page.getByTestId('equipment-picker')).toHaveCount(0);
+  await expect(page.getByTestId('equipment-slot-main-hand')).toBeFocused();
   await expect(page.getByTestId('equipment-slot-main-hand')).toHaveAttribute('aria-label', 'Main Hand: Iron Sword');
   await page.getByTestId('tools-tab').click();
   await expect(page.getByTestId('tool-slot-axe')).toBeVisible();
@@ -366,6 +368,7 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('ability-inspector')).toHaveCount(0);
   await page.getByTestId('ability-card-basic').click();
   await expect(page.getByTestId('ability-picker')).toBeVisible();
+  await expect(page.getByTestId('ability-picker-back')).toBeFocused();
   await page.getByTestId('ability-choice-bash').click();
   await expect(page.getByTestId('ability-detail')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Bash' })).toContainText('Deal 2 Stun damage.');
@@ -513,6 +516,7 @@ test('keeps Inventory contained without scroll regions across supported viewport
       expect(detailGeometry.panelBottom).toBeLessThanOrEqual(viewport.height + 1);
       await page.getByTestId('inventory-detail-back').click();
       await expect(page.locator('.inventory-screen')).not.toHaveClass(/is-detail-open/);
+      await expect(page.locator('[data-testid^="inventory-item-"]').first()).toBeFocused();
     }
 
     await page.getByTestId('close-menu').click();
@@ -662,6 +666,7 @@ test('keeps the Ability workspace readable across supported viewports', async ({
   await page.getByTestId('hud-abilities-button').click();
   await page.getByTestId('ability-slot-skill').locator('.ability-art-button').click();
   await expect(page.getByTestId('ability-picker')).toBeVisible();
+  await expect(page.getByTestId('ability-picker-back')).toBeFocused();
   await page.getByTestId('ability-picker-back').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('ability-picker')).toHaveCount(0);
@@ -757,6 +762,7 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/');
   await expect(page.getByTestId('hud-hero-button')).toBeVisible();
+  await page.waitForTimeout(400);
   const cardPlayLab = page.getByTestId('card-play-lab');
   const hasCardPlayLab = (await cardPlayLab.count()) > 0;
   if (hasCardPlayLab) {
@@ -789,12 +795,11 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
     expect(labPlacement.labRight).toBeLessThanOrEqual(labPlacement.viewportWidth);
     expect(labPlacement.labBottom).toBeLessThanOrEqual(labPlacement.viewportHeight);
   }
-  await page.waitForTimeout(400);
-
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(300);
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('context-action-card-context-entity-resource-tree-chop')).toBeVisible();
+  const chopCard = page.getByTestId('context-action-card-context-entity-resource-tree-chop');
+  await expect(chopCard).toBeVisible();
   await expect(page.getByRole('button', { name: 'Chop at Old Pine' })).toBeVisible();
 
   const handLayout = await page.evaluate(() => {
@@ -815,11 +820,10 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   expect(handLayout.handBottom).toBeGreaterThan(handLayout.railTop);
   expect(handLayout.railZ).toBeGreaterThan(handLayout.handZ);
 
-  const chopCard = page.getByTestId('context-action-card-context-entity-resource-tree-chop');
   // Let the card enter its ready state before activating it directly. This
   // keeps the assertion focused on the action-hand feedback contract rather
   // than keyboard repeat timing.
-  await page.waitForTimeout(350);
+  await expect(chopCard).toHaveAttribute('data-card-animation-phase', 'idle');
   await chopCard.evaluate((element) => {
     (window as Window & { __torchCardNode?: HTMLElement }).__torchCardNode = element as HTMLElement;
   });
@@ -882,8 +886,6 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await expect(sunderCard).toHaveAttribute('data-card-animation-preset', 'trinket');
   await expect(sunderCard).toHaveAttribute('data-card-animation-phase', 'play');
   await expect(sunderCard).toHaveCount(0, { timeout: 2500 });
-  await page.waitForTimeout(1100);
-
   const defaultAbilityCard = page.getByTestId('context-action-card-context-ability-ability.avatar');
   await expect(defaultAbilityCard).toBeVisible();
   await defaultAbilityCard.click();

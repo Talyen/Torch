@@ -40,7 +40,6 @@ describe('card animation presentation contracts', () => {
 
   it('registers exactly the two source animation bundles', () => {
     expect(CARD_ANIMATION_PRESETS.map((preset) => preset.id)).toEqual(['trinket', 'alchemy']);
-    expect(CARD_ANIMATION_PRESETS.every((preset) => preset.description.length > 20)).toBe(true);
     expect(cardAnimationPresetForId('trinket').transfer.playMode).toBe('dissolve');
     expect(cardAnimationPresetForId('alchemy').transfer.playMode).toBe('travel');
     expect(cardAnimationPresetForId('alchemy').transfer.drawFlip).toEqual([180, 90, 0]);

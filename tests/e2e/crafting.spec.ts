@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('gathers a resource, crafts a batch, and reflects the result in Inventory', async ({ page }) => {
   await page.goto('/');
@@ -11,8 +11,10 @@ test('gathers a resource, crafts a batch, and reflects the result in Inventory',
   await page.waitForTimeout(350);
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(350);
+  const chopCard = page.getByTestId('context-action-card-context-entity-resource-tree-chop');
+  await expect(chopCard).toBeVisible();
   await page.keyboard.press('g');
-  await page.waitForTimeout(350);
+  await expect(chopCard).toHaveAttribute('data-card-play-state', 'playing');
 
   await page.getByTestId('menu-button').click();
   await page.getByTestId('menu-crafting').click();

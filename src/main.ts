@@ -46,4 +46,5 @@ const game = new Phaser.Game({
 
 if (import.meta.env.DEV) {
   devFrameMonitor.start(game);
+  game.events.once(Phaser.Core.Events.DESTROY, () => devFrameMonitor.stop());
 }

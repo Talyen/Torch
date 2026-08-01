@@ -1,3 +1,6 @@
+import { itemDefinitions } from './items';
+import type { GameState } from '../sim';
+
 export const inventoryCategories = [
   { id: 'equipment', label: 'Equipment', icon: 'sword' },
   { id: 'resources', label: 'Resources', icon: 'tree' },
@@ -124,3 +127,35 @@ export const inventoryItems: InventoryItemDefinition[] = [
     icon: 'ellipsis',
   },
 ];
+
+const categoryForItem = (category: (typeof itemDefinitions)[number]['category']): InventoryCategory => {
+  if (category === 'consumable') return 'consumables';
+  if (category === 'equipment') return 'equipment';
+  if (category === 'misc') return 'misc';
+  return 'resources';
+};
+
+/**
+ * Projects the simulation's canonical inventory into the display model used by
+ * the Inventory screen. Fixture-only definitions remain visible while the
+ * equipment prototype is not yet simulation-backed, but their quantities are
+ * never treated as authoritative.
+ */
+export function inventoryItemsForState(state: Pick<GameState, 'hero'>): InventoryItemDefinition[] {
+  const fixtureIds = new Set(inventoryItems.map((item) => item.id));
+  const projected = itemDefinitions
+    .filter((item) => (state.hero.inventory[item.id] ?? 0) > 0 || fixtureIds.has(item.id))
+    .map((item) => ({
+      id: item.id,
+      category: categoryForItem(item.category),
+      name: item.name,
+      quantity: state.hero.inventory[item.id] ?? 0,
+      description: item.description,
+      icon: item.icon,
+    }));
+  const projectedIds = new Set(projected.map((item) => item.id));
+  const fixtureOnly = inventoryItems
+    .filter((item) => item.id !== 'copper-ore' && !projectedIds.has(item.id))
+    .map((item) => ({ ...item, quantity: state.hero.inventory[item.id] ?? 0 }));
+  return [...projected, ...fixtureOnly];
+}

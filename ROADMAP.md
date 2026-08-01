@@ -51,8 +51,8 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 
 ## Phase 2 — Core survival and homestead loop
 
-- [ ] Inventory, equipment state, item stacking, and encumbrance (the current React inventory/loadout surfaces are prototypes only).
-- [ ] Crafting with data-driven recipes.
+- [x] Canonical inventory projection, item stacking, and a first data-driven crafting slice for gathered materials and consumables.
+- [ ] Equipment/loadout state, encumbrance, and station-gated or equipment crafting (the remaining React gear surface is still a prototype).
 - [ ] Homestead building placement, farms, storage, and basic production.
 - [ ] Time-of-day presentation and lightweight weather effects.
 - [ ] Pets with follow, wait, interact, and simple combat behavior.

@@ -44,7 +44,7 @@ import { equipmentSlots } from '../content/equipment';
 import type { EquipmentSlotId } from '../content/equipment';
 import { toolSlots, tools } from '../content/tools';
 import type { ToolSlotId } from '../content/tools';
-import { inventoryCategories, inventoryItems } from '../content/inventory';
+import { inventoryCategories, inventoryItems, inventoryItemsForState } from '../content/inventory';
 import type { InventoryCategory, InventoryIconId } from '../content/inventory';
 import {
   clampInventoryPage,
@@ -55,6 +55,8 @@ import {
   inventoryPageRange,
 } from './inventory-pagination';
 import type { InventoryLayout, InventorySort } from './inventory-pagination';
+import { mapFitForViewport } from './responsive-layout';
+import { useElementSize } from './use-element-size';
 import { abilityActionDefinition, positionKey, tileAt } from '../sim';
 import type { GameState, Position, SimEvent } from '../sim';
 import {
@@ -65,6 +67,7 @@ import {
 } from '../game/presentation-settings';
 import type { PresentationSettings, PresentationSettingKey } from '../game/presentation-settings';
 import { ContextActionHand } from './context-action-hand';
+import { CraftingScreen } from './crafting-screen';
 import {
   TorchButton,
   TorchDialog,
@@ -98,11 +101,11 @@ type MenuItem = {
   testId?: string;
 };
 
-type Screen = 'menu' | 'hero' | 'inventory' | 'gear' | 'abilities' | 'map' | 'settings';
+type Screen = 'menu' | 'hero' | 'inventory' | 'gear' | 'crafting' | 'abilities' | 'map' | 'settings';
 
 const menuItems: MenuItem[] = [
   { label: 'Map', icon: MapIcon, screen: 'map', available: true },
-  { label: 'Crafting', icon: Hammer, screen: 'menu' },
+  { label: 'Crafting', icon: Hammer, screen: 'crafting', available: true, testId: 'menu-crafting' },
   { label: 'Journal', icon: BookOpen, screen: 'menu' },
   { label: 'Talents', icon: Sparkles, screen: 'menu' },
   { label: 'Options', icon: Settings2, screen: 'settings', available: true, testId: 'menu-settings' },
@@ -121,6 +124,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   hero: 'Hero',
   inventory: 'Inventory',
   gear: 'Equipment',
+  crafting: 'Crafting',
   abilities: 'Abilities',
   map: 'Map',
   settings: 'Options',
@@ -429,9 +433,11 @@ export function MenuOverlay(): ReactElement {
                 ) : screen === 'hero' ? (
                   <HeroScreen state={gameState} />
                 ) : screen === 'inventory' ? (
-                  <InventoryScreen />
+                  <InventoryScreen state={gameState} />
                 ) : screen === 'gear' ? (
                   <GearPanel />
+                ) : screen === 'crafting' ? (
+                  <CraftingScreen state={gameState} events={gameEvents} />
                 ) : screen === 'abilities' ? (
                   <AbilitiesScreen />
                 ) : screen === 'map' ? (
@@ -448,41 +454,32 @@ export function MenuOverlay(): ReactElement {
   );
 }
 
-function InventoryScreen(): ReactElement {
-  return <InventoryItemsPanel />;
+function InventoryScreen({ state }: { state: GameState }): ReactElement {
+  return <InventoryItemsPanel items={inventoryItemsForState(state)} />;
 }
 
-function InventoryItemsPanel(): ReactElement {
+function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): ReactElement {
   const [category, setCategory] = useState<InventoryCategory | undefined>();
   const [sort, setSort] = useState<InventorySort>('category');
   const [sortOpen, setSortOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [pageIndex, setPageIndex] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [viewport, setViewport] = useState(() => ({
-    width: typeof window === 'undefined' ? 1280 : window.innerWidth,
-    height: typeof window === 'undefined' ? 720 : window.innerHeight,
-  }));
+  const inventoryScreenRef = useRef<HTMLDivElement>(null);
+  const measuredInventorySize = useElementSize(inventoryScreenRef);
   const categoryPointerStateRef = useRef<'active' | 'inactive' | undefined>(undefined);
   const itemButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  useEffect(() => {
-    const updateViewport = (): void => {
-      setViewport({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    window.addEventListener('resize', updateViewport);
-    return () => window.removeEventListener('resize', updateViewport);
-  }, []);
+  const viewport =
+    measuredInventorySize.width > 0 && measuredInventorySize.height > 0
+      ? measuredInventorySize
+      : { width: 1280, height: 720 };
 
   const layout = useMemo<InventoryLayout>(
     () => inventoryLayoutForViewport(viewport.width, viewport.height),
     [viewport.height, viewport.width],
   );
-  const filteredItems = useMemo(() => filterAndSortInventoryItems(inventoryItems, category, sort), [category, sort]);
+  const filteredItems = useMemo(() => filterAndSortInventoryItems(items, category, sort), [category, items, sort]);
   const pageCount = inventoryPageCount(filteredItems.length, layout.pageSize);
   const safePageIndex = clampInventoryPage(pageIndex, pageCount);
   const pageItems = inventoryPageItems(filteredItems, safePageIndex, layout.pageSize);
@@ -536,6 +533,7 @@ function InventoryItemsPanel(): ReactElement {
 
   return (
     <div
+      ref={inventoryScreenRef}
       className={`inventory-screen inventory-layout-${layout.profile}${detailOpen && isCompactLayout ? ' is-detail-open' : ''}`}
       style={{ '--inventory-columns': layout.columns, '--inventory-rows': layout.rows } as CSSProperties}
     >
@@ -850,75 +848,30 @@ function mapBounds(state: GameState): MapBounds {
 
 function MapScreen(): ReactElement {
   const [mapState, setMapState] = useState(() => gameSession.state);
-  const [mapViewportSize, setMapViewportSize] = useState({ width: 0, height: 0 });
   const mapViewportRef = useRef<HTMLDivElement>(null);
+  const measuredMapViewport = useElementSize(mapViewportRef);
 
   useEffect(() => {
     const unsubscribe = gameSession.subscribe((state) => setMapState(state));
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
+  const mapViewportSize = useMemo(() => {
     const viewport = mapViewportRef.current;
-    if (!viewport) return;
-
-    const measure = (): void => {
-      const styles = getComputedStyle(viewport);
-      const horizontalPadding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
-      const verticalPadding = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
-      setMapViewportSize({
-        width: Math.max(0, viewport.clientWidth - horizontalPadding),
-        height: Math.max(0, viewport.clientHeight - verticalPadding),
-      });
+    if (!viewport) return measuredMapViewport;
+    const styles = getComputedStyle(viewport);
+    const horizontalPadding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
+    const verticalPadding = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
+    return {
+      width: Math.max(0, measuredMapViewport.width - horizontalPadding),
+      height: Math.max(0, measuredMapViewport.height - verticalPadding),
     };
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-    observer?.observe(viewport);
-    return () => observer?.disconnect();
-  }, []);
+  }, [measuredMapViewport]);
 
   const bounds = mapBounds(mapState);
   const exploredColumns = bounds.maxX - bounds.minX + 1;
   const exploredRows = bounds.maxY - bounds.minY + 1;
-  const mapSizing =
-    mapViewportSize.width > 0 && mapViewportSize.height > 0
-      ? (() => {
-          const baseCellSize = Math.max(
-            1,
-            Math.floor(Math.min(mapViewportSize.width / exploredColumns, mapViewportSize.height / exploredRows)),
-          );
-          const expandedColumns = Math.max(exploredColumns, Math.ceil(mapViewportSize.width / baseCellSize));
-          const expandedRows = Math.max(exploredRows, Math.ceil(mapViewportSize.height / baseCellSize));
-          const candidates = [
-            { columns: expandedColumns, rows: exploredRows },
-            { columns: exploredColumns, rows: expandedRows },
-            { columns: expandedColumns, rows: expandedRows },
-          ].map((candidate) => ({
-            ...candidate,
-            cellSize: Math.min(mapViewportSize.width / candidate.columns, mapViewportSize.height / candidate.rows),
-          }));
-          const best = candidates.reduce((currentBest, candidate) => {
-            const bestArea = currentBest.cellSize * currentBest.columns * currentBest.cellSize * currentBest.rows;
-            const candidateArea = candidate.cellSize * candidate.columns * candidate.cellSize * candidate.rows;
-            return candidateArea > bestArea ? candidate : currentBest;
-          });
-          // Bias the final fit toward the full viewport width. When height is the
-          // limiting dimension, keep a little vertical breathing room instead of
-          // shrinking every cell and leaving a wide unused strip on the sides.
-          const columns = Math.max(
-            exploredColumns,
-            Math.ceil(mapViewportSize.width / best.cellSize),
-            Math.ceil((mapViewportSize.width * exploredRows) / mapViewportSize.height),
-          );
-          const cellSize = mapViewportSize.width / columns;
-          const rows = Math.max(exploredRows, Math.floor(mapViewportSize.height / cellSize));
-          return {
-            columns,
-            rows,
-            cellSize,
-          };
-        })()
-      : undefined;
+  const mapSizing = mapFitForViewport(mapViewportSize.width, mapViewportSize.height, exploredColumns, exploredRows);
   const cellSize = mapSizing?.cellSize;
   const columns = mapSizing?.columns ?? exploredColumns;
   const rows = mapSizing?.rows ?? exploredRows;
@@ -1686,6 +1639,9 @@ function SettingsScreen(): ReactElement {
   );
   const [status, setStatus] = useState('Changes save locally; connected adapters update immediately.');
   const [confirmReset, setConfirmReset] = useState(false);
+  const optionsBodyRef = useRef<HTMLDivElement>(null);
+  const optionsBodySize = useElementSize(optionsBodyRef);
+  const optionsOrientation = optionsBodySize.width > 0 && optionsBodySize.width <= 720 ? 'horizontal' : 'vertical';
 
   useEffect(() => {
     const handleSettingsChange = (event: Event): void => {
@@ -1735,7 +1691,7 @@ function SettingsScreen(): ReactElement {
     <TorchTabsRoot
       className="settings-screen options-screen"
       value={activeTab}
-      orientation="vertical"
+      orientation={optionsOrientation}
       onValueChange={(value) => {
         if (typeof value === 'string') setActiveTab(value as SettingsTab);
       }}
@@ -1748,7 +1704,7 @@ function SettingsScreen(): ReactElement {
         </div>
       </div>
 
-      <div className="options-body">
+      <div className="options-body" ref={optionsBodyRef}>
         <TorchTabsList className="settings-tabs options-nav" aria-label="Options sections" variant="line">
           {optionsTabs.map((tab) => {
             const Icon = tab.icon;

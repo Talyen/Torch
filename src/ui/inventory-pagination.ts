@@ -1,7 +1,9 @@
 import type { InventoryCategory, InventoryItemDefinition } from '../content/inventory';
+import { layoutProfileForSize } from './responsive-layout';
+import type { LayoutProfile } from './responsive-layout';
 
 export type InventorySort = 'category' | 'name' | 'quantity';
-export type InventoryLayoutProfile = 'wide' | 'short' | 'compact' | 'tiny';
+export type InventoryLayoutProfile = LayoutProfile;
 
 export interface InventoryLayout {
   profile: InventoryLayoutProfile;
@@ -16,19 +18,12 @@ export interface InventoryLayout {
  * CSS grid cannot disagree about how many cards fit on screen.
  */
 export function inventoryLayoutForViewport(width: number, height: number): InventoryLayout {
-  if (width <= 360) {
-    return { profile: 'tiny', columns: 3, rows: 1, pageSize: 3 };
-  }
-
-  if (width <= 720) {
-    return { profile: 'compact', columns: 3, rows: 2, pageSize: 6 };
-  }
-
-  if (height < 660) {
-    return { profile: 'short', columns: 4, rows: 2, pageSize: 8 };
-  }
-
-  return { profile: 'wide', columns: 4, rows: 2, pageSize: 8 };
+  const profile = layoutProfileForSize(width, height);
+  return profile === 'tiny'
+    ? { profile, columns: 3, rows: 1, pageSize: 3 }
+    : profile === 'compact'
+      ? { profile, columns: 3, rows: 2, pageSize: 6 }
+      : { profile, columns: 4, rows: 2, pageSize: 8 };
 }
 
 export function filterAndSortInventoryItems(

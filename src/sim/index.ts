@@ -2,6 +2,7 @@ export * from './coords';
 export * from './actions';
 export * from './ability-rules';
 export * from './context-actions';
+export * from './crafting';
 export * from './entities';
 export * from './footprint';
 export * from './gathering';

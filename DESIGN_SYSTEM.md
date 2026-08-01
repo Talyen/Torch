@@ -153,7 +153,9 @@ add named semantic tokens before using it; do not scatter numeric z-indexes.
   cards inside the usable viewport at every supported orientation.
 - Use responsive layout or container queries based on minimum content width,
   not device-name breakpoints. Preserve readable text and artwork before
-  compressing gaps.
+  compressing gaps. `src/ui/responsive-layout.ts` owns pure breakpoint and map
+  fit math; `src/ui/use-element-size.ts` measures the actual owning surface and
+  coalesces resize notifications before React reflows it.
 - Keep the normal focused detail surface largely scroll-free at desktop sizes;
   stack or scroll on narrow/short viewports instead of shrinking below readable
   minimums.
@@ -164,8 +166,9 @@ add named semantic tokens before using it; do not scatter numeric z-indexes.
   unexplored cells to fit the available viewport. It is presentation over
   `GameState.revealedTiles`, never a second map authority.
 
-The review matrix is `1280x720`, `1170x624`, `390x844`, and `320x568`, plus
-keyboard focus, pointer/touch, reduced motion, high-DPI rendering, and long
+The review matrix is `1366x768`, `1024x600`, `768x1024`, `844x390`, `390x844`,
+`360x800`, and `320x568`, plus live resize/orientation changes, keyboard focus,
+pointer/touch, reduced motion, high-DPI rendering, and long
 content. Fix clipping, overflow, unreachable actions, layout shifts, and
 focus-ring clipping as defects.
 

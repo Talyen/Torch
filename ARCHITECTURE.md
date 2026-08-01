@@ -74,7 +74,11 @@ The exact chunk dimensions and active radius are performance parameters to bench
 
 - Use an orthographic square grid as the default presentation.
 - Keep logical tile coordinates independent from device pixels.
-- Render the Phaser canvas at the host device pixel ratio (capped at 2x) while keeping its CSS footprint responsive, so high-density displays do not soften artwork.
+- Use Phaser's `RESIZE` scale mode so the game's logical coordinate space
+  follows the host element in CSS pixels. Keep device-pixel-ratio out of tile
+  geometry and pointer hit testing; any renderer/backing-buffer resolution
+  optimization must remain an implementation detail layered underneath that
+  logical space.
 - Separate visual size, interaction footprint, collision footprint, and anchor point.
 - Entity footprints are explicit data. A one-tile entity such as the Slime uses
   a 1×1 footprint; larger tokens render across their full footprint with
@@ -83,6 +87,9 @@ The exact chunk dimensions and active radius are performance parameters to bench
 - Implement Torch visibility as a deterministic visibility/lit mask; presentation may add a lightweight tint, vignette, or post-process effect. Unexplored terrain uses a dark charcoal color, while remembered terrain retains a dimmed version of its generated tile color.
 - Keep fog, weather, lighting, and spell effects incremental so static art remains useful.
 - Use responsive camera and HUD layout rather than assuming a fixed orientation.
+- The React overlay owns visual reflow through container-aware CSS; measured
+  surface math belongs in pure UI helpers and must not read `window.innerWidth`
+  as a proxy for a nested panel's available size.
 - Keep Phaser texture filtering smooth for painterly artwork; enable pixel-art sampling only for assets explicitly authored for that style.
 - Keep the Gold/Charcoal design-system palette scoped to UI chrome and board
   presentation scaffolding. `src/game/presentation-colors.ts` bridges the
@@ -115,7 +122,7 @@ state.
 
 The game board is a full-screen Phaser canvas. Application UI mounts in a sibling `#ui-root` overlay owned by React. This keeps inventory, settings, quest journals, crafting, talents, equipment, and modal flows in semantic DOM while Phaser owns world-space presentation and effects. Base UI supplies the accessible interaction behavior for complex React patterns, while the checked-in shadcn source components in `src/components/ui` provide the shared styled layer. Screens consume those through the Torch-owned wrappers in `src/ui/primitives.tsx`; neither layer may become the simulation authority or own game-content layout decisions.
 
-The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Equipment action, Abilities action, and Main Menu action. Inventory is an items-only surface; Equipment is a dedicated surface with native-ratio hero art, paper-doll equipment, a single-row jewelry cluster, and a single-row tool loadout (including Hammer and Shovel). The Main Menu is an opaque, icon-first grid of secondary destinations and includes Map; the Map screen can also be opened with the configurable Map binding (M by default). The Map screen fills its dominant viewport with a responsive framed map of square cells, expanding the rendered bounds with unexplored cells whenever the explored bounds do not match the viewport aspect ratio, and keeps a minimum-size Hero token at the Hero's world-relative position; it is a presentation surface over `GameState.revealedTiles`, not a second map authority. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
+The current UI exposes a compact, bottom-centered HUD rail: the Hero icon, HP bar, Inventory action, Equipment action, Abilities action, and Main Menu action. Inventory is an items-only projection of the simulation's canonical material and consumable counts; equipment remains a fixture-backed prototype until loadout state is simulation-backed. Crafting is a responsive two-pane Main Menu surface whose recipe catalog, ingredient counts, batch limits, and enabled state derive from the same `GameState` inventory. The first recipe slice is station-free and covers material/consumable outputs; station-gated and equipment recipes remain content-ready but deferred until their simulation state exists. The Main Menu is an opaque, icon-first grid of secondary destinations and includes Map; the Map screen can also be opened with the configurable Map binding (M by default). The Map screen fills its dominant viewport with a responsive framed map of square cells, expanding the rendered bounds with unexplored cells whenever the explored bounds do not match the viewport aspect ratio, and keeps a minimum-size Hero token at the Hero's world-relative position; it is a presentation surface over `GameState.revealedTiles`, not a second map authority. Opening the menu switches the session input mode to `ui`, preventing keyboard or pointer input from advancing the world while a menu is open. Because action resolution is turn-based, no separate real-time simulation pause is required.
 
 The gameplay HUD also exposes a contextual Action Hand anchored to the HP rail. Cards fan upward from behind the rail, with their lower edge tucked beneath the toolbar so the rail remains the readable foreground surface. `src/sim/context-actions.ts` projects one focused adjacent target into stable, typed cards: ready equipped abilities for enemies and entity actions such as Chop or Mine for gatherables. Cooldown abilities are omitted from the hand rather than shown as translucent disabled cards. `src/ui/context-action-hand.tsx` owns only the responsive DOM presentation: 3:4 artwork, dynamic fan geometry, hover/focus/press/drag states, reflow motion, and action callbacks. Card identity is keyed to the ability or action type rather than the current target, so retargeting an unchanged ability card does not replay its entrance animation; genuinely new cards animate as a reflow. The animation is driven by the typed `ability-used` and `action-resolved` events, so clicked actions and default actions triggered by blocked movement receive the same feedback. A played card hands off to a transient ghost that travels toward the board before the replacement card reveals. The hand is hidden while menus are open and never replaces the simulation's blocked-movement default action.
 
@@ -139,10 +146,11 @@ Clicking a gear or tool slot or an ability card transitions to a dedicated
 selector submenu with a grid of compatible artwork; choosing an item immediately
 returns to the loadout. The three starter ability definitions use stable IDs and
 native 3:4 art variants; their effects and loadout changes resolve through typed
-simulation commands. The session now persists the Phase 1 world state at
-accepted action boundaries through a browser-independent `WorldSave` v1
-projection and a local storage adapter; profile progression, cloud providers,
-and migrations remain future work.
+simulation commands. The session now persists the Phase 1 world state, including
+canonical inventory, at accepted action boundaries through a browser-independent
+`WorldSave` v1 projection and a local storage adapter; crafting is an out-of-turn
+command and therefore does not advance the turn or trigger an enemy response.
+Profile progression, cloud providers, and migrations remain future work.
 
 ## Input
 
@@ -222,10 +230,12 @@ The starting Knight definition is `14 / 10 / 14 / 12 / 10`; the Forest Slime
 definition is `12 / 12 / 20 / 6 / 10`. Both totals are covered by fixed-seed
 tests.
 
-The current UI-only Inventory fixtures follow the same boundary in
-`src/content/inventory.ts`: content stores stable IDs, category IDs, quantities,
-descriptions, and presentation icon IDs, while React maps those icon IDs to
-Lucide components. Content definitions do not import React or Lucide.
+Canonical item and recipe definitions live in `src/content/items.ts` and
+`src/content/recipes.ts`. The simulation stores stable item IDs and quantities;
+`src/content/inventory.ts` projects those values into the semantic Inventory
+screen while retaining fixture-only equipment/misc entries until their state is
+implemented. React maps presentation icon IDs to Lucide components. Content
+definitions do not import React or Lucide.
 
 Terrain generation uses smooth seeded elevation fields over a single vibrant
 grassland base. Mountains are impassable terrain. Forests are not terrain kinds:

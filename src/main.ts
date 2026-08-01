@@ -34,8 +34,10 @@ const game = new Phaser.Game({
     roundPixels: false,
   },
   scale: {
-    mode: Phaser.Scale.NONE,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // RESIZE keeps Phaser's logical coordinate space in CSS pixels. The
+    // scene owns the bounded viewport math; devicePixelRatio must never leak
+    // into world coordinates or pointer hit testing.
+    mode: Phaser.Scale.RESIZE,
   },
   scene: [TorchScene],
 });

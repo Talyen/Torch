@@ -14,6 +14,8 @@ export type EnemyDisposition = 'neutral' | 'hostile';
 
 export type AbilitySlotId = 'basic' | 'skill' | 'ultimate';
 export type ActionKind = 'attack' | 'chop' | 'mine' | 'ability';
+export type CraftBlockedReason =
+  'unknown-recipe' | 'locked' | 'requires-station' | 'missing-ingredients' | 'invalid-quantity';
 
 export type AbilityEffectKind = 'stun' | 'halve-block' | 'holy-damage-from-block';
 
@@ -30,6 +32,12 @@ export interface ActionRequest {
   entityId: string;
   target: Position;
   abilityId?: string;
+}
+
+export interface CraftingCommand {
+  type: 'craft';
+  recipeId: string;
+  quantity: number;
 }
 
 export interface EntityState {
@@ -101,6 +109,7 @@ export type Command =
   | { type: 'interact'; target: Position }
   | { type: 'action'; action: ActionRequest }
   | { type: 'equip-ability'; slot: AbilitySlotId; abilityId: string }
+  | CraftingCommand
   | { type: 'wait' };
 
 export type SimEvent =
@@ -110,6 +119,19 @@ export type SimEvent =
   | { type: 'action-resolved'; action: ActionKind; entityId: string; target: Position; abilityId?: string }
   | { type: 'ability-used'; abilityId: string; entityId: string; target: Position; amount: number }
   | { type: 'ability-equipped'; slot: AbilitySlotId; abilityId: string }
+  | {
+      type: 'craft-completed';
+      recipeId: string;
+      batchCount: number;
+      outputItemId: string;
+      outputQuantity: number;
+    }
+  | {
+      type: 'craft-blocked';
+      recipeId: string;
+      reason: CraftBlockedReason;
+      missingItems?: Array<{ itemId: string; quantity: number }>;
+    }
   | { type: 'enemy-damaged'; entityId: string; amount: number }
   | { type: 'enemy-defeated'; entityId: string }
   | { type: 'resource-gathered'; resource: 'wood' | 'ore'; amount: number }

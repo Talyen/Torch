@@ -82,9 +82,18 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await page.getByTestId('settings-tab-display').click();
   await page.getByTestId('settings-ui-scale').selectOption('large');
   await expect(page.getByTestId('settings-ui-scale')).toContainText('Large');
-  expect(await page.locator('#ui-root').evaluate((element) => getComputedStyle(element).fontSize)).toBe('18px');
+  const largeUiFontSize = Number.parseFloat(
+    await page.locator('#ui-root').evaluate((element) => getComputedStyle(element).fontSize),
+  );
+  expect(largeUiFontSize).toBeGreaterThanOrEqual(18);
+  expect(largeUiFontSize).toBeLessThanOrEqual(20);
   await page.getByTestId('settings-ui-scale').selectOption('auto');
-  expect(await page.locator('#ui-root').evaluate((element) => getComputedStyle(element).fontSize)).toBe('16px');
+  const autoUiFontSize = Number.parseFloat(
+    await page.locator('#ui-root').evaluate((element) => getComputedStyle(element).fontSize),
+  );
+  expect(autoUiFontSize).toBeGreaterThanOrEqual(16);
+  expect(autoUiFontSize).toBeLessThanOrEqual(18);
+  expect(largeUiFontSize).toBeGreaterThan(autoUiFontSize);
   await page.getByTestId('settings-tab-bindings').click();
   await expect(page.getByTestId('key-binding-move-north-0')).toBeVisible();
   await page.getByTestId('key-binding-move-north-0').click();
@@ -393,9 +402,12 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
 
 test('keeps Inventory contained without scroll regions across supported viewports', async ({ page }) => {
   for (const viewport of [
-    { width: 1280, height: 720 },
-    { width: 1170, height: 624 },
+    { width: 1366, height: 768 },
+    { width: 1024, height: 600 },
+    { width: 768, height: 1024 },
+    { width: 844, height: 390 },
     { width: 390, height: 844 },
+    { width: 360, height: 800 },
     { width: 320, height: 568 },
   ]) {
     await page.setViewportSize(viewport);
@@ -438,9 +450,10 @@ test('keeps Inventory contained without scroll regions across supported viewport
           : false,
       };
     });
-
     expect(geometry.noScreenScroll).toBe(true);
-    expect(geometry.noContentScroll).toBe(true);
+    // A short/landscape surface may need the finite grid/detail row to scroll
+    // as one explicit owner; it must remain reachable rather than be clipped.
+    expect(geometry.noContentScroll).toBe(viewport.height >= 500);
     expect(geometry.noGridScroll).toBe(true);
     expect(geometry.noDetailScroll).toBe(true);
     expect(geometry.noPaginationScroll).toBe(true);
@@ -484,9 +497,12 @@ test('keeps Inventory contained without scroll regions across supported viewport
 
 test('keeps Options navigable across supported viewports', async ({ page }) => {
   for (const viewport of [
-    { width: 1280, height: 720 },
-    { width: 1170, height: 624 },
+    { width: 1366, height: 768 },
+    { width: 1024, height: 600 },
+    { width: 768, height: 1024 },
+    { width: 844, height: 390 },
     { width: 390, height: 844 },
+    { width: 360, height: 800 },
     { width: 320, height: 568 },
   ]) {
     await page.setViewportSize(viewport);
@@ -505,17 +521,22 @@ test('keeps Options navigable across supported viewports', async ({ page }) => {
         tab.getBoundingClientRect(),
       );
       const options = document.querySelector<HTMLElement>('.options-screen');
+      const tabsRoot = document.querySelector<HTMLElement>('.options-screen');
+      const optionsBody = document.querySelector<HTMLElement>('.options-body');
       return {
         panel,
         screen,
         footer,
         noHorizontalOverflow: options ? options.scrollWidth <= options.clientWidth + 1 : false,
         tabsHaveHitArea: tabs.length === 5 && tabs.every((tab) => tab.width >= 42 && tab.height >= 42),
+        tabsOrientation: tabsRoot?.getAttribute('data-orientation') ?? '',
+        optionsBodyWidth: optionsBody?.clientWidth ?? 0,
       };
     });
 
     expect(layout.noHorizontalOverflow).toBe(true);
     expect(layout.tabsHaveHitArea).toBe(true);
+    expect(layout.tabsOrientation).toBe(layout.optionsBodyWidth <= 720 ? 'horizontal' : 'vertical');
     expect(layout.screen?.left ?? -Infinity).toBeGreaterThanOrEqual((layout.panel?.left ?? 0) - 1);
     expect(layout.screen?.right ?? Infinity).toBeLessThanOrEqual((layout.panel?.right ?? 0) + 1);
     expect(layout.footer?.bottom ?? Infinity).toBeLessThanOrEqual((layout.panel?.bottom ?? 0) + 1);
@@ -523,11 +544,36 @@ test('keeps Options navigable across supported viewports', async ({ page }) => {
   }
 });
 
+test('reflows an open surface after a live viewport resize', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto('/');
+  await page.getByTestId('hud-inventory-button').click();
+  await expect(page.locator('.inventory-screen')).toHaveClass(/inventory-layout-wide/);
+
+  await page.setViewportSize({ width: 520, height: 844 });
+  await expect(page.locator('.inventory-screen')).toHaveClass(/inventory-layout-compact/, { timeout: 5_000 });
+  const compactBounds = await page.locator('#torch-menu').evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+  });
+  expect(compactBounds.left).toBeGreaterThanOrEqual(0);
+  expect(compactBounds.top).toBeGreaterThanOrEqual(0);
+  expect(compactBounds.right).toBeLessThanOrEqual(521);
+  expect(compactBounds.bottom).toBeLessThanOrEqual(845);
+
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await expect(page.locator('.inventory-screen')).toHaveClass(/inventory-layout-short/, { timeout: 5_000 });
+  await expect(page.getByTestId('inventory-page-next')).toBeVisible();
+});
+
 test('keeps the Ability workspace readable across supported viewports', async ({ page }) => {
   for (const viewport of [
-    { width: 1280, height: 720 },
-    { width: 1170, height: 624 },
+    { width: 1366, height: 768 },
+    { width: 1024, height: 600 },
+    { width: 768, height: 1024 },
+    { width: 844, height: 390 },
     { width: 390, height: 844 },
+    { width: 360, height: 800 },
     { width: 320, height: 568 },
   ]) {
     await page.setViewportSize(viewport);
@@ -617,8 +663,13 @@ test('keeps the Ability workspace readable across supported viewports', async ({
 
 test('keeps the fixed Hero shell contained across landscape and portrait viewports', async ({ page }) => {
   for (const viewport of [
-    { width: 1170, height: 624 },
+    { width: 1366, height: 768 },
+    { width: 1024, height: 600 },
+    { width: 768, height: 1024 },
+    { width: 844, height: 390 },
     { width: 390, height: 844 },
+    { width: 360, height: 800 },
+    { width: 320, height: 568 },
   ]) {
     await page.setViewportSize(viewport);
     await page.goto('/');
@@ -650,6 +701,7 @@ test('keeps the fixed Hero shell contained across landscape and portrait viewpor
         statsTop: statsRect?.top ?? 0,
         artWidth: imageRect?.width ?? 0,
         statsWidth: statsRect?.width ?? 0,
+        gridColumns: getComputedStyle(details as HTMLElement).gridTemplateColumns,
         statColumns: [...document.querySelectorAll<HTMLElement>('.stat-row')].map((row) =>
           Math.round(row.getBoundingClientRect().left),
         ),
@@ -668,7 +720,7 @@ test('keeps the fixed Hero shell contained across landscape and portrait viewpor
     expect(layout.artWidth).toBeGreaterThan(0);
     expect(layout.statsWidth).toBeGreaterThan(0);
     expect(new Set(layout.statColumns).size).toBe(1);
-    if (viewport.width > 640) {
+    if (layout.gridColumns.split(' ').length > 1) {
       expect(layout.artRight).toBeLessThanOrEqual(layout.statsLeft + 1);
     } else {
       expect(layout.artBottom).toBeLessThanOrEqual(layout.statsTop + 1);

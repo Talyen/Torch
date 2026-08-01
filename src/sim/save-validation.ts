@@ -298,6 +298,13 @@ export function commandAt(value: unknown, path: string): Command {
         slot: enumAt(record.slot, ABILITY_SLOTS, `${path}.slot`),
         abilityId: stringAt(record.abilityId, `${path}.abilityId`),
       };
+    case 'craft':
+      exactKeys(record, ['type', 'recipeId', 'quantity'], [], path);
+      return {
+        type,
+        recipeId: stringAt(record.recipeId, `${path}.recipeId`),
+        quantity: positiveIntegerAt(record.quantity, `${path}.quantity`),
+      };
     case 'wait':
       exactKeys(record, ['type'], [], path);
       return { type };

@@ -55,6 +55,10 @@
   --ui-color-info: #c9b58a;
   --ui-color-disabled: #827b6d;
   --ui-hit-target: 42px;
+  --ui-viewport-gutter: clamp(12px, 2.5vi, 28px);
+  --ui-panel-max-inline: 960px;
+  --ui-panel-max-block: 900px;
+  --ui-readable-min: 42px;
 }
 
 * {
@@ -77,15 +81,16 @@ body {
 }
 
 #ui-root {
-  font-size: 16px;
+  container: torch-ui / size;
+  font-size: clamp(1rem, calc(0.96rem + 0.25vi), 1.125rem);
 }
 
 html[data-ui-scale='compact'] #ui-root {
-  font-size: 14px;
+  font-size: clamp(0.875rem, calc(0.84rem + 0.2vi), 1rem);
 }
 
 html[data-ui-scale='large'] #ui-root {
-  font-size: 18px;
+  font-size: clamp(1rem, calc(0.98rem + 0.3vi), 1.25rem);
 }
 
 button {
@@ -9336,5 +9341,813 @@ html[data-reduce-motion='true'] *::after {
   .settings-switch-track,
   .settings-switch-track span {
     transition: none !important;
+  }
+}
+
+/* Responsive layout contract ------------------------------------------------
+ * Visual reflow follows the measured UI container. JavaScript owns only
+ * surface-specific math (inventory pagination and map cell fitting); these
+ * rules keep every interactive surface within its available block size and
+ * leave scrolling to an explicit content owner.
+ */
+#app,
+#game,
+#ui-root {
+  min-width: 0;
+  min-height: 0;
+}
+
+#game canvas {
+  touch-action: none;
+}
+
+.menu-layer {
+  padding-top: max(var(--ui-viewport-gutter), calc(env(safe-area-inset-top) + 12px));
+  padding-right: max(var(--ui-viewport-gutter), calc(env(safe-area-inset-right) + 12px));
+  padding-bottom: max(var(--ui-viewport-gutter), calc(env(safe-area-inset-bottom) + 12px));
+  padding-left: max(var(--ui-viewport-gutter), calc(env(safe-area-inset-left) + 12px));
+}
+
+.menu-panel {
+  width: min(100%, 480px) !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px) !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+
+.menu-panel-wide {
+  display: flex !important;
+  width: min(100%, var(--ui-panel-max-inline)) !important;
+  max-width: 100% !important;
+  height: min(82dvh, var(--ui-panel-max-block)) !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px) !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.menu-panel-wide > .menu-header {
+  flex: 0 0 auto;
+}
+
+.menu-panel-wide > .inventory-screen,
+.menu-panel-wide > .hero-screen,
+.menu-panel-wide > .loadout-screen,
+.menu-panel-wide > .abilities-loadout-screen,
+.menu-panel-wide > .settings-screen {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.menu-panel-wide > .inventory-screen,
+.menu-panel-wide > .hero-screen,
+.menu-panel-wide > .loadout-screen,
+.menu-panel-wide > .abilities-loadout-screen {
+  overflow: hidden !important;
+}
+
+.menu-panel-wide .inventory-content,
+.menu-panel-wide .abilities-workspace,
+.menu-panel-wide .gear-screen,
+.menu-panel-wide .selector-screen {
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.menu-panel-wide .inventory-grid,
+.menu-panel-wide .inventory-detail,
+.menu-panel-wide .gear-loadout-pane,
+.menu-panel-wide .selector-grid,
+.menu-panel-wide .options-content,
+.menu-panel-wide .ability-inspector {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.menu-panel-wide .hero-details {
+  container: hero-surface / inline-size;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.menu-panel-wide .ability-detail-close {
+  width: var(--ui-readable-min) !important;
+  height: var(--ui-readable-min) !important;
+  min-height: var(--ui-readable-min) !important;
+  border-radius: 50% !important;
+}
+
+.hud-rail {
+  max-width: calc(100% - 2 * var(--ui-viewport-gutter));
+  min-width: 0;
+}
+
+@container torch-ui (max-width: 720px) {
+  .menu-panel-wide {
+    width: 100% !important;
+    height: min(88dvh, var(--ui-panel-max-block)) !important;
+  }
+
+  .hero-details {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(180px, min(42dvh, 320px)) minmax(0, 1fr) !important;
+    overflow: auto !important;
+  }
+
+  .hero-art-full {
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    justify-self: center !important;
+  }
+
+  .abilities-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow: auto !important;
+  }
+
+  .ability-loadout-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .gear-screen {
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow: auto !important;
+  }
+
+  .gear-loadout-pane {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .selector-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .options-body {
+    flex-direction: column !important;
+  }
+
+  .options-nav {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .options-nav [role='tab'] {
+    flex: 0 0 auto !important;
+    min-width: 112px;
+  }
+}
+
+/* Tablet portrait has enough viewport width to miss the global mobile query,
+ * but not enough panel width to keep native-ratio art and stats side by side. */
+@container torch-ui (max-width: 800px) and (min-height: 600px) {
+  .hero-details {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(180px, min(42dvh, 320px)) minmax(0, 1fr) !important;
+    overflow: auto !important;
+  }
+
+  .hero-art-full {
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    justify-self: center !important;
+  }
+}
+
+@container torch-ui (max-width: 520px) {
+  .menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: var(--ui-space-3) !important;
+    min-height: 0 !important;
+  }
+
+  .menu-grid > .menu-item,
+  .menu-grid > .menu-item:nth-child(4),
+  .menu-grid > .menu-item:nth-child(5) {
+    grid-column: auto !important;
+  }
+
+  .menu-item {
+    min-height: clamp(96px, 24cqw, 124px) !important;
+  }
+
+  .hud-rail {
+    flex-wrap: wrap;
+    gap: var(--ui-space-1);
+    padding-inline: var(--ui-space-2);
+  }
+
+  .hud-hp {
+    order: -1;
+    flex: 1 0 100%;
+  }
+
+  .inventory-toolbar {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: var(--ui-space-2) !important;
+  }
+
+  .inventory-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .inventory-sort,
+  .inventory-sort-trigger {
+    width: 100%;
+  }
+
+  .inventory-sort-trigger {
+    min-width: 0;
+  }
+
+  .inventory-content {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
+    overflow: auto !important;
+  }
+
+  .inventory-detail {
+    max-height: 220px;
+  }
+
+  .selector-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .options-nav [role='tab'] {
+    min-width: 96px;
+  }
+}
+
+@container torch-ui (max-width: 360px) {
+  .menu-panel,
+  .menu-panel-wide {
+    padding: var(--ui-space-3) !important;
+  }
+
+  .menu-header {
+    gap: var(--ui-space-2);
+  }
+
+  .menu-header h1,
+  .menu-header h2 {
+    font-size: 1.45rem;
+  }
+
+  .menu-grid {
+    gap: var(--ui-space-2) !important;
+  }
+
+  .menu-item {
+    min-height: 88px !important;
+    padding: var(--ui-space-2) !important;
+  }
+
+  .menu-item-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .menu-item-label {
+    font-size: 0.75rem;
+  }
+
+  .inventory-grid {
+    gap: var(--ui-space-2) !important;
+  }
+
+  .inventory-detail {
+    padding: var(--ui-space-3) !important;
+  }
+}
+
+/* A short desktop/laptop viewport can leave only a few hundred pixels for
+ * the finite two-row inventory grid. Reduce the grid's width before allowing
+ * its square cards to push the content track beyond the shell. */
+.inventory-screen.inventory-layout-short .inventory-grid {
+  max-width: min(100%, 380px) !important;
+}
+
+.inventory-screen.inventory-layout-short .inventory-content {
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+
+@container hero-surface (max-width: 720px) {
+  .menu-panel .hero-details {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(180px, min(42dvh, 320px)) minmax(0, 1fr) !important;
+    overflow: auto !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 800px) and (min-height: 600px) {
+  .menu-panel .hero-details {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(180px, min(42dvh, 320px)) minmax(0, 1fr) !important;
+    overflow: auto !important;
+  }
+
+  .menu-panel .hero-art-full {
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    justify-self: center !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-panel-wide,
+  .menu-panel-wide * {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Crafting --------------------------------------------------------------- */
+.menu-panel:has(.crafting-screen) {
+  overflow: hidden !important;
+}
+
+.crafting-screen {
+  container: crafting-surface / inline-size;
+  display: flex;
+  width: min(820px, calc(100vw - 32px));
+  min-width: 0;
+  min-height: min(520px, calc(100dvh - 132px));
+  max-height: calc(100dvh - 132px);
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  overflow: hidden;
+  color: var(--ui-color-text);
+}
+
+.crafting-heading,
+.crafting-toolbar,
+.crafting-category-tabs,
+.crafting-panel-heading,
+.crafting-inspector-heading,
+.crafting-section-label,
+.crafting-output-row,
+.crafting-action-row {
+  display: flex;
+  align-items: center;
+}
+
+.crafting-heading {
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+}
+
+.crafting-heading h2,
+.crafting-panel-heading h3,
+.crafting-inspector-heading h3 {
+  margin: 0;
+  color: var(--ui-color-heading);
+}
+
+.crafting-heading h2 {
+  font-size: 1.55rem;
+}
+
+.crafting-panel-heading h3,
+.crafting-inspector-heading h3 {
+  font-size: 1.15rem;
+}
+
+.crafting-kicker {
+  margin: 0 0 var(--ui-space-1);
+  color: var(--ui-color-accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.crafting-subtitle,
+.crafting-description,
+.crafting-empty span {
+  margin: var(--ui-space-2) 0 0;
+  color: var(--ui-color-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.crafting-feedback {
+  display: flex;
+  max-width: 280px;
+  align-items: flex-start;
+  gap: var(--ui-space-2);
+  color: var(--ui-color-info);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: end;
+}
+
+.crafting-feedback svg {
+  flex: 0 0 auto;
+  color: var(--ui-color-success);
+}
+
+.crafting-toolbar {
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.crafting-search {
+  display: flex;
+  min-width: min(250px, 100%);
+  min-height: var(--ui-hit-target);
+  flex: 1 1 260px;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-color-surface-content);
+  color: var(--ui-color-muted);
+}
+
+.crafting-search:focus-within {
+  border-color: var(--ui-border-strong);
+  box-shadow: var(--ui-focus-ring);
+}
+
+.crafting-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ui-color-text);
+  font: inherit;
+}
+
+.crafting-search input::placeholder {
+  color: var(--ui-color-muted);
+}
+
+.crafting-filter-button {
+  min-height: var(--ui-hit-target);
+}
+
+.crafting-filter-button[aria-pressed='true'] {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-color-accent-soft);
+  color: var(--ui-color-accent-strong);
+}
+
+.crafting-category-tabs {
+  gap: var(--ui-space-1);
+  overflow-x: auto;
+  padding-bottom: var(--ui-space-1);
+  scrollbar-width: thin;
+}
+
+.crafting-category-tab {
+  min-height: var(--ui-hit-target);
+  flex: 0 0 auto;
+}
+
+.crafting-body {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1.05fr) minmax(250px, 0.95fr);
+  gap: var(--ui-space-3);
+  overflow: hidden;
+}
+
+.crafting-recipe-panel,
+.crafting-inspector {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-card-radius);
+  background: var(--ui-color-surface-content-deep);
+}
+
+.crafting-recipe-panel {
+  overflow: hidden;
+}
+
+.crafting-inspector {
+  overflow: auto;
+}
+
+.crafting-panel-heading {
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.crafting-count {
+  color: var(--ui-color-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.crafting-recipe-list {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: var(--ui-space-2);
+  overflow: auto;
+  padding: var(--ui-space-3);
+  overscroll-behavior: contain;
+}
+
+.crafting-recipe-button {
+  display: grid;
+  min-width: 0;
+  min-height: var(--ui-hit-target);
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: var(--ui-space-2);
+  justify-content: stretch;
+  padding: var(--ui-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ui-control-radius);
+  text-align: start;
+}
+
+.crafting-recipe-button:hover,
+.crafting-recipe-button.is-selected {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-color-accent-soft);
+}
+
+.crafting-recipe-icon,
+.crafting-output-icon,
+.crafting-ingredient-icon {
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-color-surface-content-raised);
+  color: var(--ui-color-accent);
+}
+
+.crafting-recipe-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.crafting-recipe-copy,
+.crafting-ingredient > span:last-child {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: var(--ui-space-1);
+}
+
+.crafting-recipe-copy strong,
+.crafting-recipe-copy small,
+.crafting-ingredient strong,
+.crafting-ingredient small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crafting-recipe-copy strong,
+.crafting-ingredient strong {
+  color: var(--ui-color-heading);
+  font-size: 0.82rem;
+}
+
+.crafting-recipe-copy small,
+.crafting-ingredient small {
+  color: var(--ui-color-muted);
+  font-size: 0.72rem;
+}
+
+.crafting-recipe-quantity {
+  align-self: center;
+  color: var(--ui-color-accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.crafting-inspector-inner {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-4);
+}
+
+.crafting-inspector-heading {
+  align-items: flex-start;
+  gap: var(--ui-space-3);
+}
+
+.crafting-output-icon {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+}
+
+.crafting-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  margin-top: var(--ui-space-2);
+  color: var(--ui-color-warning);
+  font-size: 0.74rem;
+}
+
+.crafting-status.is-ready {
+  color: var(--ui-color-success);
+}
+
+.crafting-description {
+  margin: 0;
+}
+
+.crafting-requirements {
+  display: grid;
+  gap: var(--ui-space-2);
+}
+
+.crafting-section-label {
+  justify-content: space-between;
+  color: var(--ui-color-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crafting-ingredient-list {
+  display: grid;
+  gap: var(--ui-space-2);
+}
+
+.crafting-ingredient {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-color-surface-content);
+}
+
+.crafting-ingredient-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.crafting-output-row {
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding-top: var(--ui-space-3);
+  border-top: 1px solid var(--ui-border-subtle);
+  color: var(--ui-color-muted);
+  font-size: 0.78rem;
+}
+
+.crafting-output-row strong {
+  color: var(--ui-color-heading);
+  text-align: end;
+}
+
+.crafting-action-row {
+  align-items: stretch;
+  gap: var(--ui-space-2);
+  margin-top: auto;
+}
+
+.crafting-quantity-control {
+  display: flex;
+  min-height: var(--ui-hit-target);
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-2);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-color-surface-content);
+}
+
+.crafting-quantity-control output {
+  min-width: 2ch;
+  color: var(--ui-color-heading);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.crafting-craft-button {
+  min-height: var(--ui-hit-target);
+  flex: 1 1 auto;
+}
+
+.crafting-empty {
+  display: grid;
+  min-height: 180px;
+  place-content: center;
+  justify-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-4);
+  color: var(--ui-color-muted);
+  text-align: center;
+}
+
+.crafting-empty svg {
+  color: var(--ui-color-accent);
+}
+
+.crafting-empty strong {
+  color: var(--ui-color-heading);
+}
+
+.crafting-empty-inspector {
+  min-height: 100%;
+}
+
+@container crafting-surface (max-width: 720px) {
+  .crafting-screen {
+    min-height: min(620px, calc(100dvh - 100px));
+    max-height: calc(100dvh - 100px);
+  }
+
+  .crafting-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crafting-feedback {
+    max-width: none;
+    text-align: start;
+  }
+
+  .crafting-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(190px, 1fr) auto;
+    overflow: auto;
+  }
+
+  .crafting-inspector {
+    overflow: visible;
+  }
+
+  .crafting-inspector-inner {
+    min-height: 0;
+  }
+}
+
+@container crafting-surface (max-width: 480px) {
+  .crafting-screen {
+    gap: var(--ui-space-3);
+  }
+
+  .crafting-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crafting-search {
+    grid-column: 1 / -1;
+  }
+
+  .crafting-filter-button {
+    min-width: 0;
+    padding-inline: var(--ui-space-2);
+  }
+
+  .crafting-category-tabs {
+    margin-inline: calc(var(--ui-space-2) * -1);
+    padding-inline: var(--ui-space-2);
+  }
+
+  .crafting-inspector-inner {
+    padding: var(--ui-space-3);
+  }
+
+  .crafting-action-row {
+    flex-direction: column;
+  }
+
+  .crafting-quantity-control {
+    justify-content: space-between;
   }
 }

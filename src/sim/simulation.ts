@@ -9,6 +9,7 @@ import {
 import { defaultActionForEnemy, defaultActionForEntity, resolveAction } from './actions';
 import { blockingEntityAt, entityAt } from './entities';
 import { abilityActionDefinition, canEquipAbility } from './ability-rules';
+import { resolveCraft } from './crafting';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
 import { cloneGameState } from './state';
 import type { Command, CommandResult, Direction, GameState, Position, SimEvent } from './types';
@@ -114,6 +115,11 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
       events.push({ type: 'ability-equipped', slot: command.slot, abilityId: command.abilityId });
       accepted = true;
     }
+  } else if (command.type === 'craft') {
+    // Crafting is an out-of-turn state command. The menu can remain open while
+    // the cloned resolver updates inventory, without moving enemies or
+    // advancing cooldowns.
+    accepted = resolveCraft(next, command, events);
   } else {
     materializeGeneratedTrees(next, next.hero.position);
 
@@ -198,7 +204,9 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
     }
   }
 
-  if (accepted && command.type !== 'equip-ability') advanceTurn(next, events, consumedAbilityIds);
+  if (accepted && command.type !== 'equip-ability' && command.type !== 'craft') {
+    advanceTurn(next, events, consumedAbilityIds);
+  }
 
   return { state: next, events, accepted };
 }

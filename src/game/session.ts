@@ -125,6 +125,10 @@ export class GameSession {
     this.dispatch({ type: 'equip-ability', slot, abilityId });
   }
 
+  public craft(recipeId: string, quantity = 1): void {
+    this.dispatch({ type: 'craft', recipeId, quantity });
+  }
+
   private notifyListeners(): void {
     this.listeners.forEach((listener) => listener(this._state, this.lastEvents));
   }

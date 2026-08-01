@@ -21,8 +21,9 @@ export const assetDefinitions = [
       marker: {
         output: 'public/assets/heroes/knight-marker.png',
         format: 'png',
-        size: 896,
-        // Keep more surrounding context for the larger in-world tile token.
+        size: 1536,
+        // Preserve the established in-world framing while retaining a dense
+        // 1536px source for high-DPI display.
         cropScale: 0.54,
         focalPoint: { x: 0.5, y: 0.3 },
         cornerRadius: 0.1,
@@ -99,4 +100,25 @@ export const assetDefinitions = [
       },
     },
   },
+  ...[
+    ['wood', 'resource_homestead_wood.png'],
+    ['stone', 'resource_homestead_stone.png'],
+    ['iron', 'resource_homestead_iron.png'],
+    ['food', 'resource_homestead_food.png'],
+    ['herbs', 'resource_homestead_herbs.png'],
+    ['hide', 'resource_homestead_hide.png'],
+    ['crystal', 'resource_homestead_crystal.png'],
+    ['gold', 'resource_homestead_gold.png'],
+  ].map(([resource, filename]) => ({
+    id: `resource.homestead.${resource}`,
+    kind: 'resource',
+    source: `Raw Assets/Homestead Materials/${filename}`,
+    variants: {
+      icon: {
+        output: `public/assets/resources/homestead-${resource}.png`,
+        format: 'png',
+        width: 256,
+      },
+    },
+  })),
 ];

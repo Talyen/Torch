@@ -1,13 +1,21 @@
 import { itemDefinition } from '../content/items';
 import { recipeDefinition, recipes } from '../content/recipes';
+import { stationDefinition } from '../content/stations';
+import { samePosition } from './coords';
 import type { RecipeDefinition } from '../content/recipes';
 import type { CraftBlockedReason, CraftingCommand, GameState, SimEvent } from './types';
 
 export const MAX_CRAFT_BATCH = 99;
 
 export interface CraftingContext {
-  /** Station IDs are derived from simulation state by the caller. */
+  /** Station IDs are derived from simulation state, never authored by React. */
   stationIds?: readonly string[];
+}
+
+export function craftingContextForState(state: GameState): CraftingContext {
+  return {
+    stationIds: samePosition(state.hero.position, state.homestead) ? Object.keys(state.unlockedStations) : [],
+  };
 }
 
 export interface MissingIngredient {
@@ -124,6 +132,9 @@ export function validateCraftingContent(source: readonly RecipeDefinition[] = re
     }
     validateIngredient(recipe.id, recipe.output, 'output');
     if (!itemDefinition(recipe.output.itemId)) throw new Error(`Unknown output item: ${recipe.output.itemId}`);
+    if (recipe.stationId && !stationDefinition(recipe.stationId)) {
+      throw new Error(`Unknown station requirement: ${recipe.stationId}`);
+    }
     const ingredients = new Set<string>();
     for (const ingredient of recipe.ingredients) {
       validateIngredient(recipe.id, ingredient, 'ingredient');

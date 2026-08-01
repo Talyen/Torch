@@ -12,6 +12,8 @@ import type {
   WaypointTarget,
 } from './types';
 import type { PrimaryStats } from './stats';
+import { equipmentSlots } from '../content/equipment';
+import { toolSlots } from '../content/tools';
 
 export class SimulationDataValidationError extends Error {
   public constructor(message: string) {
@@ -24,6 +26,7 @@ export type UnknownRecord = Record<string, unknown>;
 
 const RESERVED_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const ABILITY_SLOTS = new Set<AbilitySlotId>(['basic', 'skill', 'ultimate']);
+const LOADOUT_SLOTS = new Set([...equipmentSlots.map((slot) => slot.id), ...toolSlots.map((slot) => slot.id)]);
 const ACTION_KINDS = new Set<ActionKind>(['attack', 'chop', 'mine', 'ability']);
 const DIRECTIONS = new Set<Direction>(['north', 'south', 'west', 'east']);
 const EFFECT_KINDS = new Set<AbilityEffectKind>(['stun', 'halve-block', 'holy-damage-from-block']);
@@ -136,6 +139,18 @@ function numberRecordAt(value: unknown, path: string): Record<string, number> {
   return result;
 }
 
+function loadoutAt(value: unknown, path: string, allowedSlots: readonly string[]): Record<string, string> {
+  const record = recordAt(value, path);
+  const allowed = new Set(allowedSlots);
+  const result: Record<string, string> = {};
+  for (const [slot, itemId] of Object.entries(record)) {
+    safeRecordKey(slot, `${path}.${slot}`);
+    if (!allowed.has(slot)) fail(`${path}.${slot}`, 'unexpected loadout slot');
+    result[slot] = stringAt(itemId, `${path}.${slot}`);
+  }
+  return result;
+}
+
 function abilityEffectAt(value: unknown, path: string): HeroState['activeAbilityEffects'][number] {
   const record = recordAt(value, path);
   exactKeys(record, ['id', 'abilityId', 'kind', 'amount', 'remainingActions'], [], path);
@@ -162,6 +177,8 @@ export function heroStateAt(value: unknown, path: string): HeroState {
       'inventory',
       'primaryStats',
       'equippedAbilities',
+      'equippedItems',
+      'equippedTools',
       'abilityCooldowns',
       'activeAbilityEffects',
     ],
@@ -171,6 +188,16 @@ export function heroStateAt(value: unknown, path: string): HeroState {
 
   const equipped = recordAt(record.equippedAbilities, `${path}.equippedAbilities`);
   exactKeys(equipped, ['basic', 'skill', 'ultimate'], [], `${path}.equippedAbilities`);
+  const equippedItems = loadoutAt(
+    record.equippedItems,
+    `${path}.equippedItems`,
+    equipmentSlots.map((slot) => slot.id),
+  );
+  const equippedTools = loadoutAt(
+    record.equippedTools,
+    `${path}.equippedTools`,
+    toolSlots.map((slot) => slot.id),
+  );
   const effects = record.activeAbilityEffects;
   if (!Array.isArray(effects)) fail(`${path}.activeAbilityEffects`, 'expected an array');
 
@@ -189,6 +216,8 @@ export function heroStateAt(value: unknown, path: string): HeroState {
       skill: stringAt(equipped.skill, `${path}.equippedAbilities.skill`),
       ultimate: stringAt(equipped.ultimate, `${path}.equippedAbilities.ultimate`),
     },
+    equippedItems,
+    equippedTools,
     abilityCooldowns: numberRecordAt(record.abilityCooldowns, `${path}.abilityCooldowns`),
     activeAbilityEffects: effects.map((effect, index) =>
       abilityEffectAt(effect, `${path}.activeAbilityEffects[${index}]`),
@@ -298,6 +327,19 @@ export function commandAt(value: unknown, path: string): Command {
         type,
         slot: enumAt(record.slot, ABILITY_SLOTS, `${path}.slot`),
         abilityId: stringAt(record.abilityId, `${path}.abilityId`),
+      };
+    case 'equip-item':
+      exactKeys(record, ['type', 'slot', 'itemId'], [], path);
+      return {
+        type,
+        slot: enumAt(record.slot, LOADOUT_SLOTS, `${path}.slot`),
+        itemId: stringAt(record.itemId, `${path}.itemId`),
+      };
+    case 'unequip-item':
+      exactKeys(record, ['type', 'slot'], [], path);
+      return {
+        type,
+        slot: enumAt(record.slot, LOADOUT_SLOTS, `${path}.slot`),
       };
     case 'craft':
       exactKeys(record, ['type', 'recipeId', 'quantity'], [], path);

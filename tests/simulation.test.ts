@@ -185,7 +185,7 @@ describe('Torch simulation', () => {
 
     expect(result.accepted).toBe(true);
     expect(result.state.turn).toBe(1);
-    expect(result.state.hero.inventory.wood).toBe(1);
+    expect(result.state.hero.inventory.wood).toBe(state.hero.inventory.wood + 1);
     expect(result.state.entities['resource-tree']).toBeUndefined();
   });
 
@@ -216,9 +216,22 @@ describe('Torch simulation', () => {
 
     expect(result.accepted).toBe(true);
     expect(result.state.hero.position).toEqual({ x: 2, y: 2 });
-    expect(result.state.hero.inventory.wood).toBe(1);
+    expect(result.state.hero.inventory.wood).toBe(state.hero.inventory.wood + 1);
     expect(result.state.entities['resource-tree']).toBeUndefined();
     expect(result.events.some((event) => event.type === 'action-resolved' && event.action === 'chop')).toBe(true);
+  });
+
+  it('retains the target name in action events after a gatherable is removed', () => {
+    const state = createInitialGameState(1234);
+    state.hero.position = { x: 2, y: 2 };
+
+    const result = applyCommand(state, { type: 'move', direction: 'east' });
+    const resolved = result.events.find(
+      (event): event is Extract<typeof event, { type: 'action-resolved' }> => event.type === 'action-resolved',
+    );
+
+    expect(result.state.entities['resource-tree']).toBeUndefined();
+    expect(resolved).toMatchObject({ action: 'chop', entityId: 'resource-tree', entityName: 'Old Pine' });
   });
 
   it('defaults a blocked move into an enemy to the strongest ready ability', () => {
@@ -252,7 +265,7 @@ describe('Torch simulation', () => {
     });
 
     expect(result.accepted).toBe(true);
-    expect(result.state.hero.inventory.ore).toBe(1);
+    expect(result.state.hero.inventory.ore).toBe(state.hero.inventory.ore + 1);
     expect(result.state.entities['resource-ore']).toBeUndefined();
   });
 

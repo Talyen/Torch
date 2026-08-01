@@ -7,6 +7,7 @@ describe('shared responsive layout contract', () => {
     expect(layoutProfileForSize(1024, 600)).toBe('short');
     expect(layoutProfileForSize(768, 1024)).toBe('wide');
     expect(layoutProfileForSize(390, 844)).toBe('compact');
+    expect(layoutProfileForSize(598, 376)).toBe('tiny');
     expect(layoutProfileForSize(360, 800)).toBe('tiny');
   });
 

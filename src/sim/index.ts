@@ -7,6 +7,7 @@ export * from './entities';
 export * from './footprint';
 export * from './gathering';
 export * from './journal';
+export * from './loadout';
 export * from './profile-save';
 export * from './rng';
 export * from './replay';

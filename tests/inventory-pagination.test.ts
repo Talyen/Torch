@@ -3,6 +3,7 @@ import { inventoryItems } from '../src/content/inventory';
 import {
   clampInventoryPage,
   filterAndSortInventoryItems,
+  inventoryDetailVisible,
   inventoryLayoutForViewport,
   inventoryPageCount,
   inventoryPageItems,
@@ -19,6 +20,7 @@ describe('inventory pagination', () => {
       rows: 2,
       pageSize: 6,
     });
+    expect(inventoryLayoutForViewport(598, 376)).toMatchObject({ profile: 'tiny', columns: 3, rows: 1, pageSize: 3 });
     expect(inventoryLayoutForViewport(320, 568)).toMatchObject({ profile: 'tiny', columns: 3, rows: 1, pageSize: 3 });
   });
 
@@ -51,5 +53,13 @@ describe('inventory pagination', () => {
     ]);
     expect(filterAndSortInventoryItems(inventoryItems, undefined, 'quantity')[0]?.id).toBe('wood');
     expect(filterAndSortInventoryItems(inventoryItems, undefined, 'name')[0]?.name).toBe('Ancient Coin');
+  });
+
+  it('does not mount an empty detail surface and preserves compact back behavior', () => {
+    expect(inventoryDetailVisible(false, false, false)).toBe(false);
+    expect(inventoryDetailVisible(false, true, true)).toBe(false);
+    expect(inventoryDetailVisible(true, false, false)).toBe(true);
+    expect(inventoryDetailVisible(true, true, false)).toBe(false);
+    expect(inventoryDetailVisible(true, true, true)).toBe(true);
   });
 });

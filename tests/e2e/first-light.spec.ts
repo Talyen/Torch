@@ -16,12 +16,32 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   }
 
   await expect(page.locator('#game canvas')).toBeVisible();
+  const canvasResolution = await page.locator('#game canvas').evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    return {
+      backingWidth: canvas.width,
+      backingHeight: canvas.height,
+      cssWidth: canvas.clientWidth,
+      cssHeight: canvas.clientHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    };
+  });
+  const expectedRenderScale = Math.min(2, Math.max(1, canvasResolution.devicePixelRatio));
+  expect(canvasResolution.backingWidth / canvasResolution.cssWidth).toBeCloseTo(expectedRenderScale, 1);
+  expect(canvasResolution.backingHeight / canvasResolution.cssHeight).toBeCloseTo(expectedRenderScale, 1);
   // The performance panel is intentionally development-only; production
   // preview smoke proves the playable surface without relying on diagnostics.
   const performancePanel = page.getByTestId('dev-performance');
   if (await performancePanel.count()) {
     await expect(performancePanel).toBeVisible();
     await expect(performancePanel).toHaveText(/^\d+ FPS$/);
+  }
+  const cardPlayLab = page.getByTestId('card-play-lab');
+  if (process.env.TORCH_E2E_PROD === '1') {
+    await expect(performancePanel).toHaveCount(0);
+    await expect(cardPlayLab).toHaveCount(0);
+  } else {
+    await expect(cardPlayLab).toBeVisible();
   }
   await expect(page.getByTestId('hud-hero-button')).toBeVisible();
   await expect(page.getByTestId('hud-hero-button').locator('img')).toBeVisible();
@@ -97,14 +117,16 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await page.getByRole('switch', { name: 'Reduce Motion' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-reduce-motion', 'false');
   await page.getByTestId('settings-tab-display').click();
-  await page.getByTestId('settings-ui-scale').selectOption('large');
+  await page.getByTestId('settings-ui-scale').click();
+  await page.getByRole('option', { name: 'Large' }).click();
   await expect(page.getByTestId('settings-ui-scale')).toContainText('Large');
   const largeUiFontSize = Number.parseFloat(
     await page.locator('#ui-root').evaluate((element) => getComputedStyle(element).fontSize),
   );
   expect(largeUiFontSize).toBeGreaterThanOrEqual(18);
   expect(largeUiFontSize).toBeLessThanOrEqual(20);
-  await page.getByTestId('settings-ui-scale').selectOption('auto');
+  await page.getByTestId('settings-ui-scale').click();
+  await page.getByRole('option', { name: 'Auto' }).click();
   const autoUiFontSize = Number.parseFloat(
     await page.locator('#ui-root').evaluate((element) => getComputedStyle(element).fontSize),
   );
@@ -142,27 +164,30 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('inventory-section-tabs')).toHaveCount(0);
   await expect(page.getByTestId('inventory-grid')).toBeVisible();
   await expect(page.getByTestId('inventory-grid')).toHaveAttribute('aria-label', 'all items');
-  await expect(page.getByTestId('inventory-tab-equipment')).toHaveAttribute('aria-selected', 'false');
-  await expect(page.getByTestId('inventory-tab-resources')).toBeVisible();
+  await expect(page.getByTestId('inventory-filter')).toBeVisible();
+  await expect(page.getByTestId('inventory-tab-equipment')).toHaveCount(0);
   await expect(page.getByTestId('inventory-page-previous')).toBeDisabled();
   await expect(page.getByTestId('inventory-page-next')).toBeEnabled();
   await page.getByTestId('inventory-page-next').click();
-  await expect(page.locator('.inventory-pagination-label')).toHaveText('Page 2 of 2');
+  await expect(page.locator('.inventory-pagination-label')).toHaveText('Page 2 of 3');
   await expect(page.getByTestId('inventory-page-previous')).toBeEnabled();
   await page.getByTestId('inventory-page-previous').click();
-  await expect(page.locator('.inventory-pagination-label')).toHaveText('Page 1 of 2');
+  await expect(page.locator('.inventory-pagination-label')).toHaveText('Page 1 of 3');
+  await page.getByTestId('inventory-filter').click();
+  await expect(page.getByTestId('inventory-tab-equipment')).toBeVisible();
   await page.getByTestId('inventory-tab-equipment').click();
-  await expect(page.getByTestId('inventory-tab-equipment')).toHaveAttribute('aria-selected', 'true');
-  await page.getByTestId('inventory-tab-equipment').click();
-  await expect(page.getByTestId('inventory-tab-equipment')).toHaveAttribute('aria-selected', 'false');
+  await expect(page.getByTestId('inventory-grid')).toHaveAttribute('aria-label', 'equipment items');
+  await page.getByTestId('inventory-filter').click();
+  await page.getByTestId('inventory-tab-all').click();
   await expect(page.getByTestId('inventory-grid')).toHaveAttribute('aria-label', 'all items');
   await expect(page.getByTestId('inventory-sort')).toBeVisible();
   await page.getByTestId('inventory-sort').click();
   await expect(page.getByRole('menuitemradio', { name: 'Name' })).toBeVisible();
   await page.getByRole('menuitemradio', { name: 'Name' }).click();
+  await page.getByTestId('inventory-page-next').click();
   await expect(page.getByTestId('inventory-item-iron-sword')).toBeVisible();
   await expect(page.getByText('Iron Sword', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Select an item to inspect it.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Select an item to inspect it.', { exact: true })).toHaveCount(0);
   const quantityLayout = await page.evaluate(() => {
     const item = document.querySelector<HTMLElement>('[data-testid="inventory-item-iron-sword"]');
     const quantity = item?.querySelector<HTMLElement>('.inventory-item-quantity');
@@ -179,9 +204,10 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   expect(quantityLayout.quantityCenter).toBeGreaterThan(quantityLayout.itemCenter);
   await page.getByTestId('inventory-item-iron-sword').click();
   await expect(page.getByTestId('inventory-detail')).toContainText('Iron Sword');
+  await page.getByTestId('inventory-filter').click();
   await page.getByTestId('inventory-tab-resources').click();
   await expect(page.getByTestId('inventory-item-wood')).toBeVisible();
-  await expect(page.getByTestId('inventory-detail')).not.toContainText('Iron Sword');
+  await expect(page.getByTestId('inventory-detail')).toHaveCount(0);
   await page.getByTestId('close-menu').click();
   await expect(page.getByTestId('hud-inventory-button')).toBeFocused();
   await page.getByTestId('hud-hero-button').click();
@@ -202,6 +228,8 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await page.getByTestId('hud-gear-button').click();
   await expect(page.getByRole('dialog', { name: 'Equipment' })).toBeVisible();
   await expect(page.getByTestId('equipment-screen')).toBeVisible();
+  await expect(page.getByTestId('equipment-tab')).toBeVisible();
+  await expect(page.getByTestId('tools-tab')).toBeVisible();
   await expect(page.getByTestId('equipment-slot-main-hand')).toBeVisible();
   await expect(page.getByTestId('equipment-slot-body')).toBeVisible();
   const equipmentFit = await page.evaluate(() => {
@@ -217,27 +245,19 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
     const boots = slot('boots');
     const amulet = slot('amulet');
     const trinket = slot('trinket');
-    const ringLeft = slot('ring-1');
-    const ringRight = slot('ring-2');
+    const ring = slot('ring-1');
     const belt = slot('belt');
     const slots = [...document.querySelectorAll<HTMLElement>('.equipment-slot')].map((item) =>
       item.getBoundingClientRect(),
     );
-    const toolRects = [...document.querySelectorAll<HTMLElement>('.tool-slot')].map((item) =>
-      item.getBoundingClientRect(),
-    );
     const paperGrid = document.querySelector<HTMLElement>('.paper-doll-grid')?.getBoundingClientRect();
-    const jewelryGrid = document.querySelector<HTMLElement>('.jewelry-grid')?.getBoundingClientRect();
-    const toolsGrid = document.querySelector<HTMLElement>('.tool-loadout-grid')?.getBoundingClientRect();
-    const heroArt = document.querySelector<HTMLElement>('.gear-hero-art');
-    const heroStyle = heroArt ? getComputedStyle(heroArt) : undefined;
     const sameRow = (left?: DOMRect, right?: DOMRect): boolean =>
       Boolean(left && right && Math.abs(left.top - right.top) <= 1);
+    const centerX = (rect?: DOMRect): number => (rect ? rect.left + rect.width / 2 : 0);
     return {
       panelFits: panel ? panel.scrollHeight === panel.clientHeight : false,
-      nestedContainersRemoved: !document.querySelector(
-        '.equipment-paper-doll, .equipment-primary-grid, .equipment-accessory-cluster',
-      ),
+      noHeroArt: !document.querySelector('.gear-hero-art'),
+      ringTwoRemoved: !document.querySelector('[data-testid="equipment-slot-ring-2"]'),
       slotsAreSquare: slots.every((item) => Math.abs(item.width - item.height) <= 1),
       slotsFitScreen: screen
         ? slots.every(
@@ -249,60 +269,62 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
           )
         : false,
       helmAboveHands: helm && mainHand ? helm.bottom <= mainHand.top + 1 : false,
+      helmCenteredOverBody: helm && body ? Math.abs(centerX(helm) - centerX(body)) <= 1 : false,
+      amuletRightOfHelm: amulet && helm ? amulet.left >= helm.right - 1 : false,
       handsAreAligned: sameRow(mainHand, body) && sameRow(body, offHand),
-      glovesAndBeltAreAligned: sameRow(gloves, belt),
-      bootsRightOfBelt: boots && belt ? boots.left > belt.right : false,
-      bootsAlignedWithBelt: sameRow(boots, belt),
-      accessoryRowsAreAligned: sameRow(amulet, trinket) && sameRow(ringLeft, ringRight),
-      jewelryOnOneRow: amulet && ringRight ? sameRow(amulet, ringRight) : false,
-      toolsOnOneRow: toolRects.length === 4 && toolRects.every((item) => Math.abs(item.top - toolRects[0].top) <= 1),
-      allSlotsSameSize: [...slots, ...toolRects].every(
-        (item) => Math.abs(item.width - slots[0].width) <= 1 && Math.abs(item.height - slots[0].height) <= 1,
-      ),
-      sharedGridWidth:
-        paperGrid && jewelryGrid && toolsGrid
-          ? Math.abs(paperGrid.width - jewelryGrid.width) <= 1 && Math.abs(jewelryGrid.width - toolsGrid.width) <= 1
-          : false,
-      sharedGridCenter:
-        paperGrid && jewelryGrid && toolsGrid
-          ? Math.abs(paperGrid.left + paperGrid.width / 2 - (jewelryGrid.left + jewelryGrid.width / 2)) <= 1 &&
-            Math.abs(jewelryGrid.left + jewelryGrid.width / 2 - (toolsGrid.left + toolsGrid.width / 2)) <= 1
-          : false,
+      glovesBelowMainHand: gloves && mainHand ? gloves.top >= mainHand.bottom - 1 : false,
+      beltBelowBody: belt && body ? belt.top >= body.bottom - 1 : false,
+      bootsBelowBelt: boots && belt ? boots.top >= belt.bottom - 1 : false,
+      bootsCenteredOverBelt: boots && belt ? Math.abs(centerX(boots) - centerX(belt)) <= 1 : false,
+      accessoryRowIsAligned: sameRow(ring, trinket),
+      ringLeftOfTrinket: ring && trinket ? ring.left <= trinket.left : false,
+      paperGridContainsSlots: paperGrid
+        ? slots.every(
+            (item) =>
+              item.left >= paperGrid.left &&
+              item.right <= paperGrid.right &&
+              item.top >= paperGrid.top &&
+              item.bottom <= paperGrid.bottom,
+          )
+        : false,
+      artworkIsSquare: [...document.querySelectorAll<HTMLElement>('.equipment-slot-art')].every((item) => {
+        const rect = item.getBoundingClientRect();
+        return Math.abs(rect.width - rect.height) <= 1 && rect.width >= 40;
+      }),
       labelsReadable: [
         ...document.querySelectorAll<HTMLElement>(
           '.gear-screen .loadout-slot-label, .gear-screen .loadout-slot-value, .gear-screen .loadout-slot-empty',
         ),
       ].every((item) => getComputedStyle(item).textOverflow !== 'ellipsis' && item.getBoundingClientRect().height > 0),
-      heroArtSubtle: Boolean(
-        heroStyle && heroStyle.filter.includes('blur(1.5px)') && Number.parseFloat(heroStyle.opacity) <= 0.35,
-      ),
-      toolGroupSemantics: document.querySelector('.tool-loadout-grid')?.getAttribute('role') === 'group',
+      paperGroupSemantics: document.querySelector('.paper-doll-grid')?.getAttribute('role') === 'group',
     };
   });
   expect(equipmentFit.panelFits).toBe(true);
-  expect(equipmentFit.nestedContainersRemoved).toBe(true);
+  expect(equipmentFit.noHeroArt).toBe(true);
+  expect(equipmentFit.ringTwoRemoved).toBe(true);
   expect(equipmentFit.slotsAreSquare).toBe(true);
   expect(equipmentFit.slotsFitScreen).toBe(true);
   expect(equipmentFit.helmAboveHands).toBe(true);
+  expect(equipmentFit.helmCenteredOverBody).toBe(true);
+  expect(equipmentFit.amuletRightOfHelm).toBe(true);
   expect(equipmentFit.handsAreAligned).toBe(true);
-  expect(equipmentFit.glovesAndBeltAreAligned).toBe(true);
-  expect(equipmentFit.bootsRightOfBelt).toBe(true);
-  expect(equipmentFit.bootsAlignedWithBelt).toBe(true);
-  expect(equipmentFit.accessoryRowsAreAligned).toBe(true);
-  expect(equipmentFit.jewelryOnOneRow).toBe(true);
-  expect(equipmentFit.toolsOnOneRow).toBe(true);
-  expect(equipmentFit.allSlotsSameSize).toBe(true);
-  expect(equipmentFit.sharedGridWidth).toBe(true);
-  expect(equipmentFit.sharedGridCenter).toBe(true);
+  expect(equipmentFit.glovesBelowMainHand).toBe(true);
+  expect(equipmentFit.beltBelowBody).toBe(true);
+  expect(equipmentFit.bootsBelowBelt).toBe(true);
+  expect(equipmentFit.bootsCenteredOverBelt).toBe(true);
+  expect(equipmentFit.accessoryRowIsAligned).toBe(true);
+  expect(equipmentFit.ringLeftOfTrinket).toBe(true);
+  expect(equipmentFit.paperGridContainsSlots).toBe(true);
+  expect(equipmentFit.artworkIsSquare).toBe(true);
   expect(equipmentFit.labelsReadable).toBe(true);
-  expect(equipmentFit.heroArtSubtle).toBe(true);
-  expect(equipmentFit.toolGroupSemantics).toBe(true);
+  expect(equipmentFit.paperGroupSemantics).toBe(true);
   await page.getByTestId('equipment-slot-main-hand').click();
   await expect(page.getByTestId('equipment-picker')).toBeVisible();
   await expect(page.getByTestId('equipment-picker-back')).toBeVisible();
   await page.getByTestId('equipment-choice-iron-sword').click();
   await expect(page.getByTestId('equipment-picker')).toHaveCount(0);
   await expect(page.getByTestId('equipment-slot-main-hand')).toHaveAttribute('aria-label', 'Main Hand: Iron Sword');
+  await page.getByTestId('tools-tab').click();
   await expect(page.getByTestId('tool-slot-axe')).toBeVisible();
   await expect(page.getByTestId('tool-slot-pickaxe')).toBeVisible();
   await expect(page.getByTestId('tool-slot-hammer')).toBeVisible();
@@ -312,6 +334,11 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('tool-choice-iron-axe')).toBeVisible();
   await page.getByTestId('tool-choice-iron-axe').click();
   await expect(page.getByTestId('tool-picker')).toHaveCount(0);
+  await expect(page.getByTestId('tool-slot-axe')).toHaveAttribute('aria-label', 'Axe: Iron Axe');
+  await page.getByTestId('close-menu').click();
+  await page.getByTestId('hud-gear-button').click();
+  await expect(page.getByTestId('equipment-slot-main-hand')).toHaveAttribute('aria-label', 'Main Hand: Iron Sword');
+  await page.getByTestId('tools-tab').click();
   await expect(page.getByTestId('tool-slot-axe')).toHaveAttribute('aria-label', 'Axe: Iron Axe');
   await page.getByTestId('close-menu').click();
   await page.getByTestId('hud-abilities-button').click();
@@ -336,28 +363,16 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   expect(abilitiesFit.panelFits).toBe(true);
   expect(abilitiesFit.cardsAreSideBySide).toBe(true);
   expect(abilitiesFit.artKeepsRatio).toBe(true);
-  await expect(page.getByTestId('ability-inspector')).toContainText('Bash');
-  await page.getByTestId('ability-view-details').click();
+  await expect(page.getByTestId('ability-inspector')).toHaveCount(0);
+  await page.getByTestId('ability-card-basic').click();
+  await expect(page.getByTestId('ability-picker')).toBeVisible();
+  await page.getByTestId('ability-choice-bash').click();
   await expect(page.getByTestId('ability-detail')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Bash' })).toContainText('Deal 2 Stun damage.');
   await expect(page.getByTestId('ability-detail')).toContainText('No cooldown');
-  await page.waitForTimeout(300);
-  await page.getByTestId('ability-detail-close').click();
-  await page.getByTestId('ability-change').click();
-  await expect(page.getByTestId('ability-picker')).toBeVisible();
-  await expect(page.getByTestId('ability-choice-bash')).toBeVisible();
-  await page.waitForFunction(() => {
-    const image = document.querySelector<HTMLImageElement>('[data-testid="ability-choice-bash"] img');
-    return Boolean(image?.naturalWidth && image?.naturalHeight);
-  });
-  const abilityRatio = await page
-    .getByTestId('ability-choice-bash')
-    .locator('img')
-    .evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight);
-  expect(abilityRatio).toBeCloseTo(3 / 4, 2);
-  await page.getByTestId('ability-choice-bash').click();
+  await page.getByTestId('ability-detail-select').click();
   await expect(page.getByTestId('ability-picker')).toHaveCount(0);
-  await expect(page.getByTestId('ability-feedback')).toContainText('Bash equipped in Basic.');
+  await expect(page.getByTestId('ability-detail')).toHaveCount(0);
 
   await page.getByTestId('close-menu').click();
   await page.getByTestId('menu-button').click();
@@ -421,6 +436,7 @@ test('keeps Inventory contained without scroll regions across supported viewport
   for (const viewport of [
     { width: 1366, height: 768 },
     { width: 1024, height: 600 },
+    { width: 674, height: 582 },
     { width: 768, height: 1024 },
     { width: 844, height: 390 },
     { width: 390, height: 844 },
@@ -441,11 +457,8 @@ test('keeps Inventory contained without scroll regions across supported viewport
           ? element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1
           : false;
       };
-      const tabs = [...document.querySelectorAll<HTMLElement>('.inventory-tab')].map((tab) => {
-        const tabRect = tab.getBoundingClientRect();
-        return { left: tabRect.left, right: tabRect.right, top: tabRect.top, bottom: tabRect.bottom };
-      });
-      const tabsList = rect('.inventory-tabs [role="tablist"]');
+      const filter = rect('[data-testid="inventory-filter"]');
+      const toolbar = rect('.inventory-toolbar');
       const panel = rect('#torch-menu');
       const screen = rect('.inventory-screen');
       return {
@@ -454,17 +467,11 @@ test('keeps Inventory contained without scroll regions across supported viewport
         noScreenScroll: noScroll('.inventory-screen'),
         noContentScroll: noScroll('.inventory-content'),
         noGridScroll: noScroll('.inventory-grid'),
-        noDetailScroll: noScroll('.inventory-detail'),
+        noDetailScroll: !document.querySelector('.inventory-detail') || noScroll('.inventory-detail'),
         noPaginationScroll: noScroll('.inventory-pagination'),
-        tabsInside: tabsList
-          ? tabs.every(
-              (tab) =>
-                tab.left >= tabsList.left - 1 &&
-                tab.right <= tabsList.right + 1 &&
-                tab.top >= tabsList.top - 1 &&
-                tab.bottom <= tabsList.bottom + 1,
-            )
-          : false,
+        filterInsideToolbar: Boolean(
+          filter && toolbar && filter.left >= toolbar.left - 1 && filter.right <= toolbar.right + 1,
+        ),
       };
     });
     expect(geometry.noScreenScroll).toBe(true);
@@ -474,7 +481,7 @@ test('keeps Inventory contained without scroll regions across supported viewport
     expect(geometry.noGridScroll).toBe(true);
     expect(geometry.noDetailScroll).toBe(true);
     expect(geometry.noPaginationScroll).toBe(true);
-    expect(geometry.tabsInside).toBe(true);
+    expect(geometry.filterInsideToolbar).toBe(true);
     expect(geometry.panel?.bottom ?? Infinity).toBeLessThanOrEqual(viewport.height + 1);
     expect(geometry.screen?.bottom ?? Infinity).toBeLessThanOrEqual((geometry.panel?.bottom ?? 0) + 1);
 
@@ -606,14 +613,12 @@ test('keeps the Ability workspace readable across supported viewports', async ({
     const layout = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>('#torch-menu');
       const screen = document.querySelector<HTMLElement>('[data-testid="abilities-screen"]');
-      const surface = document.querySelector<HTMLElement>('.ability-loadout-surface');
       const inspector = document.querySelector<HTMLElement>('[data-testid="ability-inspector"]');
       const cards = [...document.querySelectorAll<HTMLElement>('.ability-loadout-card')];
       const images = [...document.querySelectorAll<HTMLImageElement>('.ability-loadout-card img')];
       const controls = [...document.querySelectorAll<HTMLElement>('[data-testid="abilities-screen"] button')];
       const panelRect = panel?.getBoundingClientRect();
       const screenRect = screen?.getBoundingClientRect();
-      const surfaceRect = surface?.getBoundingClientRect();
       const inspectorRect = inspector?.getBoundingClientRect();
       return {
         panelInsideViewport: Boolean(
@@ -630,15 +635,7 @@ test('keeps the Ability workspace readable across supported viewports', async ({
           screenRect.right <= panelRect.right + 1 &&
           screenRect.bottom <= panelRect.bottom + 1,
         ),
-        inspectorVisible: Boolean(inspectorRect && inspectorRect.width > 0 && inspectorRect.height > 0),
-        loadoutAndInspectorDoNotOverlap: Boolean(
-          surfaceRect &&
-          inspectorRect &&
-          (surfaceRect.right <= inspectorRect.left + 1 ||
-            inspectorRect.right <= surfaceRect.left + 1 ||
-            surfaceRect.bottom <= inspectorRect.top + 1 ||
-            inspectorRect.bottom <= surfaceRect.top + 1),
-        ),
+        inspectorAbsent: !inspectorRect,
         cardsHaveReadableWidth: cards.length === 3 && cards.every((card) => card.getBoundingClientRect().width >= 42),
         artKeepsRatio:
           images.length === 3 &&
@@ -654,8 +651,7 @@ test('keeps the Ability workspace readable across supported viewports', async ({
 
     expect(layout.panelInsideViewport).toBe(true);
     expect(layout.screenInsidePanel).toBe(true);
-    expect(layout.inspectorVisible).toBe(true);
-    expect(layout.loadoutAndInspectorDoNotOverlap).toBe(true);
+    expect(layout.inspectorAbsent).toBe(true);
     expect(layout.cardsHaveReadableWidth).toBe(true);
     expect(layout.artKeepsRatio).toBe(true);
     expect(layout.controlsHaveHitArea).toBe(true);
@@ -665,17 +661,29 @@ test('keeps the Ability workspace readable across supported viewports', async ({
   await page.goto('/');
   await page.getByTestId('hud-abilities-button').click();
   await page.getByTestId('ability-slot-skill').locator('.ability-art-button').click();
-  await expect(page.getByTestId('ability-inspector')).toContainText('Sunder');
-  await expect(page.getByTestId('ability-slot-skill').locator('.ability-art-button')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await page.getByTestId('ability-change').focus();
-  await page.keyboard.press('Enter');
   await expect(page.getByTestId('ability-picker')).toBeVisible();
   await page.getByTestId('ability-picker-back').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('ability-picker')).toHaveCount(0);
+});
+
+test('keeps pointer-to-tile mapping aligned with the high-DPI backing surface', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 480 });
+  await page.goto('/');
+  const canvas = page.locator('#game canvas');
+  await expect(canvas).toBeVisible();
+
+  const metrics = await canvas.evaluate((element) => ({
+    width: element.clientWidth,
+    height: element.clientHeight,
+  }));
+  const tileSize = Math.min(metrics.width, metrics.height) / 7;
+  await canvas.click({ position: { x: metrics.width / 2 + tileSize, y: metrics.height / 2 } });
+
+  await page.getByTestId('menu-button').click();
+  await page.getByTestId('menu-map').click();
+  await expect(page.getByRole('img', { name: /Explored terrain map/ })).toBeVisible();
+  await expect(page.getByTestId('map-grid')).toHaveAttribute('aria-label', 'Explored terrain map with Hero at 1, 2');
 });
 
 test('keeps the fixed Hero shell contained across landscape and portrait viewports', async ({ page }) => {
@@ -749,6 +757,38 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/');
   await expect(page.getByTestId('hud-hero-button')).toBeVisible();
+  const cardPlayLab = page.getByTestId('card-play-lab');
+  const hasCardPlayLab = (await cardPlayLab.count()) > 0;
+  if (hasCardPlayLab) {
+    await expect(cardPlayLab).toBeVisible();
+    await expect(page.getByTestId('card-play-preset-trinket')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('card-play-replay')).toHaveCount(0);
+    await expect(page.getByTestId('card-play-compare')).toHaveCount(0);
+    await expect(page.getByTestId('card-play-slow-motion')).toHaveCount(0);
+    for (const presetId of ['alchemy']) {
+      const preset = page.getByTestId(`card-play-preset-${presetId}`);
+      await preset.click();
+      await expect(preset).toHaveAttribute('aria-checked', 'true');
+    }
+    await page.getByTestId('card-play-preset-trinket').click();
+    const labPlacement = await page.evaluate(() => {
+      const lab = document.querySelector<HTMLElement>('[data-testid="card-play-lab"]')?.getBoundingClientRect();
+      const perf = document.querySelector<HTMLElement>('[data-testid="dev-performance"]')?.getBoundingClientRect();
+      return {
+        labLeft: lab?.left ?? 0,
+        labTop: lab?.top ?? 0,
+        labRight: lab?.right ?? 0,
+        labBottom: lab?.bottom ?? 0,
+        perfBottom: perf?.bottom ?? 0,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(labPlacement.labLeft).toBeGreaterThanOrEqual(0);
+    expect(labPlacement.labTop).toBeGreaterThanOrEqual(labPlacement.perfBottom);
+    expect(labPlacement.labRight).toBeLessThanOrEqual(labPlacement.viewportWidth);
+    expect(labPlacement.labBottom).toBeLessThanOrEqual(labPlacement.viewportHeight);
+  }
   await page.waitForTimeout(400);
 
   await page.keyboard.press('ArrowRight');
@@ -780,26 +820,76 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   // keeps the assertion focused on the action-hand feedback contract rather
   // than keyboard repeat timing.
   await page.waitForTimeout(350);
+  await chopCard.evaluate((element) => {
+    (window as Window & { __torchCardNode?: HTMLElement }).__torchCardNode = element as HTMLElement;
+  });
   await chopCard.click();
   await expect(chopCard).toHaveClass(/is-playing/);
+  const playingCardAnimation = await chopCard.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      name: style.animationName,
+      duration: style.animationDuration,
+    };
+  });
+  expect(playingCardAnimation.name).toBe('torch-card-play-trinket');
+  expect(playingCardAnimation.duration).not.toBe('0s');
+  const playingCardGeometry = await chopCard.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const hand = document.querySelector<HTMLElement>('.context-action-hand')?.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      radius: Number.parseFloat(style.borderTopLeftRadius),
+      handBottom: hand?.bottom ?? 0,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      sameNode: (window as Window & { __torchCardNode?: HTMLElement }).__torchCardNode === element,
+    };
+  });
+  expect(playingCardGeometry.sameNode).toBe(true);
+  expect(playingCardGeometry.radius).toBeGreaterThanOrEqual(12);
+  expect(playingCardGeometry.left).toBeGreaterThanOrEqual(-1);
+  expect(playingCardGeometry.right).toBeLessThanOrEqual(playingCardGeometry.viewportWidth + 1);
+  expect(playingCardGeometry.top).toBeGreaterThanOrEqual(-1);
+  expect(playingCardGeometry.bottom).toBeLessThanOrEqual(playingCardGeometry.viewportHeight + 1);
+  expect(playingCardGeometry.handBottom).toBeGreaterThanOrEqual(playingCardGeometry.bottom - 2);
+  await expect(chopCard).toHaveAttribute('data-card-play-state', 'playing');
+  await expect(chopCard).toHaveAttribute('data-card-animation-preset', 'trinket');
+  await expect(chopCard).toHaveAttribute('data-card-animation-phase', 'play');
+  await expect(chopCard).toHaveAttribute('data-card-play-key', 'entity:chop');
   await expect(chopCard.getByRole('status')).toHaveText('Resolving…');
-  await expect(page.getByTestId('context-action-play-ghost')).toHaveCount(1);
-  await expect(page.getByTestId('context-action-hand')).toHaveCount(0);
+  await expect(page.getByTestId('card-animation-transfer')).toHaveCount(0);
+  await expect(chopCard).toContainText('Old Pine');
+  await expect(chopCard).not.toContainText('Target');
+
+  await page.evaluate(() => {
+    document.documentElement.dataset.reduceMotion = 'true';
+  });
 
   await page.keyboard.press('ArrowRight');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Bash against Forest Slime' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sunder against Forest Slime' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Avatar against Forest Slime' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Sunder against Forest Slime' }).click();
-  await expect(page.getByRole('button', { name: 'Sunder against Forest Slime' })).toHaveCount(0);
+  const sunderCard = page.getByRole('button', { name: 'Sunder against Forest Slime' });
+  await sunderCard.click();
+  await expect(sunderCard).toHaveAttribute('data-card-animation-preset', 'trinket');
+  await expect(sunderCard).toHaveAttribute('data-card-animation-phase', 'play');
+  await expect(sunderCard).toHaveCount(0, { timeout: 2500 });
+  await page.waitForTimeout(1100);
 
-  await page.keyboard.press('ArrowRight');
   const defaultAbilityCard = page.getByTestId('context-action-card-context-ability-ability.avatar');
-  await expect(defaultAbilityCard).toHaveClass(/is-playing/);
-  await expect(defaultAbilityCard).toHaveCount(0);
+  await expect(defaultAbilityCard).toBeVisible();
+  await defaultAbilityCard.click();
+  await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-phase', 'play');
+  await expect(defaultAbilityCard).toHaveAttribute('data-card-animation-preset', 'trinket');
+  await expect(defaultAbilityCard).toHaveCount(0, { timeout: 2500 });
 });
 
 test('persists an action-boundary world and restores it after reload', async ({ page }) => {

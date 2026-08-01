@@ -16,8 +16,8 @@ export const toolSlots = [
 
 export type ToolSlotId = (typeof toolSlots)[number]['id'];
 
-// These fixtures establish the loadout contract before tool durability and
-// tool-specific gathering modifiers become simulation-backed inventory data.
+// Tool definitions provide the presentation metadata for canonical equipment
+// IDs. Durability and tool-specific gathering modifiers remain future work.
 export const tools: ToolDefinition[] = [
   { id: 'iron-axe', name: 'Iron Axe', action: 'chop', icon: 'axe' },
   { id: 'stone-pickaxe', name: 'Stone Pickaxe', action: 'mine', icon: 'pickaxe' },

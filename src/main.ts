@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { createElement } from 'react';
+import { Fragment, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TorchScene } from './game/scene';
 import { gameSession } from './game/session';
 import { MenuOverlay } from './ui/menu-overlay';
 import { LocalStorageSaveProvider } from './platform/local-save-provider';
 import { devFrameMonitor } from './dev/frame-monitor';
+import { CardPlayLab } from './dev/card-play-lab';
 import { applyReduceMotionPreference, applyUiScalePreference } from './game/presentation-settings';
 import './index.css';
 import './styles.css';
@@ -17,7 +18,9 @@ applyUiScalePreference();
 applyReduceMotionPreference();
 gameSession.attachSaveProvider(new LocalStorageSaveProvider());
 
-createRoot(uiRoot).render(createElement(MenuOverlay));
+createRoot(uiRoot).render(
+  createElement(Fragment, null, createElement(MenuOverlay), import.meta.env.DEV ? createElement(CardPlayLab) : null),
+);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -34,10 +37,9 @@ const game = new Phaser.Game({
     roundPixels: false,
   },
   scale: {
-    // RESIZE keeps Phaser's logical coordinate space in CSS pixels. The
-    // scene owns the bounded viewport math; devicePixelRatio must never leak
-    // into world coordinates or pointer hit testing.
-    mode: Phaser.Scale.RESIZE,
+    // TorchScene owns the CSS-to-backing-size bridge so high-DPI displays get
+    // a dense renderer without leaking device pixels into world coordinates.
+    mode: Phaser.Scale.NONE,
   },
   scene: [TorchScene],
 });

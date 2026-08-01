@@ -51,7 +51,7 @@
   --color-foreground: var(--ui-color-text);
   --color-card: var(--ui-color-surface-content);
   --color-card-foreground: var(--ui-color-text);
-  --color-popover: var(--ui-color-surface-panel);
+  --color-popover: var(--ui-color-popover);
   --color-popover-foreground: var(--ui-color-text);
   --color-primary: var(--ui-color-accent);
   --color-primary-foreground: var(--ui-color-on-accent);
@@ -59,7 +59,7 @@
   --color-secondary-foreground: var(--ui-color-heading);
   --color-muted: var(--ui-color-surface-content-raised);
   --color-muted-foreground: var(--ui-color-muted);
-  --color-accent: var(--ui-color-accent-soft);
+  --color-accent: var(--ui-color-surface-selected);
   --color-accent-foreground: var(--ui-color-heading);
   --color-border: var(--ui-border-subtle);
   --color-input: var(--ui-border-subtle);
@@ -78,7 +78,7 @@
   --foreground: var(--ui-color-text);
   --card: var(--ui-color-surface-content);
   --card-foreground: var(--ui-color-text);
-  --popover: var(--ui-color-surface-panel);
+  --popover: var(--ui-color-popover);
   --popover-foreground: var(--ui-color-text);
   --primary: var(--ui-color-accent);
   --primary-foreground: var(--ui-color-on-accent);
@@ -86,7 +86,7 @@
   --secondary-foreground: var(--ui-color-heading);
   --muted: var(--ui-color-surface-content-raised);
   --muted-foreground: var(--ui-color-muted);
-  --accent: var(--ui-color-accent-soft);
+  --accent: var(--ui-color-surface-selected);
   --accent-foreground: var(--ui-color-heading);
   --border: var(--ui-border-subtle);
   --input: var(--ui-border-subtle);

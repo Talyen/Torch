@@ -20,7 +20,8 @@ export interface InventoryItemDefinition {
   icon: InventoryIconId;
 }
 
-// Temporary authored fixtures keep the menu useful while inventory simulation state is still on the roadmap.
+// Catalog-only display fixtures remain available for pagination tests and
+// content previews. They are never treated as owned inventory.
 export const inventoryItems: InventoryItemDefinition[] = [
   {
     id: 'iron-sword',
@@ -135,16 +136,10 @@ const categoryForItem = (category: (typeof itemDefinitions)[number]['category'])
   return 'resources';
 };
 
-/**
- * Projects the simulation's canonical inventory into the display model used by
- * the Inventory screen. Fixture-only definitions remain visible while the
- * equipment prototype is not yet simulation-backed, but their quantities are
- * never treated as authoritative.
- */
+/** Projects only simulation-owned item IDs into the display model. */
 export function inventoryItemsForState(state: Pick<GameState, 'hero'>): InventoryItemDefinition[] {
-  const fixtureIds = new Set(inventoryItems.map((item) => item.id));
-  const projected = itemDefinitions
-    .filter((item) => (state.hero.inventory[item.id] ?? 0) > 0 || fixtureIds.has(item.id))
+  return itemDefinitions
+    .filter((item) => (state.hero.inventory[item.id] ?? 0) > 0)
     .map((item) => ({
       id: item.id,
       category: categoryForItem(item.category),
@@ -153,9 +148,4 @@ export function inventoryItemsForState(state: Pick<GameState, 'hero'>): Inventor
       description: item.description,
       icon: item.icon,
     }));
-  const projectedIds = new Set(projected.map((item) => item.id));
-  const fixtureOnly = inventoryItems
-    .filter((item) => item.id !== 'copper-ore' && !projectedIds.has(item.id))
-    .map((item) => ({ ...item, quantity: state.hero.inventory[item.id] ?? 0 }));
-  return [...projected, ...fixtureOnly];
 }

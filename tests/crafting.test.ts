@@ -20,6 +20,7 @@ describe('crafting simulation', () => {
       'recipe.copper-ingot',
       'recipe.field-torch',
       'recipe.healing-potion',
+      'recipe.iron-axe',
     ]);
   });
 
@@ -46,6 +47,7 @@ describe('crafting simulation', () => {
 
   it('rejects missing materials without mutating the cloned state', () => {
     const state = createInitialGameState(1234);
+    state.hero.inventory = {};
     const result = applyCommand(state, { type: 'craft', recipeId: 'recipe.copper-ingot', quantity: 1 });
 
     expect(result.accepted).toBe(false);
@@ -89,9 +91,9 @@ describe('crafting simulation', () => {
       seed: 1234,
       generationVersion: createInitialGameState(1234).generationVersion,
       commands: [
-        { type: 'craft' as const, recipeId: 'recipe.wood-plank', quantity: 1 },
+        { type: 'craft' as const, recipeId: 'recipe.iron-axe', quantity: 1 },
         { type: 'move' as const, direction: 'east' as const },
-        { type: 'craft' as const, recipeId: 'recipe.wood-plank', quantity: 1 },
+        { type: 'craft' as const, recipeId: 'recipe.iron-axe', quantity: 1 },
       ],
     };
     const first = runReplay(transcript);
@@ -109,7 +111,7 @@ describe('crafting simulation', () => {
     expect(crafted.accepted).toBe(true);
 
     const restored = restoreWorldSave(JSON.parse(JSON.stringify(createWorldSave(crafted.state))));
-    expect(restored.hero.inventory).toEqual({ 'wood-plank': 4 });
+    expect(restored.hero.inventory['wood-plank']).toBe(4);
     expect(inventoryItemsForState(restored).find((item) => item.id === 'wood-plank')).toMatchObject({
       quantity: 4,
       category: 'resources',

@@ -18,6 +18,10 @@ test('gathers a resource, crafts a batch, and reflects the result in Inventory',
   await page.getByTestId('menu-crafting').click();
   await expect(page.getByRole('dialog', { name: 'Crafting' })).toBeVisible();
   await expect(page.getByTestId('crafting-screen')).toBeVisible();
+  await expect(page.getByTestId('crafting-station-status')).toContainText('Expedition crafting');
+  await page.getByTestId('crafting-recipe-recipe.iron-axe').click();
+  await expect(page.getByTestId('crafting-inspector')).toContainText('Requires Workbench');
+  await expect(page.getByTestId('crafting-craft')).toBeDisabled();
 
   await page.getByTestId('crafting-recipe-recipe.wood-plank').click();
   await expect(page.getByTestId('crafting-craft')).toBeEnabled();
@@ -26,6 +30,7 @@ test('gathers a resource, crafts a batch, and reflects the result in Inventory',
 
   await page.getByTestId('close-menu').click();
   await page.getByTestId('hud-inventory-button').click();
+  await page.getByTestId('inventory-filter').click();
   await page.getByTestId('inventory-tab-resources').click();
   await expect(page.getByTestId('inventory-item-wood-plank')).toHaveAttribute('aria-label', 'Wood Plank, quantity 4');
 });

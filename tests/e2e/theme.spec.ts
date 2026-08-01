@@ -80,3 +80,48 @@ test('uses the canonical Gold/Charcoal palette across overlay surfaces', async (
   const allSurfaceStyles = [menuPanel, menuTile, settingsGroup, inventoryItem, equipmentSlot].join(' ').toLowerCase();
   for (const value of legacyBlueValues) expect(allSurfaceStyles).not.toContain(value);
 });
+
+test('uses Torch geometry for dialog close and pagination controls', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('hud-inventory-button').click();
+  await expect(page.getByRole('dialog', { name: 'Inventory' })).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      const icon = element?.querySelector<SVGElement>('svg');
+      if (!element || !icon) return undefined;
+      const elementRect = element.getBoundingClientRect();
+      const iconRect = icon.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        height: elementRect.height,
+        width: elementRect.width,
+        centerDeltaX: iconRect.left + iconRect.width / 2 - (elementRect.left + elementRect.width / 2),
+        centerDeltaY: iconRect.top + iconRect.height / 2 - (elementRect.top + elementRect.height / 2),
+        borderRadius: style.borderRadius,
+        background: style.backgroundColor,
+        dataSlot: element.dataset.slot,
+      };
+    };
+
+    return {
+      close: read("button[aria-label='Close menu']"),
+      previous: read("button[aria-label='Previous inventory page']"),
+      next: read("button[aria-label='Next inventory page']"),
+    };
+  });
+
+  expect(metrics.close).toBeDefined();
+  expect(metrics.close?.dataSlot).toBe('button');
+  expect(metrics.close?.borderRadius).toBe('50%');
+  expect(Math.abs(metrics.close?.centerDeltaX ?? 99)).toBeLessThan(0.5);
+  expect(Math.abs(metrics.close?.centerDeltaY ?? 99)).toBeLessThan(0.5);
+
+  for (const pagination of [metrics.previous, metrics.next]) {
+    expect(pagination).toBeDefined();
+    expect(pagination?.dataSlot).toBe('button');
+    expect(pagination?.height).toBeGreaterThanOrEqual(42);
+    expect(pagination?.background).not.toBe('rgb(12, 11, 9)');
+  }
+});

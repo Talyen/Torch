@@ -76,8 +76,16 @@ Phaser owns the world canvas; React owns semantic application UI in the sibling
 `#ui-root` overlay. React UI requests commands through the session boundary and
 subscribes to action-boundary state rather than polling each frame.
 
+Torch keeps world positions and board geometry in logical CSS-pixel units. The
+Phaser presentation layer may render into a denser device-pixel backing surface,
+but DPR is applied only by the scale/camera bridge and Phaser's input transform;
+it must not leak into simulation coordinates, React layout, or board-anchor math.
+Resize and device-pixel-ratio changes update the backing surface, camera
+projection, and pointer conversion as one coalesced presentation update.
+
 Keep logical tile coordinates independent from device pixels. Use Phaser's
-`RESIZE` scale mode and responsive, container-aware layout. Rendering may
+container-aware scale contract and the presentation resize bridge to keep
+canvas sizing responsive while backing density changes. Rendering may
 interpolate between action-boundary snapshots, but it must not invent gameplay
 state or rules.
 
@@ -86,6 +94,25 @@ objects, actors, fog, effects, and UI should remain separable enough to update
 bounded work without rebuilding the whole scene. Prefer simple cached or pooled
 rendering when profiling shows it is needed; do not add a specialized rendering
 path preemptively.
+
+The React Action Hand captures an immutable card-animation snapshot immediately
+before dispatching an action. The snapshot owns the stable presentation key,
+target tile, camera position, target label, source geometry, and selected source
+preset; the simulation also includes the target name in its action-boundary
+events before a gatherable or defeated enemy is removed. This keeps card copy
+truthful while the result is presented. The active card keeps its stable keyed
+DOM node and moves through a presentation-only `data-card-animation-phase`
+transition. The hand has one renderer and two typed source bundles: Trinket
+owns the spring fan, held-card tilt, staggered draw, and dissolve cast; Alchemy
+owns the precise hover fan, 3D draw/discard flips, and target-travel ghost.
+The animation layer may use visual draw/discard anchors, but it never adds deck
+state or gameplay semantics to the simulation.
+
+Development builds expose a temporary Card Animation Lab with exactly two
+presentation-only presets (`trinket` and `alchemy`). It selects the complete
+hand, hover, reflow, draw, discard, and play behavior for the real Action Hand,
+not a second replay engine. The lab never changes simulation rules, persistence,
+or production UI.
 
 Use smooth filtering for painterly artwork and pixel sampling only for assets
 authored for it. The Gold/Charcoal palette applies to UI chrome and board
@@ -119,7 +146,10 @@ Storage failures should be recoverable without corrupting the running session.
 Cloud storage is an optional provider, not an authority for game rules.
 
 Schema changes require an explicit version and migration or a deliberate reset
-decision. Keep profile progression separate from world-local state.
+decision. During early development, unsupported older world-save schemas may
+deliberately start a fresh deterministic world; migration and recovery are
+release-hardening work. Keep profile progression separate from world-local
+state.
 
 ## Content and assets
 

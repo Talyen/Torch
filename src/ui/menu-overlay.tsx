@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FlaskConical,
+  Filter,
   Gem,
   Gamepad2,
   Hammer,
@@ -45,8 +46,10 @@ import { equipmentSlots } from '../content/equipment';
 import type { EquipmentSlotId } from '../content/equipment';
 import { toolSlots, tools } from '../content/tools';
 import type { ToolSlotId } from '../content/tools';
-import { inventoryCategories, inventoryItems, inventoryItemsForState } from '../content/inventory';
-import type { InventoryCategory, InventoryIconId } from '../content/inventory';
+import { inventoryCategories, inventoryItemsForState } from '../content/inventory';
+import type { InventoryCategory, InventoryIconId, InventoryItemDefinition } from '../content/inventory';
+import { itemDefinition } from '../content/items';
+import type { ItemDefinition } from '../content/items';
 import {
   clampInventoryPage,
   filterAndSortInventoryItems,
@@ -54,6 +57,7 @@ import {
   inventoryPageCount,
   inventoryPageItems,
   inventoryPageRange,
+  inventoryDetailVisible,
 } from './inventory-pagination';
 import type { InventoryLayout, InventorySort } from './inventory-pagination';
 import { mapFitForViewport } from './responsive-layout';
@@ -69,16 +73,20 @@ import {
 } from '../game/presentation-settings';
 import type { PresentationSettings, PresentationSettingKey } from '../game/presentation-settings';
 import { ContextActionHand } from './context-action-hand';
+import { feedbackAnnouncementForBatch } from '../game/feedback-presenter';
 import { CraftingScreen } from './crafting-screen';
 import { JournalScreen } from './journal-screen';
 import {
   TorchButton,
+  TorchArtworkCard,
   TorchDialog,
+  TorchIconButton,
   TorchMenuContent,
   TorchMenuRadioGroup,
   TorchMenuRadioItem,
   TorchMenuRoot,
   TorchMenuTrigger,
+  TorchSelectField,
   TorchTabsContent,
   TorchTabsList,
   TorchTabsRoot,
@@ -170,7 +178,6 @@ const equipmentSlotIcons: Record<EquipmentSlotId, LucideIcon> = {
   boots: PackageOpen,
   belt: CircleEllipsis,
   'ring-1': Gem,
-  'ring-2': Gem,
   amulet: Gem,
   trinket: Sparkles,
 };
@@ -188,6 +195,7 @@ export function MenuOverlay(): ReactElement {
   const [gameState, setGameState] = useState(() => gameSession.state);
   const [profileJournal, setProfileJournal] = useState<ProfileJournalState>(() => gameSession.profileJournal);
   const [gameEvents, setGameEvents] = useState<SimEvent[]>([]);
+  const [feedbackAnnouncement, setFeedbackAnnouncement] = useState('');
   const [heroStatus, setHeroStatus] = useState(() => ({
     health: gameSession.state.hero.health,
     maxHealth: gameSession.state.hero.maxHealth,
@@ -212,6 +220,14 @@ export function MenuOverlay(): ReactElement {
     return () => {
       unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = gameSession.subscribeActionBatches((batch) => {
+      const announcement = feedbackAnnouncementForBatch(batch);
+      if (announcement) setFeedbackAnnouncement(announcement);
+    });
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -308,6 +324,9 @@ export function MenuOverlay(): ReactElement {
   return (
     <>
       <div ref={gameplayHudRef} className="gameplay-hud" data-testid="gameplay-hud">
+        <div className="sr-only" role="status" aria-live="polite" data-testid="combat-feedback-announcement">
+          {feedbackAnnouncement}
+        </div>
         <ContextActionHand state={gameState} events={gameEvents} hidden={open} />
         {!open ? (
           <>
@@ -410,9 +429,15 @@ export function MenuOverlay(): ReactElement {
                   </div>
                   <TorchDialog.Close
                     ref={closeButtonRef}
-                    className="menu-close"
-                    aria-label="Close menu"
-                    data-testid="close-menu"
+                    render={
+                      <TorchButton
+                        variant="ghost"
+                        size="icon-lg"
+                        className="menu-close"
+                        aria-label="Close menu"
+                        data-testid="close-menu"
+                      />
+                    }
                     onPointerDown={() => {
                       const triggerTestId = returnFocusTestIdRef.current;
                       if (triggerTestId) {
@@ -463,7 +488,7 @@ export function MenuOverlay(): ReactElement {
                 ) : screen === 'inventory' ? (
                   <InventoryScreen state={gameState} />
                 ) : screen === 'gear' ? (
-                  <GearPanel />
+                  <GearPanel state={gameState} />
                 ) : screen === 'crafting' ? (
                   <CraftingScreen state={gameState} events={gameEvents} />
                 ) : screen === 'abilities' ? (
@@ -519,8 +544,29 @@ function InventoryScreen({ state }: { state: GameState }): ReactElement {
   return <InventoryItemsPanel items={inventoryItemsForState(state)} />;
 }
 
-function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): ReactElement {
+function inventoryItemFromDefinition(definition: ItemDefinition | undefined): InventoryItemDefinition | undefined {
+  if (!definition) return undefined;
+  const category =
+    definition.category === 'consumable'
+      ? 'consumables'
+      : definition.category === 'equipment'
+        ? 'equipment'
+        : definition.category === 'misc'
+          ? 'misc'
+          : 'resources';
+  return {
+    id: definition.id,
+    category,
+    name: definition.name,
+    quantity: 1,
+    description: definition.description,
+    icon: definition.icon,
+  };
+}
+
+function InventoryItemsPanel({ items }: { items: InventoryItemDefinition[] }): ReactElement {
   const [category, setCategory] = useState<InventoryCategory | undefined>();
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [sort, setSort] = useState<InventorySort>('category');
   const [sortOpen, setSortOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -528,7 +574,6 @@ function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): React
   const [detailOpen, setDetailOpen] = useState(false);
   const inventoryScreenRef = useRef<HTMLDivElement>(null);
   const measuredInventorySize = useElementSize(inventoryScreenRef);
-  const categoryPointerStateRef = useRef<'active' | 'inactive' | undefined>(undefined);
   const itemButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const viewport =
@@ -548,6 +593,8 @@ function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): React
   const selectedItem = pageItems.find((item) => item.id === selectedId);
   const selectedItemFromFilteredItems = filteredItems.find((item) => item.id === selectedId);
   const SelectedIcon = selectedItemFromFilteredItems ? inventoryIcons[selectedItemFromFilteredItems.icon] : undefined;
+  const hasSelectedDetail = inventoryDetailVisible(Boolean(selectedItem && SelectedIcon), isCompactLayout, detailOpen);
+  const activeCategoryLabel = inventoryCategories.find((item) => item.id === category)?.label;
 
   useEffect(() => {
     if (safePageIndex !== pageIndex) setPageIndex(safePageIndex);
@@ -611,46 +658,67 @@ function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): React
       </div>
 
       <div className="inventory-toolbar">
-        <TorchTabsRoot
-          className="inventory-tabs"
-          value={category ?? null}
-          onValueChange={(value) => {
-            if (typeof value === 'string') {
-              setCategory(value as InventoryCategory);
-              setSelectedId(undefined);
-              setPageIndex(0);
-              setDetailOpen(false);
+        <TorchMenuRoot open={categoryOpen} onOpenChange={setCategoryOpen}>
+          <TorchMenuTrigger
+            render={
+              <TorchIconButton
+                label={activeCategoryLabel ? `Filter inventory: ${activeCategoryLabel}` : 'Filter inventory'}
+                data-testid="inventory-filter"
+              >
+                <Filter aria-hidden="true" />
+              </TorchIconButton>
             }
-          }}
-        >
-          <TorchTabsList aria-label="Inventory categories" activateOnFocus variant="line">
-            {inventoryCategories.map(({ id, label, icon }) => {
-              const Icon = inventoryIcons[icon];
-              return (
-                <TorchTabsTab
-                  className="inventory-tab"
-                  value={id}
-                  aria-label={label}
-                  title={label}
-                  data-testid={`inventory-tab-${id}`}
-                  key={id}
-                  onPointerDown={(event) => {
-                    categoryPointerStateRef.current = category === id ? 'active' : 'inactive';
-                    event.preventBaseUIHandler();
-                    selectCategory(id);
-                  }}
-                  onClick={(event) => {
-                    if (categoryPointerStateRef.current === 'active') event.preventBaseUIHandler();
-                    categoryPointerStateRef.current = undefined;
-                  }}
-                >
-                  <Icon aria-hidden="true" />
-                  <span className="inventory-tab-label">{label}</span>
-                </TorchTabsTab>
-              );
-            })}
-          </TorchTabsList>
-        </TorchTabsRoot>
+            className={`inventory-filter-trigger${category ? ' is-active' : ''}`}
+            aria-label={activeCategoryLabel ? `Filter inventory: ${activeCategoryLabel}` : 'Filter inventory'}
+          />
+          <TorchMenuContent
+            container={typeof document === 'undefined' ? null : document.getElementById('torch-menu')}
+            className="inventory-filter-menu"
+            aria-label="Filter inventory"
+            side="bottom"
+            align="start"
+            sideOffset={6}
+          >
+            <TorchMenuRadioGroup
+              value={category ?? 'all'}
+              onValueChange={(value) => {
+                if (value === 'all') {
+                  setCategory(undefined);
+                  setSelectedId(undefined);
+                  setPageIndex(0);
+                  setDetailOpen(false);
+                  return;
+                }
+                if (inventoryCategories.some((item) => item.id === value)) selectCategory(value as InventoryCategory);
+              }}
+            >
+              <TorchMenuRadioItem
+                className="inventory-filter-option"
+                value="all"
+                data-testid="inventory-tab-all"
+                closeOnClick
+              >
+                <Filter aria-hidden="true" />
+                <span>All items</span>
+              </TorchMenuRadioItem>
+              {inventoryCategories.map(({ id, label, icon }) => {
+                const Icon = inventoryIcons[icon];
+                return (
+                  <TorchMenuRadioItem
+                    className="inventory-filter-option"
+                    value={id}
+                    data-testid={`inventory-tab-${id}`}
+                    key={id}
+                    closeOnClick
+                  >
+                    <Icon aria-hidden="true" />
+                    <span>{label}</span>
+                  </TorchMenuRadioItem>
+                );
+              })}
+            </TorchMenuRadioGroup>
+          </TorchMenuContent>
+        </TorchMenuRoot>
 
         <TorchMenuRoot open={sortOpen} onOpenChange={setSortOpen}>
           <div className={`inventory-sort${sortOpen ? ' is-open' : ''}`}>
@@ -689,7 +757,7 @@ function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): React
         </TorchMenuRoot>
       </div>
 
-      <div className="inventory-content">
+      <div className={`inventory-content${hasSelectedDetail ? ' has-detail' : ''}`}>
         <div
           className="inventory-grid"
           data-testid="inventory-grid"
@@ -762,46 +830,38 @@ function InventoryItemsPanel({ items }: { items: typeof inventoryItems }): React
           ) : null}
         </div>
 
-        <section
-          className={`inventory-detail${selectedItem && SelectedIcon ? ' has-item' : ' is-empty'}`}
-          data-testid="inventory-detail"
-          aria-label="Item detail"
-          aria-live="polite"
-        >
-          {selectedItem && SelectedIcon ? (
-            <>
-              {isCompactLayout ? (
-                <TorchButton
-                  variant="ghost"
-                  size="sm"
-                  className="inventory-detail-back"
-                  type="button"
-                  data-testid="inventory-detail-back"
-                  onClick={() => setDetailOpen(false)}
-                >
-                  <ArrowLeft aria-hidden="true" />
-                  Back to items
-                </TorchButton>
-              ) : null}
-              <p className="inventory-detail-kicker">Item detail</p>
-              <div className="inventory-detail-heading">
-                <SelectedIcon aria-hidden="true" />
-                <h2>{selectedItem.name}</h2>
-              </div>
-              <span className="inventory-detail-category">
-                {inventoryCategories.find((item) => item.id === selectedItem.category)?.label}
-              </span>
-              <p>{selectedItem.description}</p>
-              <span className="inventory-detail-quantity">Quantity {selectedItem.quantity}</span>
-            </>
-          ) : (
-            <>
-              <PackageOpen aria-hidden="true" />
-              <strong>Select an item to inspect it.</strong>
-              <span>Names and descriptions appear here.</span>
-            </>
-          )}
-        </section>
+        {hasSelectedDetail && selectedItem && SelectedIcon ? (
+          <section
+            className="inventory-detail has-item"
+            data-testid="inventory-detail"
+            aria-label="Item detail"
+            aria-live="polite"
+          >
+            {isCompactLayout ? (
+              <TorchButton
+                variant="ghost"
+                size="sm"
+                className="inventory-detail-back"
+                type="button"
+                data-testid="inventory-detail-back"
+                onClick={() => setDetailOpen(false)}
+              >
+                <ArrowLeft aria-hidden="true" />
+                Back to items
+              </TorchButton>
+            ) : null}
+            <p className="inventory-detail-kicker">Item detail</p>
+            <div className="inventory-detail-heading">
+              <SelectedIcon aria-hidden="true" />
+              <h2>{selectedItem.name}</h2>
+            </div>
+            <span className="inventory-detail-category">
+              {inventoryCategories.find((item) => item.id === selectedItem.category)?.label}
+            </span>
+            <p>{selectedItem.description}</p>
+            <span className="inventory-detail-quantity">Quantity {selectedItem.quantity}</span>
+          </section>
+        ) : null}
       </div>
 
       <div className="inventory-pagination" aria-label="Inventory pagination">
@@ -1018,45 +1078,61 @@ function MapScreen(): ReactElement {
   );
 }
 
-function GearPanel(): ReactElement {
+function GearPanel({ state }: { state: GameState }): ReactElement {
+  type GearTab = 'equipment' | 'tools';
+
   const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlotId>();
-  const [equippedEquipment, setEquippedEquipment] = useState<Partial<Record<EquipmentSlotId, string>>>({});
   const [selectedToolSlot, setSelectedToolSlot] = useState<ToolSlotId>();
-  const [equippedTools, setEquippedTools] = useState<Partial<Record<ToolSlotId, string>>>({});
-  const equipmentItems = inventoryItems.filter((item) => item.category === 'equipment');
+  const [activeTab, setActiveTab] = useState<GearTab>('equipment');
+  const ownedItems = inventoryItemsForState(state);
 
   if (activeEquipmentSlot) {
     const activeSlot = equipmentSlots.find((slot) => slot.id === activeEquipmentSlot);
-    const equipmentForSlot = activeEquipmentSlot === 'main-hand' ? equipmentItems : [];
+    const equippedId = state.hero.equippedItems[activeEquipmentSlot];
+    const equipmentForSlot = ownedItems.filter(
+      (item) => itemDefinition(item.id)?.equipmentSlot === activeEquipmentSlot,
+    );
+    if (equippedId && !equipmentForSlot.some((item) => item.id === equippedId)) {
+      const definition = itemDefinition(equippedId);
+      const equippedItem = inventoryItemFromDefinition(definition);
+      if (equippedItem) equipmentForSlot.push({ ...equippedItem, quantity: 0 });
+    }
     return (
       <EquipmentSelectorScreen
         slot={activeSlot}
         items={equipmentForSlot}
-        selectedId={equippedEquipment[activeEquipmentSlot]}
+        selectedId={equippedId}
         onBack={() => setActiveEquipmentSlot(undefined)}
         onSelect={(itemId) => {
-          setEquippedEquipment((current) => ({ ...current, [activeEquipmentSlot]: itemId }));
+          gameSession.equipItem(activeEquipmentSlot, itemId);
+          setActiveEquipmentSlot(undefined);
+        }}
+        onUnequip={() => {
+          gameSession.unequipItem(activeEquipmentSlot);
           setActiveEquipmentSlot(undefined);
         }}
       />
     );
   }
 
-  const heroAsset =
-    Object.values(heroAssets).find((asset) => asset.id === gameSession.state.hero.heroId) ?? heroAssets.knight;
-  const paperDollSlots = ['helm', 'main-hand', 'body', 'off-hand', 'gloves', 'belt', 'boots'] as const;
-  const jewelrySlots = ['amulet', 'trinket', 'ring-1', 'ring-2'] as const;
-
   if (selectedToolSlot) {
     const activeSlot = toolSlots.find((slot) => slot.id === selectedToolSlot);
+    const equippedId = state.hero.equippedTools[selectedToolSlot];
     return (
       <ToolSelectorScreen
         slot={activeSlot}
-        items={tools.filter((tool) => tool.action === activeSlot?.action)}
-        selectedId={equippedTools[selectedToolSlot]}
+        items={tools.filter(
+          (tool) =>
+            tool.action === activeSlot?.action && ((state.hero.inventory[tool.id] ?? 0) > 0 || equippedId === tool.id),
+        )}
+        selectedId={equippedId}
         onBack={() => setSelectedToolSlot(undefined)}
         onSelect={(toolId) => {
-          setEquippedTools((current) => ({ ...current, [selectedToolSlot]: toolId }));
+          gameSession.equipItem(selectedToolSlot, toolId);
+          setSelectedToolSlot(undefined);
+        }}
+        onUnequip={() => {
+          gameSession.unequipItem(selectedToolSlot);
           setSelectedToolSlot(undefined);
         }}
       />
@@ -1066,11 +1142,12 @@ function GearPanel(): ReactElement {
   const equipmentButton = (slotId: EquipmentSlotId): ReactElement => {
     const slot = equipmentSlots.find((candidate) => candidate.id === slotId);
     if (!slot) return <span key={slotId} />;
-    const equippedItem = inventoryItems.find((item) => item.id === equippedEquipment[slot.id]);
-    const Icon = equipmentSlotIcons[slot.id];
+    const equippedItemId = state.hero.equippedItems[slot.id];
+    const equippedItem = equippedItemId ? inventoryItemFromDefinition(itemDefinition(equippedItemId)) : undefined;
+    const Icon = equippedItem ? inventoryIcons[equippedItem.icon] : equipmentSlotIcons[slot.id];
     return (
       <TorchButton
-        className={`equipment-slot equipment-slot-${slot.id}`}
+        className={`equipment-slot equipment-slot-${slot.id}${equippedItem ? ' is-equipped' : ''}`}
         type="button"
         key={slot.id}
         data-testid={`equipment-slot-${slot.id}`}
@@ -1079,7 +1156,7 @@ function GearPanel(): ReactElement {
         onClick={() => setActiveEquipmentSlot(slot.id)}
       >
         <span className="equipment-slot-art">
-          {equippedItem ? <Sword aria-hidden="true" /> : <Icon aria-hidden="true" />}
+          <Icon aria-hidden="true" />
         </span>
         <span className="equipment-slot-copy">
           <span className="loadout-slot-label">{slot.label}</span>
@@ -1094,25 +1171,54 @@ function GearPanel(): ReactElement {
   };
 
   return (
-    <section className="loadout-screen gear-screen" data-testid="equipment-screen" aria-label="Equipment and tools">
-      <div className="gear-hero-pane">
-        <img className="gear-hero-art" src={heroAsset.full} alt={heroAsset.fullAlt} />
-      </div>
-      <div className="gear-loadout-pane">
-        <section className="gear-slot-group gear-paper-doll" aria-label="Equipment slots">
-          <div className="paper-doll-grid">{paperDollSlots.map(equipmentButton)}</div>
+    <TorchTabsRoot
+      className="loadout-screen gear-screen"
+      value={activeTab}
+      onValueChange={(value) => {
+        if (typeof value === 'string') setActiveTab(value as GearTab);
+      }}
+      data-testid="equipment-screen"
+      aria-label="Equipment and tools"
+    >
+      <TorchTabsList className="gear-tabs" aria-label="Loadout sections">
+        <TorchTabsTab value="equipment" data-testid="equipment-tab">
+          Equipment
+        </TorchTabsTab>
+        <TorchTabsTab value="tools" data-testid="tools-tab">
+          Tools
+        </TorchTabsTab>
+      </TorchTabsList>
+
+      <TorchTabsContent className="gear-tab-panel" value="equipment">
+        <section className="gear-loadout-pane" aria-label="Equipment slots">
+          <div className="paper-doll-grid" role="group" aria-label="Equipment slots">
+            {(
+              [
+                'helm',
+                'amulet',
+                'main-hand',
+                'body',
+                'off-hand',
+                'gloves',
+                'belt',
+                'ring-1',
+                'trinket',
+                'boots',
+              ] as const
+            ).map(equipmentButton)}
+          </div>
         </section>
-        <section className="gear-slot-group gear-jewelry" aria-label="Jewelry slots">
-          <div className="jewelry-grid">{jewelrySlots.map(equipmentButton)}</div>
-        </section>
-        <section className="gear-slot-group gear-tools" aria-label="Tool slots">
+      </TorchTabsContent>
+
+      <TorchTabsContent className="gear-tab-panel" value="tools">
+        <section className="gear-loadout-pane gear-tools-pane" aria-label="Tool slots">
           <div className="tool-loadout-grid" role="group" aria-label="Tool slots">
             {toolSlots.map((slot) => {
-              const equippedTool = tools.find((tool) => tool.id === equippedTools[slot.id]);
+              const equippedTool = tools.find((tool) => tool.id === state.hero.equippedTools[slot.id]);
               const Icon = toolSlotIcons[slot.id];
               return (
                 <TorchButton
-                  className="tool-slot"
+                  className={`tool-slot${equippedTool ? ' is-equipped' : ''}`}
                   type="button"
                   key={slot.id}
                   data-testid={`tool-slot-${slot.id}`}
@@ -1136,8 +1242,8 @@ function GearPanel(): ReactElement {
             })}
           </div>
         </section>
-      </div>
-    </section>
+      </TorchTabsContent>
+    </TorchTabsRoot>
   );
 }
 
@@ -1147,12 +1253,14 @@ function EquipmentSelectorScreen({
   selectedId,
   onBack,
   onSelect,
+  onUnequip,
 }: {
   slot: (typeof equipmentSlots)[number] | undefined;
-  items: typeof inventoryItems;
+  items: InventoryItemDefinition[];
   selectedId: string | undefined;
   onBack: () => void;
   onSelect: (itemId: string) => void;
+  onUnequip: () => void;
 }): ReactElement {
   return (
     <div
@@ -1172,31 +1280,46 @@ function EquipmentSelectorScreen({
         </TorchButton>
         <h2>{slot?.label}</h2>
       </header>
+      {selectedId ? (
+        <TorchButton
+          variant="outline"
+          size="lg"
+          type="button"
+          className="selector-unequip"
+          data-testid="equipment-unequip"
+          onClick={onUnequip}
+        >
+          Unequip current item
+        </TorchButton>
+      ) : null}
       {items.length ? (
         <div
           className="equipment-choice-grid selector-grid"
           role="list"
           aria-label={`${slot?.label ?? 'Equipment'} choices`}
         >
-          {items.map((item) => (
-            <TorchButton
-              className={`equipment-choice${selectedId === item.id ? ' is-selected' : ''}`}
-              type="button"
-              key={item.id}
-              aria-label={item.name}
-              aria-pressed={selectedId === item.id}
-              data-testid={`equipment-choice-${item.id}`}
-              onClick={() => onSelect(item.id)}
-            >
-              <span className="equipment-choice-art">
-                <Sword aria-hidden="true" />
-              </span>
-              <span className="equipment-choice-copy">
-                <strong>{item.name}</strong>
-              </span>
-              {selectedId === item.id ? <Check aria-hidden="true" /> : null}
-            </TorchButton>
-          ))}
+          {items.map((item) => {
+            const Icon = inventoryIcons[item.icon];
+            return (
+              <TorchButton
+                className={`equipment-choice${selectedId === item.id ? ' is-selected' : ''}`}
+                type="button"
+                key={item.id}
+                aria-label={item.name}
+                aria-pressed={selectedId === item.id}
+                data-testid={`equipment-choice-${item.id}`}
+                onClick={() => onSelect(item.id)}
+              >
+                <span className="equipment-choice-art">
+                  <Icon aria-hidden="true" />
+                </span>
+                <span className="equipment-choice-copy">
+                  <strong>{item.name}</strong>
+                </span>
+                {selectedId === item.id ? <Check aria-hidden="true" /> : null}
+              </TorchButton>
+            );
+          })}
         </div>
       ) : (
         <div className="selector-empty" role="status">
@@ -1213,12 +1336,14 @@ function ToolSelectorScreen({
   selectedId,
   onBack,
   onSelect,
+  onUnequip,
 }: {
   slot: (typeof toolSlots)[number] | undefined;
   items: typeof tools;
   selectedId: string | undefined;
   onBack: () => void;
   onSelect: (toolId: string) => void;
+  onUnequip: () => void;
 }): ReactElement {
   return (
     <div
@@ -1238,6 +1363,18 @@ function ToolSelectorScreen({
         </TorchButton>
         <h2>{slot?.label}</h2>
       </header>
+      {selectedId ? (
+        <TorchButton
+          variant="outline"
+          size="lg"
+          type="button"
+          className="selector-unequip"
+          data-testid="tool-unequip"
+          onClick={onUnequip}
+        >
+          Unequip current tool
+        </TorchButton>
+      ) : null}
       <div className="tool-choice-grid selector-grid" role="list" aria-label={`${slot?.label ?? 'Tool'} choices`}>
         {items.map((tool) => {
           const Icon =
@@ -1268,280 +1405,116 @@ function ToolSelectorScreen({
 }
 
 function AbilitiesScreen(): ReactElement {
-  const [activeAbilitySlot, setActiveAbilitySlot] = useState<AbilitySlotId>('basic');
   const [pickerSlot, setPickerSlot] = useState<AbilitySlotId>();
   const [detailAbility, setDetailAbility] = useState<(typeof abilities)[number]>();
-  const [feedback, setFeedback] = useState<string>();
   const [equippedAbilities, setEquippedAbilities] = useState<Partial<Record<AbilitySlotId, string>>>({
     ...gameSession.state.hero.equippedAbilities,
-  });
-  const [abilityCooldowns, setAbilityCooldowns] = useState<Record<string, number>>({
-    ...gameSession.state.hero.abilityCooldowns,
   });
 
   useEffect(
     () =>
       gameSession.subscribe((state) => {
         setEquippedAbilities({ ...state.hero.equippedAbilities });
-        setAbilityCooldowns({ ...state.hero.abilityCooldowns });
       }),
     [],
   );
 
+  const selectAbility = (slotId: AbilitySlotId, abilityId: string): void => {
+    gameSession.equipAbility(slotId, abilityId);
+    setPickerSlot(undefined);
+    setDetailAbility(undefined);
+  };
+
   if (pickerSlot) {
     const picker = abilitySlots.find((slot) => slot.id === pickerSlot);
     return (
-      <AbilitySelectorScreen
-        slot={picker}
-        abilities={abilities.filter((ability) => ability.slot === pickerSlot)}
-        selectedId={equippedAbilities[pickerSlot]}
-        onBack={() => setPickerSlot(undefined)}
-        onSelect={(abilityId) => {
-          gameSession.equipAbility(pickerSlot, abilityId);
-          setActiveAbilitySlot(pickerSlot);
-          setPickerSlot(undefined);
-          const selectedAbility = abilities.find((ability) => ability.id === abilityId);
-          setFeedback(`${selectedAbility?.name ?? 'Ability'} equipped in ${picker?.label ?? 'slot'}.`);
-        }}
-      />
+      <>
+        <AbilitySelectorScreen
+          slot={picker}
+          abilities={abilities.filter((ability) => ability.slot === pickerSlot)}
+          selectedId={equippedAbilities[pickerSlot]}
+          onBack={() => setPickerSlot(undefined)}
+          onView={setDetailAbility}
+        />
+        {detailAbility ? (
+          <AbilityDetailDialog
+            ability={detailAbility}
+            onClose={() => setDetailAbility(undefined)}
+            onSelect={() => selectAbility(pickerSlot, detailAbility.id)}
+          />
+        ) : null}
+      </>
     );
   }
 
-  const activeSlot = abilitySlots.find((slot) => slot.id === activeAbilitySlot) ?? abilitySlots[0];
-  const activeAbility = abilities.find((ability) => ability.id === equippedAbilities[activeSlot.id]);
-  const equippedCount = abilitySlots.filter((slot) => equippedAbilities[slot.id]).length;
-
   return (
-    <>
-      <div className="loadout-screen abilities-loadout-screen">
-        <section className="abilities-screen" data-testid="abilities-screen" aria-label="Ability loadout">
-          <header className="abilities-intro">
-            <div>
-              <h2>Build your combat loadout</h2>
-              <p>Choose one ability for each slot. Changes do not consume a turn.</p>
-            </div>
-            <div
-              className="abilities-progress"
-              aria-label={`${equippedCount} of ${abilitySlots.length} ability slots equipped`}
-            >
-              <strong>
-                {equippedCount} / {abilitySlots.length}
-              </strong>
-              <span>equipped</span>
-            </div>
-          </header>
-
-          <div className="abilities-workspace">
-            <section className="ability-loadout-surface" aria-labelledby="ability-loadout-heading">
-              <div className="ability-surface-heading">
-                <div>
-                  <h3 id="ability-loadout-heading">Loadout</h3>
-                  <span>Select a slot to inspect or change it.</span>
-                </div>
-              </div>
-              <div className="ability-loadout-grid" role="list" aria-label="Equipped abilities">
-                {abilitySlots.map((slot) => {
-                  const equipped = abilities.find((ability) => ability.id === equippedAbilities[slot.id]);
-                  const selected = activeSlot.id === slot.id;
-                  return (
-                    <div
-                      className={`ability-loadout-card${selected ? ' is-active' : ''}`}
-                      role="listitem"
-                      key={slot.id}
-                      data-testid={`ability-slot-${slot.id}`}
-                    >
-                      <AbilityArtButton
-                        ability={equipped}
-                        className="ability-art-button"
-                        ariaLabel={`${slot.label}: ${equipped?.name ?? 'Empty'}`}
-                        selected={selected}
-                        onClick={() => {
-                          setActiveAbilitySlot(slot.id);
-                          setFeedback(undefined);
-                        }}
-                      />
-                      <div className="ability-loadout-label">
-                        <strong>{slot.label}</strong>
-                        <small>{equipped?.name ?? 'Empty slot'}</small>
-                        <span>
-                          {equipped ? abilityCooldownLabel(equipped.id, abilityCooldowns) : 'Choose an ability'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <AbilityInspector
-              slot={activeSlot}
-              ability={activeAbility}
-              cooldown={activeAbility ? abilityCooldownLabel(activeAbility.id, abilityCooldowns) : undefined}
-              onChange={() => setPickerSlot(activeSlot.id)}
-              onShowDetail={activeAbility ? () => setDetailAbility(activeAbility) : undefined}
-            />
-          </div>
-
-          {feedback ? (
-            <div className="ability-feedback" data-testid="ability-feedback" role="status" aria-live="polite">
-              {feedback}
-            </div>
-          ) : null}
-        </section>
-      </div>
-      {detailAbility ? (
-        <AbilityDetailDialog ability={detailAbility} onClose={() => setDetailAbility(undefined)} />
-      ) : null}
-    </>
-  );
-}
-
-function abilityCooldownLabel(abilityId: string, cooldowns: Record<string, number>): string {
-  const remaining = cooldowns[abilityId] ?? 0;
-  if (remaining > 0) return `Cooling down · ${remaining}`;
-  const cooldown = abilityActionDefinition(abilityId)?.cooldown ?? 0;
-  return cooldown > 0 ? `${cooldown} action cooldown` : 'Ready';
-}
-
-function AbilityInspector({
-  slot,
-  ability,
-  cooldown,
-  onChange,
-  onShowDetail,
-}: {
-  slot: (typeof abilitySlots)[number];
-  ability: (typeof abilities)[number] | undefined;
-  cooldown: string | undefined;
-  onChange: () => void;
-  onShowDetail: (() => void) | undefined;
-}): ReactElement {
-  return (
-    <section className="ability-inspector" data-testid="ability-inspector" aria-labelledby="ability-inspector-heading">
-      <header className="ability-inspector-header">
-        <div>
-          <p className="stats-kicker">{slot.label} slot</p>
-          <h3 id="ability-inspector-heading">{ability?.name ?? 'Empty slot'}</h3>
-        </div>
-        <span className={`ability-status${ability ? '' : ' is-empty'}`}>{cooldown ?? 'Not equipped'}</span>
-      </header>
-
-      {ability ? (
-        <div className="ability-inspector-content">
-          <div className="ability-inspector-art">
-            <img src={ability.assetPath} alt={ability.assetAlt} />
-          </div>
-          <div className="ability-inspector-copy">
-            <p>{ability.description}</p>
-            <dl className="ability-metadata">
-              <div>
-                <dt>Slot</dt>
-                <dd>{slot.label}</dd>
-              </div>
-              <div>
-                <dt>Cooldown</dt>
-                <dd>
-                  {abilityActionDefinition(ability.id)?.cooldown
-                    ? `${abilityActionDefinition(ability.id)?.cooldown} actions`
-                    : 'No cooldown'}
-                </dd>
-              </div>
-            </dl>
-            <div className="ability-inspector-actions">
-              <TorchButton
-                type="button"
-                className="ability-change-button"
-                data-testid="ability-change"
-                onClick={onChange}
+    <div className="loadout-screen abilities-loadout-screen">
+      <section
+        className="abilities-screen abilities-summary-screen"
+        data-testid="abilities-screen"
+        aria-label="Ability loadout"
+      >
+        <div className="ability-loadout-grid" role="list" aria-label="Equipped abilities">
+          {abilitySlots.map((slot) => {
+            const equipped = abilities.find((ability) => ability.id === equippedAbilities[slot.id]);
+            return (
+              <div
+                className="ability-loadout-card"
+                role="listitem"
+                key={slot.id}
+                data-testid={`ability-slot-${slot.id}`}
               >
-                Change ability
-              </TorchButton>
-              {onShowDetail ? (
-                <TorchButton
-                  type="button"
-                  className="ability-details-button"
-                  data-testid="ability-view-details"
-                  onClick={onShowDetail}
-                >
-                  View full details
-                </TorchButton>
-              ) : null}
-            </div>
-          </div>
+                <TorchArtworkCard
+                  artSrc={equipped?.assetPath}
+                  artAlt={equipped?.assetAlt}
+                  eyebrow={slot.label}
+                  title={equipped?.name ?? 'Empty slot'}
+                  ariaLabel={`${slot.label}: ${equipped?.name ?? 'Empty slot'}`}
+                  className="ability-art-button"
+                  testId={`ability-card-${slot.id}`}
+                  onClick={() => setPickerSlot(slot.id)}
+                />
+              </div>
+            );
+          })}
         </div>
-      ) : (
-        <div className="ability-inspector-empty" role="status">
-          <strong>No ability equipped</strong>
-          <span>Choose an ability to make this slot ready for combat.</span>
-          <TorchButton type="button" className="ability-change-button" data-testid="ability-change" onClick={onChange}>
-            Choose ability
-          </TorchButton>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function AbilityArtButton({
-  ability,
-  className,
-  ariaLabel,
-  onClick,
-  selected = false,
-}: {
-  ability: (typeof abilities)[number] | undefined;
-  className: string;
-  ariaLabel: string;
-  onClick: () => void;
-  selected?: boolean;
-}): ReactElement {
-  return (
-    <TorchButton className={className} type="button" aria-label={ariaLabel} aria-pressed={selected} onClick={onClick}>
-      {ability ? (
-        <img src={ability.assetPath} alt={ability.assetAlt} />
-      ) : (
-        <span className="ability-loadout-placeholder">+</span>
-      )}
-    </TorchButton>
+      </section>
+    </div>
   );
 }
 
 function AbilityChoiceButton({
   ability,
   selected,
-  onClick,
+  onView,
 }: {
   ability: (typeof abilities)[number];
   selected: boolean;
-  onClick: () => void;
+  onView: () => void;
 }): ReactElement {
-  const cooldown = abilityActionDefinition(ability.id)?.cooldown ?? 0;
   return (
-    <TorchButton
+    <TorchArtworkCard
+      artSrc={ability.assetPath}
+      artAlt={ability.assetAlt}
+      eyebrow={ability.slot}
+      title={ability.name}
+      ariaLabel={`${ability.name}: ${ability.description}`}
       className={`ability-choice${selected ? ' is-selected' : ''}`}
-      type="button"
-      aria-label={`${ability.name}: ${ability.description}`}
-      aria-pressed={selected}
-      data-testid={`ability-choice-${ability.id.replace('ability.', '')}`}
-      onClick={onClick}
-    >
-      <img src={ability.assetPath} alt={ability.assetAlt} />
-      <span className="ability-choice-copy">
-        <strong>{ability.name}</strong>
-        <small>{ability.description}</small>
-        <small>{cooldown > 0 ? `${cooldown} action cooldown` : 'Ready'}</small>
-      </span>
-      {selected ? <Check aria-hidden="true" /> : null}
-    </TorchButton>
+      testId={`ability-choice-${ability.id.replace('ability.', '')}`}
+      selected={selected}
+      onClick={onView}
+    />
   );
 }
 
 function AbilityDetailDialog({
   ability,
   onClose,
+  onSelect,
 }: {
   ability: (typeof abilities)[number];
   onClose: () => void;
+  onSelect: () => void;
 }): ReactElement {
   const closeRef = useRef<HTMLButtonElement>(null);
   const cooldown = abilityActionDefinition(ability.id)?.cooldown ?? 0;
@@ -1564,9 +1537,15 @@ function AbilityDetailDialog({
             >
               <TorchDialog.Close
                 ref={closeRef}
-                className="ability-detail-close"
-                aria-label="Close ability details"
-                data-testid="ability-detail-close"
+                render={
+                  <TorchButton
+                    variant="ghost"
+                    size="icon-lg"
+                    className="ability-detail-close"
+                    aria-label="Close ability details"
+                    data-testid="ability-detail-close"
+                  />
+                }
               >
                 <CloseIcon aria-hidden="true" />
               </TorchDialog.Close>
@@ -1583,6 +1562,14 @@ function AbilityDetailDialog({
                     <dd>{cooldown > 0 ? `${cooldown} actions` : 'No cooldown'}</dd>
                   </div>
                 </dl>
+                <TorchButton
+                  type="button"
+                  className="ability-detail-select"
+                  data-testid="ability-detail-select"
+                  onClick={onSelect}
+                >
+                  Select Ability
+                </TorchButton>
               </div>
             </TorchDialog.Popup>
           </TorchDialog.Viewport>
@@ -1597,13 +1584,13 @@ function AbilitySelectorScreen({
   abilities: choices,
   selectedId,
   onBack,
-  onSelect,
+  onView,
 }: {
   slot: (typeof abilitySlots)[number] | undefined;
   abilities: typeof abilities;
   selectedId: string | undefined;
   onBack: () => void;
-  onSelect: (abilityId: string) => void;
+  onView: (ability: (typeof abilities)[number]) => void;
 }): ReactElement {
   return (
     <div
@@ -1622,6 +1609,12 @@ function AbilitySelectorScreen({
           aria-label="Back to Abilities"
           data-testid="ability-picker-back"
           onClick={onBack}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onBack();
+            }
+          }}
         >
           <ArrowLeft aria-hidden="true" />
         </TorchButton>
@@ -1632,7 +1625,7 @@ function AbilitySelectorScreen({
             <AbilityChoiceButton
               ability={ability}
               selected={selectedId === ability.id}
-              onClick={() => onSelect(ability.id)}
+              onView={() => onView(ability)}
               key={ability.id}
             />
           ))
@@ -1643,40 +1636,6 @@ function AbilitySelectorScreen({
         )}
       </div>
     </div>
-  );
-}
-
-type TorchSelectOption = {
-  value: string;
-  label: string;
-};
-
-type TorchSelectProps = {
-  value: string;
-  options: readonly TorchSelectOption[];
-  onChange: (value: string) => void;
-  ariaLabel: string;
-  testId: string;
-};
-
-function TorchSelect({ value, options, onChange, ariaLabel, testId }: TorchSelectProps): ReactElement {
-  return (
-    <label className="torch-select">
-      <select
-        className="torch-select-trigger torch-select-native"
-        value={value}
-        aria-label={ariaLabel}
-        data-testid={testId}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option value={option.value} key={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="torch-select-chevron" aria-hidden="true" />
-    </label>
   );
 }
 
@@ -1827,14 +1786,14 @@ function SettingsScreen(): ReactElement {
                 />
               </SettingRow>
               <SettingRow label="UI Scale" description="Adjust interface density independently of the board.">
-                <TorchSelect
+                <TorchSelectField
                   value={settings.uiScale}
                   options={[
                     { value: 'auto', label: 'Auto' },
                     { value: 'compact', label: 'Compact' },
                     { value: 'large', label: 'Large' },
                   ]}
-                  onChange={(value) => updateSetting('uiScale', value as PresentationSettings['uiScale'])}
+                  onValueChange={(value) => updateSetting('uiScale', value as PresentationSettings['uiScale'])}
                   ariaLabel="UI Scale"
                   testId="settings-ui-scale"
                 />

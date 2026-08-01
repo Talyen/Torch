@@ -12,6 +12,11 @@ export interface InventoryLayout {
   pageSize: number;
 }
 
+/** The detail surface is mounted only for a valid selection. */
+export function inventoryDetailVisible(hasSelection: boolean, isCompactLayout: boolean, detailOpen: boolean): boolean {
+  return hasSelection && (!isCompactLayout || detailOpen);
+}
+
 /**
  * Inventory deliberately uses a finite layout instead of an inner scroll
  * region. Keep the breakpoints and page sizes together so the paginator and

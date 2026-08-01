@@ -26,10 +26,15 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add native-ratio Bash, Sunder, and Avatar ability artwork to the asset pipeline.
 - [x] Add a minimal asset/content manifest convention.
 - [x] Document the development verification workflow and deterministic replay contract.
+- [ ] Add content and schema validation for stable IDs, orphaned references, and generated test fixtures.
+- [ ] Add save fault-injection coverage for interrupted writes, corrupted envelopes, last-known-good recovery, and migrations.
+- [ ] Add seed/replay export and import, including a small developer state and event inspector.
+- [ ] Establish shared contracts for input rebinding, audio, haptics, reduced motion, and larger text.
 
-> Foundation work is complete; the remaining work below is the active Phase 1
-> vertical slice. The heading is retained so the historical foundation scope
-> remains visible while the roadmap wording is consolidated.
+> The initial foundation slice is complete; these hardening items remain while
+> the active Phase 1 vertical slice progresses. The heading is retained so the
+> historical foundation scope remains visible while the roadmap wording is
+> consolidated.
 
 ## Phase 1 — First playable vertical slice
 
@@ -48,16 +53,27 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [x] Add seeded grassland with interactive tree groves, clear traversal corridors, bright mountain regions, and ore on every walkable mountain neighbor.
 - [x] Save, reload, die, and respawn deterministically.
 - [x] Run the same seed and command transcript in automated tests.
+- [ ] Add a short First Light onboarding expedition that teaches Torch visibility, one-tile turns, context actions, combat, gathering, and returning home.
+- [ ] Add a universal Inspect/Examine action for tiles, creatures, resources, hazards, and discovered lore.
+- [ ] Add a simple rest or camp interaction plus a post-expedition report for loot, discoveries, damage, and new Journal entries.
+- [ ] Add minimum audiovisual feedback for turn resolution, enemy response, blocked movement, damage, gathering, and death.
 
 ## Phase 2 — Core survival and homestead loop
 
 - [x] Canonical inventory projection, item stacking, and a first data-driven crafting slice for gathered materials and consumables.
-- [ ] Equipment/loadout state, encumbrance, and station-gated or equipment crafting (the remaining React gear surface is still a prototype).
+- [ ] Equipment/loadout state and station-gated or equipment crafting (inventory remains unlimited; the remaining React gear surface is still a prototype).
 - [ ] Homestead building placement, farms, storage, and basic production.
 - [ ] Time-of-day presentation and lightweight weather effects.
 - [ ] Pets with follow, wait, interact, and simple combat behavior.
 - [x] World-local quests, mystery clues, waypoint targets, and Journal progress tracking.
 - [ ] Durable versioned save envelopes with local fallback.
+- [ ] Materialize world chunks and nearby entities with deterministic sleep/wake rules and sparse persistent mutations.
+- [ ] Add a visible homestead upgrade graph with repaired rooms, station dependencies, storage expansion, and production improvements.
+- [ ] Add renewable resource and production cadence such as crop cycles, regrowing nodes, and fuel or other recurring resource sinks.
+- [ ] Add a lightweight economy for trading, selling surplus, purchasing seeds or tools, and optionally recruiting a specialist.
+- [ ] Add a death-aftermath mechanic such as a recoverable expedition pack or last-known-location marker.
+- [ ] Add pet bonding and training progression beyond follow, wait, interact, and combat.
+- [ ] Decide whether survival includes one restrained pressure such as fatigue or exposure; avoid a full hunger/thirst stack unless the core loop needs it.
 
 ## Phase 3 — RPG depth
 
@@ -68,15 +84,26 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [ ] Hand-authored quests and mystery content.
 - [ ] Template-driven or semi-randomized radiant quests.
 - [ ] Dungeon generation and dungeon-specific rules.
+- [ ] Define a world arc or victory condition that culminates in a major threat, dungeon, or transformation of the world.
+- [ ] Add status effects, resistances, enemy abilities, and readable combat counterplay.
+- [ ] Add factions, NPC relationships, reputation, and consequential dialogue or quest outcomes.
+- [ ] Add stronger Hero identity through passive choices, training, respec decisions, or class-specific interactions.
+- [ ] Add pet or companion progression with tactical roles.
+- [ ] Add elite enemies, bosses, and landmark encounters.
+- [ ] Add a bestiary and discovery codex tied to the existing Journal.
 
 ## Phase 4 — Replayability and meta-progression
 
 - [x] Profile-level Journal onboarding milestones and rewards separate from world saves.
 - [ ] Unlockable Hero classes, recipes, abilities, and content families.
-- [ ] New world seeds and biomes with meaningful variation.
-- [ ] Run/world summaries and discovery history.
+- [ ] New world seeds, biome archetypes, rare landmarks, and world rules with meaningful variation.
+- [ ] Add run/world summaries, a discovery atlas, and an archive of major events, deaths, completed objectives, and abandoned worlds.
 - [ ] Balance passes that preserve old worlds as safely as practical.
 - [ ] Optional platform cloud-save providers with local fallback.
+- [ ] Add run/world contracts or modifiers that change strategic priorities.
+- [ ] Add shareable deterministic challenge seeds, including optional daily or weekly-style challenges.
+- [ ] Add a profile-level meta hub that explains unlocks and prevents excessive replay grind.
+- [ ] Add a retire or archive flow so completing or abandoning a world has a satisfying endpoint.
 
 ## Phase 5 — Steam release candidate
 
@@ -86,6 +113,13 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [ ] Test clean installs, interrupted saves, corrupted saves, and upgrades.
 - [ ] Profile representative worlds on supported desktop hardware.
 - [ ] Add store assets, onboarding, accessibility review, and release telemetry only if needed.
+- [ ] Verify Steam Deck and Big Picture behavior.
+- [ ] Add Steam achievements, statistics, and optional Rich Presence.
+- [ ] Add controller remapping, controller glyphs, and reliable focus and pause behavior.
+- [ ] Add save backup/export and clear cloud-conflict resolution.
+- [ ] Add first-run onboarding, graphics and performance settings, and a privacy-conscious diagnostics path.
+- [ ] Add localization readiness, including font fallback and text-expansion testing.
+- [ ] Complete accessibility review for keyboard, controller, contrast, motion, focus, and screen-reader-adjacent behavior.
 
 ## Phase 6 — Mobile release
 
@@ -94,6 +128,13 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 - [ ] Profile on recent and lower-end target devices.
 - [ ] Add platform cloud providers where useful.
 - [ ] Complete store-specific compliance, entitlement, and lifecycle work.
+- [ ] Make autosave transactional across backgrounding, suspension, termination, and interrupted resume.
+- [ ] Add touch-first interactions such as tap targeting, hold-to-inspect, drag or gesture alternatives, and one-handed layouts.
+- [ ] Add haptics and audio-session interruption handling.
+- [ ] Set battery, thermal, memory, and asset-cache budgets.
+- [ ] Support VoiceOver/TalkBack, Dynamic Type, larger touch targets, reduced motion, and color or contrast needs.
+- [ ] Validate phone, tablet, and foldable layouts.
+- [ ] Support offline resume plus account or cloud restore and conflict handling.
 
 ## Explicit non-goals for the initial architecture
 
@@ -136,16 +177,3 @@ work:
   initial-load budget and authored-output policy are agreed.
 - Split the remaining `menu-overlay.tsx`, `scene.ts`, and `styles.css`
   ownership hotspots after the current Journal/Profile slice stabilizes.
-
-### UI/UX follow-ups
-
-- Consolidate the historical duplicate CSS cascade and complete the feature
-  token/color audit without mixing it into active Journal/Profile work.
-- Finish the visual review of action-hand fan layouts, board framing, Hero and
-  equipment hierarchy, ability detail affordances, and large explored-map
-  scaling at all four required viewports.
-- Decide whether fixed-shell whitespace is intentionally theatrical, and set
-  the final Map frame grammar and disabled-destination product copy.
-- Add screenshot/geometry coverage for every menu surface, focus restoration
-  path, reduced-motion state, and short-viewport safe-area combination after
-  the current broad browser smoke flow is split by ownership.

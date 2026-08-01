@@ -24,7 +24,7 @@ function nearbyGeneratedTree(seed: number): { x: number; y: number } {
   throw new Error(`Expected a generated tree for seed ${seed}.`);
 }
 
-describe('WorldSave v1', () => {
+describe('WorldSave v2', () => {
   it('round-trips state while regenerating baseline entities from sparse mutations', () => {
     const state = createInitialGameState(1234);
     const generatedPosition = nearbyGeneratedTree(state.seed);
@@ -72,7 +72,7 @@ describe('WorldSave v1', () => {
     const valid = createWorldSave(createInitialGameState(1234));
 
     expect(() => decodeWorldSave({ ...valid, unexpected: true })).toThrow(SimulationDataValidationError);
-    expect(() => decodeWorldSave({ ...valid, schemaVersion: 2 })).toThrow(/unsupported schema version 2/);
+    expect(() => decodeWorldSave({ ...valid, schemaVersion: 1 })).toThrow(/unsupported schema version 1/);
     expect(() =>
       decodeWorldSave({
         ...valid,

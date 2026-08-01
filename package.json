@@ -21,12 +21,21 @@
     "test:e2e:prod": "TORCH_E2E_PROD=1 npm run test:e2e -- --reporter=line",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
+    "prepare": "husky",
     "check:theme": "node scripts/check-ui-theme.mjs",
+    "check:ui-system": "node scripts/check-ui-system.mjs",
     "check:content": "node scripts/check-content.mjs",
     "check:size": "node scripts/check-bundle-size.mjs",
-    "verify": "npm run format:check && npm run lint && npm run check:theme && npm run check:content && npm run typecheck:sim && npm run typecheck && npm test && npm run build && npm run check:size && npm run test:e2e:prod"
+    "verify": "npm run format:check && npm run lint && npm run check:theme && npm run check:ui-system && npm run check:content && npm run typecheck:sim && npm run typecheck && npm test && npm run build && npm run check:size && npm run test:e2e:prod"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,jsx,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix --max-warnings=0"
+    ],
+    "*.{json,css,md,html,yml,yaml}": "prettier --write"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -50,6 +59,8 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
     "prettier": "^3.9.6",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.3",

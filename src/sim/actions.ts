@@ -3,10 +3,14 @@ import { entityAt } from './entities';
 import { entityOccupiesPosition } from './footprint';
 import { abilityActionDefinition, DEFAULT_ABILITY_PRIORITY } from './ability-rules';
 import { GATHERING_ACTION_COSTS } from './gathering';
-import type { ActionKind, ActionRequest, EntityState, GameState, Position, SimEvent } from './types';
+import type { ActionKind, ActionRequest, CombatantSnapshot, EntityState, GameState, Position, SimEvent } from './types';
 
 export interface ActionOption extends ActionRequest {
   label: string;
+}
+
+export interface CombatEventContext {
+  attackOrdinal: number;
 }
 
 const ACTION_LABELS: Record<ActionKind, string> = {
@@ -89,6 +93,7 @@ export function resolveAction(
   action: ActionRequest,
   events: SimEvent[],
   consumedAbilityIds: Set<string> = new Set(),
+  combatContext: CombatEventContext = { attackOrdinal: 0 },
 ): boolean {
   const entity = state.entities[action.entityId];
   const actionKinds = entity ? actionOptionsForEntity(entity) : [];
@@ -107,13 +112,14 @@ export function resolveAction(
   }
 
   if (action.kind === 'ability') {
-    return resolveAbilityAction(state, entity, action, events, consumedAbilityIds);
+    return resolveAbilityAction(state, entity, action, events, consumedAbilityIds, combatContext);
   }
 
   events.push({
     type: 'action-resolved',
     action: action.kind,
     entityId: entity.id,
+    entityName: entity.name,
     target: { ...action.target },
   });
 
@@ -122,6 +128,22 @@ export function resolveAction(
     entity.alerted = true;
     entity.health = Math.max(0, (entity.health ?? 1) - amount);
     events.push({ type: 'enemy-damaged', entityId: entity.id, amount });
+    events.push(
+      attackEvent(
+        state,
+        combatContext,
+        'attack',
+        {
+          id: state.hero.heroId,
+          kind: 'hero',
+          name: 'Hero',
+          position: state.hero.position,
+        },
+        combatantSnapshot(entity),
+        amount,
+        entity.health === 0,
+      ),
+    );
     if (entity.health === 0) {
       delete state.entities[entity.id];
       events.push({ type: 'enemy-defeated', entityId: entity.id });
@@ -155,7 +177,7 @@ export function resolveAction(
     state.removedGeneratedEntities[entity.id] = true;
   }
   delete state.entities[entity.id];
-  events.push({ type: 'resource-gathered', resource, amount: 1 });
+  events.push({ type: 'resource-gathered', resource, amount: 1, collectorPosition: { ...state.hero.position } });
   events.push({ type: 'message', text: `${action.kind === 'chop' ? 'Chopped' : 'Mined'} 1 ${resource}.` });
   return true;
 }
@@ -166,6 +188,7 @@ function resolveAbilityAction(
   action: ActionRequest,
   events: SimEvent[],
   consumedAbilityIds: Set<string>,
+  combatContext: CombatEventContext,
 ): boolean {
   const ability = abilityActionDefinition(action.abilityId);
   const equipped = action.abilityId ? Object.values(state.hero.equippedAbilities).includes(action.abilityId) : false;
@@ -185,6 +208,7 @@ function resolveAbilityAction(
     type: 'action-resolved',
     action: 'ability',
     entityId: entity.id,
+    entityName: entity.name,
     target: { ...action.target },
     abilityId: action.abilityId,
   });
@@ -192,6 +216,7 @@ function resolveAbilityAction(
     type: 'ability-used',
     abilityId: action.abilityId,
     entityId: entity.id,
+    entityName: entity.name,
     target: { ...action.target },
     amount,
   });
@@ -200,6 +225,24 @@ function resolveAbilityAction(
     entity.health = Math.max(0, (entity.health ?? 1) - amount);
     events.push({ type: 'enemy-damaged', entityId: entity.id, amount });
   }
+
+  events.push(
+    attackEvent(
+      state,
+      combatContext,
+      'ability',
+      {
+        id: state.hero.heroId,
+        kind: 'hero',
+        name: 'Hero',
+        position: state.hero.position,
+      },
+      combatantSnapshot(entity),
+      amount,
+      entity.health === 0,
+      action.abilityId,
+    ),
+  );
 
   applyAbilityEffect(state, entity, ability.id, ability.effect, ability.effectAmount, ability.effectDuration);
 
@@ -214,6 +257,38 @@ function resolveAbilityAction(
     });
   }
   return true;
+}
+
+function combatantSnapshot(entity: EntityState): CombatantSnapshot {
+  return {
+    id: entity.id,
+    kind: entity.kind === 'enemy' ? 'enemy' : 'hero',
+    name: entity.name,
+    position: { ...entity.position },
+  };
+}
+
+function attackEvent(
+  state: GameState,
+  context: CombatEventContext,
+  action: Extract<ActionKind, 'attack' | 'ability'>,
+  attacker: CombatantSnapshot,
+  target: CombatantSnapshot,
+  amount: number,
+  targetDefeated: boolean,
+  abilityId?: string,
+): Extract<SimEvent, { type: 'attack-resolved' }> {
+  const ordinal = context.attackOrdinal++;
+  return {
+    type: 'attack-resolved',
+    attackId: `${state.turn}:attack:${ordinal}:${attacker.id}:${target.id}`,
+    action,
+    abilityId,
+    attacker: { ...attacker, position: { ...attacker.position } },
+    target: { ...target, position: { ...target.position } },
+    amount,
+    targetDefeated,
+  };
 }
 
 function applyAbilityEffect(

@@ -32,7 +32,10 @@ export function positiveSize(size: ResponsiveSize): ResponsiveSize {
  * device-pixel-ratio or browser chrome.
  */
 export function layoutProfileForSize(width: number, height: number): LayoutProfile {
-  if (width <= 360) return 'tiny';
+  // A compact-width surface can still be too short for the two-row page. Use
+  // the existing one-row profile before the grid starts clipping beneath the
+  // toolbar and paginator.
+  if (width <= 360 || (width <= 720 && height < 480)) return 'tiny';
   if (width <= 720) return 'compact';
   if (height < 660) return 'short';
   return 'wide';

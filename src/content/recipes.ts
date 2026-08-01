@@ -74,6 +74,21 @@ export const recipes: readonly RecipeDefinition[] = [
     displayOrder: 40,
     outputCategory: 'consumable',
   },
+  {
+    id: 'recipe.iron-axe',
+    category: 'equipment',
+    name: 'Iron Axe',
+    description: 'Shape a reliable axe at the homestead workbench.',
+    output: { itemId: 'iron-axe', quantity: 1 },
+    ingredients: [
+      { itemId: 'wood-plank', quantity: 2 },
+      { itemId: 'copper-ingot', quantity: 1 },
+    ],
+    maxBatch: 1,
+    displayOrder: 50,
+    stationId: 'workbench',
+    outputCategory: 'equipment',
+  },
 ];
 
 export function recipeDefinition(recipeId: string): RecipeDefinition | undefined {

@@ -32,6 +32,15 @@ composition belongs in the feature. Prefer the shared Base UI/shadcn primitives
 for dialogs, tabs, menus, popovers, and selectors instead of rebuilding their
 keyboard and focus behavior.
 
+Feature screens must consume Torch-owned primitives rather than importing Base
+UI directly or creating native selects. `TorchSelectField`, `TorchIconButton`,
+`TorchArtworkCard`, and the Torch button variants provide the standard
+selector, icon-control, authored-art-card, dialog-close, and pagination
+contracts. Dropdowns use one charcoal popover surface with flat option rows;
+gold is reserved for focus, selection indicators, and intentional emphasis.
+`npm run check:ui-system` enforces the boundary and checks the contrast of body
+text, muted text, charcoal controls, selected states, and gold emphasis.
+
 Phaser may consume board-safe tokens through
 `src/game/presentation-colors.ts`. Terrain, entities, resources, feedback, and
 artwork keep the colors needed to communicate their game meaning.
@@ -39,9 +48,12 @@ artwork keep the colors needed to communicate their game meaning.
 ## Color, type, and motion
 
 Use the existing semantic tokens for backgrounds, surfaces, text, accent,
-controls, borders, focus, feedback, and disabled states. Gold and charcoal are
-the chrome palette; success, warning, danger, info, and game-content colors are
-semantic exceptions.
+controls, borders, focus, feedback, and disabled states. Use
+`--ui-color-icon` for icon emphasis on charcoal controls and
+`--ui-color-control-foreground` for readable text inside raised charcoal
+controls; `--ui-color-on-accent` is reserved for dark text on gold-filled
+controls. Gold and charcoal are the chrome palette; success, warning, danger,
+info, and game-content colors are semantic exceptions.
 
 Text must meet WCAG AA contrast against its actual surface. Focus and selection
 indicators must remain visible against adjacent controls.

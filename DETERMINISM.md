@@ -58,7 +58,7 @@ small fixed-seed regression case whenever a generation or action rule changes.
 
 `runReplay()` in `src/sim/replay.ts` is the reusable command-transcript runner.
 It validates command shapes, replays the fixed seed and generation version, and
-returns structured state/event checkpoints for each command. `WorldSave` v1 in
+returns structured state/event checkpoints for each command. `WorldSave` v2 in
 `src/sim/world-save.ts` uses the same deterministic baseline and sparse mutation
 boundary, so save/load tests compare restored state with replay output without
 snapshotting renderer text or animation details.
@@ -66,6 +66,7 @@ snapshotting renderer text or animation details.
 ## Versioning
 
 Changing procedural generation rules requires a `generationVersion` decision.
-Changing save serialization requires a separate save-schema version and
-migration decision. Do not silently treat either change as a cosmetic patch:
-record the reason and add a regression fixture for the affected seed.
+Changing save serialization requires a separate save-schema version and an
+explicit migration-or-reset decision. The current early-development policy is
+to write the clean v2 shape and reset unsupported older saves; migration,
+recovery, and fault-injection coverage remain release-hardening work.

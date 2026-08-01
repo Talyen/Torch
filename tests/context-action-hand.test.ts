@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { actionsDuringCardPlayback, calculateHandMetrics } from '../src/ui/context-action-hand';
 import type { ContextActionOption } from '../src/sim/context-actions';
 
-function chopCard(entityId: string): ContextActionOption {
+function chopCard(entityId: string, kind: 'chop' | 'mine' | 'attack' = 'chop'): ContextActionOption {
   return {
-    id: `context:entity:${entityId}:chop`,
-    label: 'Chop',
+    id: `context:entity:${entityId}:${kind}`,
+    label: kind[0].toUpperCase() + kind.slice(1),
     source: 'entity',
     entityName: entityId,
-    action: { kind: 'chop', entityId, target: { x: 1, y: 0 } },
+    action: { kind, entityId, target: { x: 1, y: 0 } },
   };
 }
 
@@ -19,6 +19,19 @@ describe('context action playback', () => {
 
     expect(actionsDuringCardPlayback([replacement], played, 'entity:chop')).toEqual([played]);
     expect(actionsDuringCardPlayback([replacement], undefined, undefined)).toEqual([replacement]);
+  });
+
+  it('retains a removed card at its original fan index', () => {
+    const left = chopCard('left-tree', 'attack');
+    const played = chopCard('played-tree');
+    const right = chopCard('right-tree', 'mine');
+    const replacement = chopCard('replacement-tree');
+
+    expect(actionsDuringCardPlayback([left, replacement, right], played, 'entity:chop', 1)).toEqual([
+      left,
+      played,
+      right,
+    ]);
   });
 
   it('keeps the card geometry stable while deriving a proportional tuck depth', () => {

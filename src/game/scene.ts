@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { entityFootprint, footprintPositions, positionKey, samePosition, tileAt } from '../sim';
-import type { GameState, Position, SimEvent } from '../sim';
+import type { AttackResolvedEvent, GameState, Position, SimEvent } from '../sim';
 import { heroAssets } from '../content/hero-assets';
 import { enemyAssets } from '../content/enemy-assets';
+import { resourceAssets } from '../content/resource-assets';
 import { devFrameMonitor } from '../dev/frame-monitor';
 import { tileSizeForViewport, viewRadiusForViewport } from './layout';
 import { gameSession } from './session';
@@ -32,6 +33,28 @@ import {
   readKeyBindings,
 } from './input-bindings';
 import { ControllerInputTracker, readConnectedGamepad } from './controller-input';
+import {
+  backingSizeForViewport,
+  cameraScrollForLogicalViewport,
+  logicalPointerCoordinate,
+  renderScaleForDevicePixelRatio,
+} from './render-resolution';
+import type { ActionBatch } from './session';
+import { attackPoseAt, ATTACK_MOTION } from './attack-motion';
+import { feedbackRequestsForBatch, type FeedbackRequest } from './feedback-presenter';
+import { presentationGate } from './presentation-gate';
+
+declare global {
+  interface Window {
+    __torchPresentation?: {
+      lastBatchId: number;
+      busy: boolean;
+      activeAttackId?: string;
+      queuedAttacks: number;
+      activeFeedback: number;
+    };
+  }
+}
 
 const COLORS = {
   grass: 0x789f55,
@@ -46,6 +69,19 @@ interface EntityMotion {
   to: Position;
 }
 
+interface ActorPose {
+  source: Position;
+  target: Position;
+  progress: number;
+}
+
+interface FeedbackChip {
+  container: Phaser.GameObjects.Container;
+  label: Phaser.GameObjects.Text;
+  icon: Phaser.GameObjects.Image;
+  anchor: Position;
+}
+
 type EntityToken = Phaser.GameObjects.Graphics | Phaser.GameObjects.Image;
 
 export class TorchScene extends Phaser.Scene {
@@ -55,14 +91,18 @@ export class TorchScene extends Phaser.Scene {
   private gridLayer!: Phaser.GameObjects.Container;
   private gridTiles: Phaser.GameObjects.Rectangle[] = [];
   private heroImage!: Phaser.GameObjects.Image;
+  private effectsLayer!: Phaser.GameObjects.Container;
+  private feedbackLayer!: Phaser.GameObjects.Container;
   private entityTokens = new Map<string, EntityToken>();
   private visualEntityPositions = new Map<string, Position>();
   private entityMotions = new Map<string, EntityMotion>();
   private unsubscribe?: () => void;
+  private unsubscribeBatches?: () => void;
   private resizeObserver?: ResizeObserver;
   private resizeFrame?: number;
   private dprMediaQuery?: MediaQueryList;
   private viewportSize = { width: 960, height: 640 };
+  private renderScale = 1;
   private heroTween?: Phaser.Tweens.Tween;
   private heroAnimating = false;
   private lastSimulationHeroPosition?: Position;
@@ -70,6 +110,15 @@ export class TorchScene extends Phaser.Scene {
   private visualHeroPosition?: Position;
   private boardBaseCamera?: Position;
   private movementProgress = { value: 0 };
+  private attackProgress = { value: 0 };
+  private attackQueue: AttackResolvedEvent[] = [];
+  private activeAttack?: AttackResolvedEvent;
+  private attackRelease?: () => void;
+  private actorPoses = new Map<string, ActorPose>();
+  private feedbackPool: FeedbackChip[] = [];
+  private activeFeedback = new Map<string, FeedbackChip>();
+  private feedbackSequence = 0;
+  private lastBatchId = 0;
   private visibilityProgress = { value: 1 };
   private lastVisibilitySnapshot?: VisibilitySnapshot;
   private tileCache = new Map<string, ReturnType<typeof tileAt>>();
@@ -87,7 +136,11 @@ export class TorchScene extends Phaser.Scene {
   };
 
   private handlePointerDown = (pointer: Phaser.Input.Pointer): void => {
-    this.handlePointer(pointer.x, pointer.y);
+    const displayScale = this.scale.displayScale;
+    this.handlePointer(
+      logicalPointerCoordinate(pointer.x, displayScale.x),
+      logicalPointerCoordinate(pointer.y, displayScale.y),
+    );
   };
 
   private handleDevicePixelRatioChange = (): void => {
@@ -96,7 +149,7 @@ export class TorchScene extends Phaser.Scene {
   };
 
   private handleKeyDown = (event: KeyboardEvent): void => {
-    if (gameSession.inputMode !== 'world' || this.heroAnimating) return;
+    if (gameSession.inputMode !== 'world' || this.heroAnimating || presentationGate.busy) return;
 
     const direction = directionForKey(this.keyBindings, event.key);
     if (direction) {
@@ -124,6 +177,9 @@ export class TorchScene extends Phaser.Scene {
   public preload(): void {
     this.load.image('hero-knight-marker', heroAssets.knight.marker);
     this.load.image('enemy-slime-marker', enemyAssets.slime.marker);
+    for (const [resource, path] of Object.entries(resourceAssets)) {
+      this.load.image(`resource-homestead-${resource}`, path);
+    }
   }
 
   public create(): void {
@@ -136,6 +192,8 @@ export class TorchScene extends Phaser.Scene {
     // so drawing the stroke on that same rectangle would make the grid
     // disappear with the fill.
     this.gridLayer = this.add.container(0, 0).setDepth(0.6);
+    this.effectsLayer = this.add.container(0, 0).setDepth(3);
+    this.feedbackLayer = this.add.container(0, 0).setDepth(4);
     this.showGrid = readShowGridPreference();
     this.reduceMotion = readReduceMotionPreference();
     this.keyBindings = readKeyBindings();
@@ -143,12 +201,14 @@ export class TorchScene extends Phaser.Scene {
     this.textures.get('hero-knight-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.textures.get('enemy-slime-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.heroImage = this.add.image(0, 0, 'hero-knight-marker').setDepth(2);
+    this.effectsLayer.add(this.heroImage);
     this.presentationColors = {
       grid: cssHexColorToNumber(readCssColorToken('--ui-color-grid', '#3a3328'), 0x3a3328),
       fog: cssHexColorToNumber(readCssColorToken('--ui-color-fog', '#15130f'), 0x15130f),
     };
     this.cameras.main.setBackgroundColor(readCssColorToken('--ui-color-background', '#0c0b09'));
     this.unsubscribe = gameSession.subscribe((_state, events) => this.redraw(true, events));
+    this.unsubscribeBatches = gameSession.subscribeActionBatches((batch) => this.handleActionBatch(batch));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
     this.bindDevicePixelRatioListener();
     this.resizeObserver =
@@ -165,10 +225,18 @@ export class TorchScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribe?.();
+      this.unsubscribeBatches?.();
       this.input.off(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown);
       this.input.keyboard?.off('keydown', this.handleKeyDown);
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);
       this.heroTween?.stop();
+      this.attackRelease?.();
+      this.attackRelease = undefined;
+      this.attackQueue = [];
+      this.actorPoses.clear();
+      this.activeFeedback.clear();
+      this.feedbackPool.forEach((chip) => chip.container.destroy());
+      this.feedbackPool = [];
       this.resizeObserver?.disconnect();
       window.removeEventListener('resize', this.scheduleViewportSync);
       window.visualViewport?.removeEventListener('resize', this.scheduleViewportSync);
@@ -182,13 +250,14 @@ export class TorchScene extends Phaser.Scene {
 
     this.syncLogicalViewport();
     this.redraw();
+    this.updatePresentationDiagnostics();
   }
 
   public update(): void {
     // Poll even while UI or animation owns input so a held control does not
     // unexpectedly fire when the world becomes available again.
     const action = this.controllerInput.poll(readConnectedGamepad());
-    if (!action || gameSession.inputMode !== 'world' || this.heroAnimating) return;
+    if (!action || gameSession.inputMode !== 'world' || this.heroAnimating || presentationGate.busy) return;
 
     const direction = directionForInputAction(action);
     if (direction) gameSession.move(direction);
@@ -215,6 +284,11 @@ export class TorchScene extends Phaser.Scene {
     this.heroTween?.stop();
     this.heroTween = undefined;
     this.heroAnimating = false;
+    this.attackQueue = [];
+    this.activeAttack = undefined;
+    this.attackRelease?.();
+    this.attackRelease = undefined;
+    this.actorPoses.clear();
     this.redraw(false);
   };
 
@@ -241,10 +315,28 @@ export class TorchScene extends Phaser.Scene {
     const bounds = container.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width || this.scale.width));
     const height = Math.max(1, Math.round(bounds.height || this.scale.height));
+    const renderScale = renderScaleForDevicePixelRatio(typeof window === 'undefined' ? 1 : window.devicePixelRatio);
+    const backingSize = backingSizeForViewport(width, height, renderScale);
 
-    if (this.viewportSize.width === width && this.viewportSize.height === height) return;
+    if (
+      this.viewportSize.width === width &&
+      this.viewportSize.height === height &&
+      this.renderScale === renderScale &&
+      this.scale.width === backingSize.width &&
+      this.scale.height === backingSize.height
+    ) {
+      return;
+    }
 
     this.viewportSize = { width, height };
+    this.renderScale = renderScale;
+    // ScaleManager.resize updates the canvas, renderer, camera sizing, and
+    // Phaser's input transform together. The camera zoom maps logical world
+    // units onto the denser backing surface without scaling the React overlay.
+    this.scale.resize(backingSize.width, backingSize.height);
+    this.cameras.main.setZoom(renderScale);
+    const cameraScroll = cameraScrollForLogicalViewport(width, height, backingSize.width, backingSize.height);
+    this.cameras.main.setScroll(cameraScroll.x, cameraScroll.y);
     this.redraw(false);
   };
 
@@ -270,7 +362,7 @@ export class TorchScene extends Phaser.Scene {
   }
 
   private handlePointer(screenX: number, screenY: number): void {
-    if (gameSession.inputMode !== 'world' || this.heroAnimating) return;
+    if (gameSession.inputMode !== 'world' || this.heroAnimating || presentationGate.busy) return;
 
     const target = this.screenToTile(screenX, screenY);
     const hero = gameSession.state.hero.position;
@@ -310,6 +402,146 @@ export class TorchScene extends Phaser.Scene {
 
   private tileSize(): number {
     return tileSizeForViewport(this.viewportSize.width, this.viewportSize.height);
+  }
+
+  private handleActionBatch(batch: ActionBatch): void {
+    this.lastBatchId = batch.batchId;
+    this.updatePresentationDiagnostics();
+    if (!batch.accepted) return;
+
+    const attacks = batch.events.filter((event): event is AttackResolvedEvent => event.type === 'attack-resolved');
+    if (attacks.length > 0) {
+      // Keyboard/controller entry points are gated, but a scripted client can
+      // still dispatch synchronously. Queue a short burst rather than dropping
+      // accepted simulation results or starting overlapping transforms.
+      this.attackQueue.push(...attacks);
+      this.drainAttackQueue();
+    }
+
+    for (const request of feedbackRequestsForBatch(batch)) this.scheduleFeedback(request);
+  }
+
+  private drainAttackQueue(): void {
+    if (this.activeAttack || this.attackQueue.length === 0) return;
+    const attack = this.attackQueue.shift();
+    if (!attack) return;
+
+    this.activeAttack = attack;
+    this.attackRelease = presentationGate.acquire();
+    this.attackProgress.value = 0;
+    this.actorPoses.set(attack.attacker.id, {
+      source: { ...attack.attacker.position },
+      target: { ...attack.target.position },
+      progress: 0,
+    });
+    this.updatePresentationDiagnostics();
+
+    this.tweens.add({
+      targets: this.attackProgress,
+      value: 1,
+      duration: this.reduceMotion ? 80 : ATTACK_MOTION.durationMs,
+      ease: 'Linear',
+      onUpdate: () => {
+        const pose = this.actorPoses.get(attack.attacker.id);
+        if (!pose) return;
+        pose.progress = this.attackProgress.value;
+        this.renderActorPositions();
+      },
+      onComplete: () => {
+        this.actorPoses.delete(attack.attacker.id);
+        this.activeAttack = undefined;
+        this.attackRelease?.();
+        this.attackRelease = undefined;
+        this.renderActorPositions();
+        this.updatePresentationDiagnostics();
+        this.drainAttackQueue();
+      },
+    });
+  }
+
+  private scheduleFeedback(request: FeedbackRequest): void {
+    const delay = Math.max(0, request.delayMs);
+    this.time.delayedCall(delay, () => this.showFeedback(request));
+  }
+
+  private showFeedback(request: FeedbackRequest): void {
+    const tileSize = this.tileSize();
+    const chip = this.feedbackPool.pop() ?? this.createFeedbackChip();
+    const screen = this.tileScreenPosition(request.anchor, tileSize);
+    chip.anchor = { ...request.anchor };
+    chip.container
+      .setPosition(screen.x + tileSize / 2, screen.y + tileSize * 0.22)
+      .setAlpha(0)
+      .setVisible(true);
+    chip.label.setText(request.text);
+    chip.icon.setVisible(Boolean(request.iconKey));
+    if (request.iconKey) chip.icon.setTexture(request.iconKey.replace('resource.homestead.', 'resource-homestead-'));
+    this.activeFeedback.set(request.id, chip);
+    this.feedbackSequence += 1;
+    this.tweens.add({
+      targets: chip.container,
+      y: chip.container.y - tileSize * 0.44,
+      alpha: 1,
+      duration: 220,
+      ease: 'Cubic.Out',
+      hold: 420,
+      onComplete: () => {
+        this.tweens.add({
+          targets: chip.container,
+          alpha: 0,
+          y: chip.container.y - tileSize * 0.16,
+          duration: 300,
+          ease: 'Cubic.In',
+          onComplete: () => this.releaseFeedback(request.id),
+        });
+      },
+    });
+  }
+
+  private createFeedbackChip(): FeedbackChip {
+    const container = this.add.container(0, 0).setDepth(1).setVisible(false);
+    const icon = this.add.image(-24, 0, 'resource-homestead-wood').setDisplaySize(22, 22).setVisible(false);
+    const label = this.add
+      .text(0, 0, '', {
+        color: '#fff3d2',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        stroke: '#261b12',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5);
+    container.add([icon, label]);
+    this.feedbackLayer.add(container);
+    return { container, label, icon, anchor: { x: 0, y: 0 } };
+  }
+
+  private releaseFeedback(id: string): void {
+    const chip = this.activeFeedback.get(id);
+    if (!chip) return;
+    this.activeFeedback.delete(id);
+    chip.container.setVisible(false).setAlpha(0);
+    this.feedbackPool.push(chip);
+    this.updatePresentationDiagnostics();
+  }
+
+  private updatePresentationDiagnostics(): void {
+    if (typeof window === 'undefined' || !import.meta.env.DEV) return;
+    window.__torchPresentation = {
+      lastBatchId: this.lastBatchId,
+      busy: presentationGate.busy,
+      activeAttackId: this.activeAttack?.attackId,
+      queuedAttacks: this.attackQueue.length,
+      activeFeedback: this.activeFeedback.size,
+    };
+  }
+
+  private renderActorPositions(): void {
+    if (!this.board) return;
+    const state = gameSession.state;
+    const visibility = this.lastVisibilitySnapshot ?? captureVisibilitySnapshot(state);
+    this.positionEntityTokens(state, this.tileSize(), false, visibility, visibility, 1);
+    this.positionHeroImage(this.tileSize());
   }
 
   private redraw(animateHero = true, events: SimEvent[] = []): void {
@@ -655,6 +887,7 @@ export class TorchScene extends Phaser.Scene {
       } else {
         token.setPosition(screen.x, screen.y);
       }
+      this.applyActorPose(entityId, token, screen, tileSize * footprint.width, tileSize * footprint.height);
       const alpha = this.calculateEntityVisibilityAlpha(
         entity,
         previousVisibility,
@@ -717,6 +950,30 @@ export class TorchScene extends Phaser.Scene {
     this.heroImage
       .setDisplaySize(tileSize, tileSize)
       .setPosition(heroScreen.x + tileSize / 2, heroScreen.y + tileSize / 2);
+    this.applyActorPose(gameSession.state.hero.heroId, this.heroImage, heroScreen, tileSize, tileSize);
+  }
+
+  private applyActorPose(
+    actorId: string,
+    object: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics,
+    screen: Position,
+    width: number,
+    height: number,
+  ): void {
+    const baseScaleX = object instanceof Phaser.GameObjects.Image && object.width > 0 ? width / object.width : 1;
+    const baseScaleY = object instanceof Phaser.GameObjects.Image && object.height > 0 ? height / object.height : 1;
+    const pose = this.actorPoses.get(actorId);
+    if (!pose) {
+      object.setScale(baseScaleX, baseScaleY).setRotation(0);
+      return;
+    }
+    const sampled = attackPoseAt(pose.progress, pose.source, pose.target, this.tileSize());
+    const centeredX = screen.x + width / 2;
+    const centeredY = screen.y + height / 2;
+    object
+      .setPosition(centeredX + sampled.offsetX, centeredY + sampled.offsetY)
+      .setScale(baseScaleX * sampled.scaleX, baseScaleY * sampled.scaleY)
+      .setRotation(sampled.rotation);
   }
 
   private prewarmNearbyTiles(seed: number, center: Position, radiusX: number, radiusY: number): void {

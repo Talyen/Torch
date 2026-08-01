@@ -22,19 +22,19 @@ import type {
   WaypointStatus,
   WorldJournalState,
 } from './types';
-import { createInitialWorldJournalState } from './journal';
 import { createInitialGameState, GENERATION_VERSION, materializeGeneratedTrees, worldIdForSeed } from './world';
 
-export const WORLD_SAVE_SCHEMA_VERSION = 1;
+export const WORLD_SAVE_SCHEMA_VERSION = 2;
 
-export interface WorldSaveV1 {
-  schemaVersion: 1;
+export interface WorldSaveV2 {
+  schemaVersion: 2;
   worldId: string;
   seed: number;
   generationVersion: number;
   turn: number;
   hero: HeroState;
   homestead: Position;
+  unlockedStations: Record<string, true>;
   entityMutations: {
     updated: Record<string, EntityState>;
     removed: string[];
@@ -43,9 +43,12 @@ export interface WorldSaveV1 {
   gatheringProgress: Record<string, number>;
   discoveries: Record<string, true>;
   revealedTiles: Record<string, true>;
-  /** Optional for backwards compatibility with pre-Journal v1 world saves. */
-  journal?: WorldJournalState;
+  journal: WorldJournalState;
 }
+
+/** Current development save shape. Older development saves are intentionally
+ * invalidated rather than migrated while the game is still changing quickly. */
+export type WorldSave = WorldSaveV2;
 
 function isGeneratedEntityId(id: string): boolean {
   return id.startsWith('generated-tree:');
@@ -73,7 +76,7 @@ function cloneRecord<T>(value: Record<string, T>): Record<string, T> {
   return cloneSerializable(value);
 }
 
-function entityMutationsFor(state: GameState): WorldSaveV1['entityMutations'] {
+function entityMutationsFor(state: GameState): WorldSaveV2['entityMutations'] {
   const baseline = createInitialGameState(state.seed);
   const updated: Record<string, EntityState> = {};
   const removed: string[] = [];
@@ -93,7 +96,7 @@ function entityMutationsFor(state: GameState): WorldSaveV1['entityMutations'] {
   return { updated, removed };
 }
 
-export function createWorldSave(state: GameState): WorldSaveV1 {
+export function createWorldSave(state: GameState): WorldSaveV2 {
   if (state.generationVersion !== GENERATION_VERSION) {
     throw new Error(`Cannot save generation version ${state.generationVersion}; expected ${GENERATION_VERSION}.`);
   }
@@ -109,6 +112,7 @@ export function createWorldSave(state: GameState): WorldSaveV1 {
     turn: state.turn,
     hero: cloneSerializable(state.hero),
     homestead: cloneSerializable(state.homestead),
+    unlockedStations: cloneRecord(state.unlockedStations),
     entityMutations: entityMutationsFor(state),
     removedGeneratedEntities: cloneRecord(state.removedGeneratedEntities),
     gatheringProgress: cloneRecord(state.gatheringProgress),
@@ -118,13 +122,13 @@ export function createWorldSave(state: GameState): WorldSaveV1 {
   };
 }
 
-/** Encode a validated v1 DTO with stable object insertion order. */
-export function encodeWorldSave(save: WorldSaveV1): string {
+/** Encode a validated v2 DTO with stable object insertion order. */
+export function encodeWorldSave(save: WorldSaveV2): string {
   return JSON.stringify(save);
 }
 
-/** Decode a serialized v1 DTO without making JSON parsing part of the sim. */
-export function decodeWorldSaveJson(serialized: string): WorldSaveV1 {
+/** Decode a serialized v2 DTO without making JSON parsing part of the sim. */
+export function decodeWorldSaveJson(serialized: string): WorldSaveV2 {
   let value: unknown;
   try {
     value = JSON.parse(serialized) as unknown;
@@ -253,7 +257,7 @@ function worldJournalAt(value: unknown, path: string): WorldJournalState {
   };
 }
 
-export function decodeWorldSave(value: unknown): WorldSaveV1 {
+export function decodeWorldSave(value: unknown): WorldSaveV2 {
   const record = recordAt(value, 'worldSave');
   exactKeys(
     record,
@@ -265,13 +269,15 @@ export function decodeWorldSave(value: unknown): WorldSaveV1 {
       'turn',
       'hero',
       'homestead',
+      'unlockedStations',
       'entityMutations',
       'removedGeneratedEntities',
       'gatheringProgress',
       'discoveries',
       'revealedTiles',
+      'journal',
     ],
-    ['journal'],
+    [],
     'worldSave',
   );
 
@@ -326,6 +332,7 @@ export function decodeWorldSave(value: unknown): WorldSaveV1 {
       x: integerAt(homesteadRecord.x, 'worldSave.homestead.x'),
       y: integerAt(homesteadRecord.y, 'worldSave.homestead.y'),
     },
+    unlockedStations: trueRecordAt(record.unlockedStations, 'worldSave.unlockedStations'),
     entityMutations: { updated, removed },
     removedGeneratedEntities: trueRecordAt(
       record.removedGeneratedEntities,
@@ -335,7 +342,7 @@ export function decodeWorldSave(value: unknown): WorldSaveV1 {
     gatheringProgress: numberRecordAt(record.gatheringProgress, 'worldSave.gatheringProgress', 'generated-tree:'),
     discoveries: trueRecordAt(record.discoveries, 'worldSave.discoveries'),
     revealedTiles: trueRecordAt(record.revealedTiles, 'worldSave.revealedTiles'),
-    ...(Object.hasOwn(record, 'journal') ? { journal: worldJournalAt(record.journal, 'worldSave.journal') } : {}),
+    journal: worldJournalAt(record.journal, 'worldSave.journal'),
   };
 }
 
@@ -353,11 +360,12 @@ export function restoreWorldSave(value: unknown): GameState {
   state.worldId = save.worldId;
   state.hero = cloneSerializable(save.hero);
   state.homestead = cloneSerializable(save.homestead);
+  state.unlockedStations = cloneRecord(save.unlockedStations);
   state.removedGeneratedEntities = cloneRecord(save.removedGeneratedEntities);
   state.gatheringProgress = cloneRecord(save.gatheringProgress);
   state.discoveries = cloneRecord(save.discoveries);
   state.revealedTiles = cloneRecord(save.revealedTiles);
-  state.journal = cloneSerializable(save.journal ?? createInitialWorldJournalState());
+  state.journal = cloneSerializable(save.journal);
 
   for (const id of Object.keys(state.entities)) {
     if (isGeneratedEntityId(id)) delete state.entities[id];

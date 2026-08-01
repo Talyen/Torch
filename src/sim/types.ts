@@ -1,4 +1,6 @@
 import type { PrimaryStats } from './stats';
+import type { EquipmentSlotId } from '../content/equipment';
+import type { ToolSlotId } from '../content/tools';
 
 export type Direction = 'north' | 'south' | 'west' | 'east';
 
@@ -16,6 +18,8 @@ export type AbilitySlotId = 'basic' | 'skill' | 'ultimate';
 export type ActionKind = 'attack' | 'chop' | 'mine' | 'ability';
 export type CraftBlockedReason =
   'unknown-recipe' | 'locked' | 'requires-station' | 'missing-ingredients' | 'invalid-quantity';
+
+export type LoadoutSlotId = EquipmentSlotId | ToolSlotId;
 
 export type JournalEntryKind = 'quest' | 'mystery' | 'milestone';
 export type JournalScope = 'profile' | 'world';
@@ -83,6 +87,9 @@ export interface CraftingCommand {
   quantity: number;
 }
 
+export type LoadoutCommand =
+  { type: 'equip-item'; slot: LoadoutSlotId; itemId: string } | { type: 'unequip-item'; slot: LoadoutSlotId };
+
 export interface EntityState {
   id: string;
   kind: EntityKind;
@@ -126,6 +133,10 @@ export interface HeroState {
   block?: number;
   primaryStats: PrimaryStats;
   equippedAbilities: Record<AbilitySlotId, string>;
+  /** Canonical stable-ID equipment loadout; inventory remains the ownership source. */
+  equippedItems: Partial<Record<EquipmentSlotId, string>>;
+  /** Canonical stable-ID tool loadout; tool items are also inventory entries. */
+  equippedTools: Partial<Record<ToolSlotId, string>>;
   abilityCooldowns: Record<string, number>;
   activeAbilityEffects: ActiveAbilityEffect[];
 }
@@ -138,6 +149,8 @@ export interface GameState {
   turn: number;
   hero: HeroState;
   homestead: Position;
+  /** Stations unlocked by the current world. The starter homestead has a workbench. */
+  unlockedStations: Record<string, true>;
   entities: Record<string, EntityState>;
   removedGeneratedEntities: Record<string, true>;
   /** Partial work on generated gatherables survives active-ring pruning. */
@@ -148,11 +161,35 @@ export interface GameState {
   journal: WorldJournalState;
 }
 
+export type CombatantKind = 'hero' | 'enemy';
+
+/** Stable, presentation-neutral facts about one side of an attack. */
+export interface CombatantSnapshot {
+  id: string;
+  kind: CombatantKind;
+  name: string;
+  position: Position;
+}
+
+/** One resolved attack. The simulation commits this synchronously; clients
+ * decide when to show its visual impact. */
+export interface AttackResolvedEvent {
+  type: 'attack-resolved';
+  attackId: string;
+  action: ActionKind;
+  abilityId?: string;
+  attacker: CombatantSnapshot;
+  target: CombatantSnapshot;
+  amount: number;
+  targetDefeated: boolean;
+}
+
 export type Command =
   | { type: 'move'; direction: Direction }
   | { type: 'interact'; target: Position }
   | { type: 'action'; action: ActionRequest }
   | { type: 'equip-ability'; slot: AbilitySlotId; abilityId: string }
+  | LoadoutCommand
   | CraftingCommand
   | { type: 'set-journal-focus'; entryId?: string }
   | { type: 'set-waypoint'; entryId: string; target: WaypointTarget }
@@ -164,9 +201,26 @@ export type SimEvent =
   | { type: 'message'; text: string }
   | { type: 'hero-moved'; from: Position; to: Position }
   | { type: 'enemy-moved'; entityId: string; from: Position; to: Position }
-  | { type: 'action-resolved'; action: ActionKind; entityId: string; target: Position; abilityId?: string }
-  | { type: 'ability-used'; abilityId: string; entityId: string; target: Position; amount: number }
+  | {
+      type: 'action-resolved';
+      action: ActionKind;
+      entityId: string;
+      entityName: string;
+      target: Position;
+      abilityId?: string;
+    }
+  | {
+      type: 'ability-used';
+      abilityId: string;
+      entityId: string;
+      entityName: string;
+      target: Position;
+      amount: number;
+    }
+  | AttackResolvedEvent
   | { type: 'ability-equipped'; slot: AbilitySlotId; abilityId: string }
+  | { type: 'item-equipped'; slot: LoadoutSlotId; itemId: string }
+  | { type: 'item-unequipped'; slot: LoadoutSlotId; itemId: string }
   | {
       type: 'craft-completed';
       recipeId: string;
@@ -183,7 +237,13 @@ export type SimEvent =
   | { type: 'tiles-revealed'; count: number }
   | { type: 'enemy-damaged'; entityId: string; amount: number }
   | { type: 'enemy-defeated'; entityId: string }
-  | { type: 'resource-gathered'; resource: 'wood' | 'ore'; amount: number }
+  | {
+      type: 'resource-gathered';
+      resource: 'wood' | 'ore';
+      amount: number;
+      /** Snapshot used by presentation layers to anchor feedback. */
+      collectorPosition?: Position;
+    }
   | { type: 'hero-damaged'; amount: number; source: string }
   | { type: 'hero-respawned'; position: Position }
   | { type: 'journal-progressed'; entryId: string; objectiveId: string; current: number; target: number }

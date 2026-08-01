@@ -13,7 +13,25 @@ npm run dev   # Vite at 127.0.0.1:5173
 Open the Vite URL rather than `index.html`; module and asset paths rely on the
 development server.
 
+For Phaser presentation changes, verify both the logical canvas bounds and its
+backing density in the browser: `canvas.width / canvas.clientWidth` should track
+the capped device-pixel ratio (currently 1–2×), while board geometry and pointer
+actions remain in CSS-pixel coordinates.
+
+Development builds include a temporary Card Animation Lab in the upper-left UI
+overlay. It exposes exactly two source bundles, `trinket` and `alchemy`; the
+selected bundle controls the real contextual hand's hand, hover, reflow, draw,
+discard, and play phases. The lab is not rendered in production previews and
+does not persist its selection. Draw/discard pile anchors are presentation-only
+visual endpoints because Torch's simulation does not model a deck.
+
 ## Verification
+
+`npm run check:ui-system` enforces the React UI primitive boundary. It rejects
+feature-local Base UI imports, native selects, raw feature colors, unnamed
+transition shorthands, and direct feature buttons that bypass Torch's shared
+components. It also checks the required body, muted, control, selected, and
+gold token contrast pairs. `npm run verify` includes this check.
 
 Use the checks closest to the change while iterating:
 
@@ -28,6 +46,14 @@ npm test
 npm run test:e2e -- --reporter=line
 npm run test:e2e:prod -- --reporter=line
 ```
+
+Commits automatically run Prettier and ESLint on staged JavaScript and
+TypeScript files through the Husky pre-commit hook. Staged JSON, CSS, Markdown,
+HTML, and YAML files receive the same Prettier check. The hook is intentionally
+limited to staged files so commits stay fast; it does not replace the complete
+verification gate below. `npm install` and `npm ci` install the hook through
+the repository's `prepare` script. If the hook needs to be restored manually,
+run `npm run prepare`.
 
 Run the complete local gate before handing off code, asset, configuration, or
 workflow changes:

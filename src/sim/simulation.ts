@@ -6,10 +6,11 @@ import {
   positionKey,
   samePosition,
 } from './coords';
-import { defaultActionForEnemy, defaultActionForEntity, resolveAction } from './actions';
+import { defaultActionForEnemy, defaultActionForEntity, resolveAction, type CombatEventContext } from './actions';
 import { blockingEntityAt, entityAt } from './entities';
 import { abilityActionDefinition, canEquipAbility } from './ability-rules';
-import { resolveCraft } from './crafting';
+import { craftingContextForState, resolveCraft } from './crafting';
+import { applyLoadoutCommand } from './loadout';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
 import { advanceWorldJournal, claimWorldJournalReward, resolveWaypointPosition } from './journal';
 import { cloneGameState } from './state';
@@ -56,7 +57,7 @@ function refreshWaypointStatus(state: GameState, events: SimEvent[]): void {
   events.push({ type: 'waypoint-changed', entryId: waypoint.entryId, status: nextStatus });
 }
 
-function advanceEnemies(state: GameState, events: SimEvent[]): void {
+function advanceEnemies(state: GameState, events: SimEvent[], combatContext: CombatEventContext): void {
   const enemies = Object.values(state.entities).filter((entity) => entity.kind === 'enemy' && (entity.health ?? 0) > 0);
 
   for (const enemy of enemies) {
@@ -72,6 +73,25 @@ function advanceEnemies(state: GameState, events: SimEvent[]): void {
 
     if (distance === 1) {
       const amount = enemy.attack ?? 1;
+      events.push({
+        type: 'attack-resolved',
+        attackId: `${state.turn}:attack:${combatContext.attackOrdinal++}:${enemy.id}:${state.hero.heroId}`,
+        action: 'attack',
+        attacker: {
+          id: enemy.id,
+          kind: 'enemy',
+          name: enemy.name,
+          position: { ...enemy.position },
+        },
+        target: {
+          id: state.hero.heroId,
+          kind: 'hero',
+          name: 'Hero',
+          position: { ...state.hero.position },
+        },
+        amount,
+        targetDefeated: false,
+      });
       state.hero.health -= amount;
       events.push({ type: 'hero-damaged', amount, source: enemy.name });
       events.push({ type: 'message', text: `${enemy.name} strikes for ${amount}.` });
@@ -110,10 +130,15 @@ function advanceAbilityEffects(state: GameState, consumedAbilityIds: Set<string>
   });
 }
 
-function advanceTurn(state: GameState, events: SimEvent[], consumedAbilityIds: Set<string>): void {
+function advanceTurn(
+  state: GameState,
+  events: SimEvent[],
+  consumedAbilityIds: Set<string>,
+  combatContext: CombatEventContext,
+): void {
   state.turn += 1;
   advanceAbilityCooldowns(state, consumedAbilityIds);
-  advanceEnemies(state, events);
+  advanceEnemies(state, events, combatContext);
   advanceAbilityEffects(state, consumedAbilityIds);
   events.push({ type: 'turn-advanced', turn: state.turn });
 }
@@ -122,9 +147,10 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
   const next = cloneGameState(state);
   const events: SimEvent[] = [];
   const consumedAbilityIds = new Set<string>();
+  const combatContext: CombatEventContext = { attackOrdinal: 0 };
   let accepted = false;
 
-  // Equipment changes are state commands but not turn-consuming actions.
+  // Equipment and loadout changes are state commands but not turn-consuming actions.
   // They still go through this resolver so replays and UI callbacks share one
   // validation path.
   if (command.type === 'equip-ability') {
@@ -138,11 +164,13 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
       events.push({ type: 'ability-equipped', slot: command.slot, abilityId: command.abilityId });
       accepted = true;
     }
+  } else if (command.type === 'equip-item' || command.type === 'unequip-item') {
+    accepted = applyLoadoutCommand(next, command, events);
   } else if (command.type === 'craft') {
     // Crafting is an out-of-turn state command. The menu can remain open while
     // the cloned resolver updates inventory, without moving enemies or
     // advancing cooldowns.
-    accepted = resolveCraft(next, command, events);
+    accepted = resolveCraft(next, command, events, craftingContextForState(next));
   } else if (command.type === 'set-journal-focus') {
     if (command.entryId && next.journal.entries[command.entryId]?.status === 'locked') {
       events.push({ type: 'blocked', reason: 'That Journal entry is not available yet.' });
@@ -200,6 +228,7 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
                   : action,
                 events,
                 consumedAbilityIds,
+                combatContext,
               );
             } else {
               events.push({ type: 'blocked', reason: `${blocker.name} blocks the way.` });
@@ -237,13 +266,14 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
               },
               events,
               consumedAbilityIds,
+              combatContext,
             );
           }
         }
         break;
       }
       case 'action':
-        accepted = resolveAction(next, command.action, events, consumedAbilityIds);
+        accepted = resolveAction(next, command.action, events, consumedAbilityIds, combatContext);
         break;
       case 'wait':
         events.push({ type: 'message', text: 'You wait and listen to the dark.' });
@@ -252,15 +282,14 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
     }
   }
 
-  if (accepted && command.type !== 'equip-ability' && command.type !== 'craft') {
-    advanceTurn(next, events, consumedAbilityIds);
+  if (accepted && !isStateOnlyCommand(command)) {
+    advanceTurn(next, events, consumedAbilityIds, combatContext);
     refreshWaypointStatus(next, events);
   }
 
   if (
     accepted &&
-    command.type !== 'equip-ability' &&
-    command.type !== 'craft' &&
+    !isStateOnlyCommand(command) &&
     command.type !== 'set-journal-focus' &&
     command.type !== 'set-waypoint' &&
     command.type !== 'clear-waypoint' &&
@@ -270,6 +299,15 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
   }
 
   return { state: next, events, accepted };
+}
+
+function isStateOnlyCommand(command: Command): boolean {
+  return (
+    command.type === 'equip-ability' ||
+    command.type === 'equip-item' ||
+    command.type === 'unequip-item' ||
+    command.type === 'craft'
+  );
 }
 
 export function latestMessage(events: SimEvent[]): string | undefined {

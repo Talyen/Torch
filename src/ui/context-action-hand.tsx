@@ -1,11 +1,20 @@
 import { Axe, Pickaxe, Sparkles, Sword } from 'lucide-react';
-import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { abilities } from '../content/abilities';
 import { gameSession } from '../game/session';
 import { availableContextActionsAt, contextActionCardKey, contextualActionTargets, positionKey } from '../sim';
 import type { ContextActionOption, GameState, Position, SimEvent } from '../sim';
+import { setCardPlayPlaybackActive, useCardPlayLabState } from '../dev/card-play-lab-store';
+import {
+  animationDurationForPhase,
+  cardAnimationPresetForId,
+  DEFAULT_CARD_ANIMATION_PRESET,
+  snapshotForCardAnimation,
+} from './card-animation';
+import type { CardAnimationPreset, CardAnimationPresetId, CardAnimationSnapshot, CardRect } from './card-animation';
+import { presentationGate } from '../game/presentation-gate';
 
 interface ContextActionHandProps {
   state: GameState;
@@ -21,44 +30,46 @@ export interface HandMetrics {
   tuckDepth: number;
 }
 
-interface CardRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-interface PlayingGhost {
-  action: ContextActionOption;
-  sourceRect?: CardRect;
-}
-
 const MIN_CARD_WIDTH = 72;
 const MAX_CARD_WIDTH = 132;
-const HAND_OVERLAP = 0.48;
 const CARD_ASPECT_HEIGHT = 4 / 3;
 const CARD_TUCK_RATIO = 0.1;
-const PLAY_DURATION_MS = 560;
-const REVEAL_DURATION_MS = 240;
+
+interface ActivePlayback {
+  cardKey: string;
+  action: ContextActionOption;
+  origin: Position;
+  originalIndex: number;
+  token: number;
+}
 
 export function ContextActionHand({ state, events, hidden = false }: ContextActionHandProps): ReactElement | null {
   const handRef = useRef<HTMLDivElement>(null);
   const [handElement, setHandElement] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
-  const [focusedTargetKey, setFocusedTargetKey] = useState<string>();
-  const [activatingId, setActivatingId] = useState<string>();
-  const [playingAction, setPlayingAction] = useState<ContextActionOption>();
-  const [playingGhost, setPlayingGhost] = useState<PlayingGhost>();
-  const [replacingCardKey, setReplacingCardKey] = useState<string>();
-  const [revealingCardKey, setRevealingCardKey] = useState<string>();
+  const [focusedTargetKey, setFocusedTargetKey] = useState<string | undefined>(undefined);
+  const [activatingId, setActivatingId] = useState<string | undefined>(undefined);
+  const [playingAction, setPlayingAction] = useState<ContextActionOption | undefined>(undefined);
+  const [playingCardKey, setPlayingCardKey] = useState<string | undefined>(undefined);
+  const [playingPresetId, setPlayingPresetId] = useState<CardAnimationPresetId | undefined>(undefined);
+  const [playingToken, setPlayingToken] = useState<number | undefined>(undefined);
+  const [presentationBusy, setPresentationBusy] = useState(() => presentationGate.busy);
   const seenCardKeysRef = useRef(new Set<string>());
   const knownActionsRef = useRef(new Map<string, ContextActionOption>());
   const sourceRectsRef = useRef(new Map<string, CardRect>());
+  const cardIndexesRef = useRef(new Map<string, number>());
+  const pendingSnapshotsRef = useRef(new Map<string, CardAnimationSnapshot>());
   const lastPlaybackSignatureRef = useRef<string | undefined>(undefined);
+  const activePlaybackRef = useRef<ActivePlayback | undefined>(undefined);
+  const nextPlaybackTokenRef = useRef(0);
+  const labState = useCardPlayLabState();
+  const activePresetId = import.meta.env.DEV ? labState.activePreset : DEFAULT_CARD_ANIMATION_PRESET;
   const handCallbackRef = useCallback((element: HTMLDivElement | null): void => {
     handRef.current = element;
     setHandElement(element);
   }, []);
+
+  useEffect(() => presentationGate.subscribe(setPresentationBusy), []);
 
   const targets = contextualActionTargets(state);
   const focusedTarget = useMemo(() => {
@@ -78,7 +89,6 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
   useEffect(() => {
     const element = handElement;
     if (!element) return;
-
     const measure = (): void => setAvailableWidth(element.clientWidth);
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
@@ -91,7 +101,7 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
   }, [handElement]);
 
   const actions = useMemo(() => availableContextActionsAt(state, focusedTarget), [focusedTarget, state]);
-  const metrics = useMemo(() => calculateHandMetrics(availableWidth, actions.length), [actions.length, availableWidth]);
+  const heroPositionKey = positionKey(state.hero.position);
   const enteringCardKeys = useMemo(() => {
     const entering = new Set<string>();
     for (const action of actions) {
@@ -107,7 +117,32 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
 
   useEffect(() => {
     actions.forEach((action) => knownActionsRef.current.set(contextActionCardKey(action), action));
+    actions.forEach((action, index) => cardIndexesRef.current.set(contextActionCardKey(action), index));
   }, [actions]);
+
+  const beginPlayback = useCallback(
+    (snapshot: CardAnimationSnapshot, presetId: CardAnimationPresetId, originalIndex: number): boolean => {
+      const current = activePlaybackRef.current;
+      if (current) return false;
+
+      const token = ++nextPlaybackTokenRef.current;
+      activePlaybackRef.current = {
+        cardKey: snapshot.cardKey,
+        action: snapshot.action,
+        origin: { ...snapshot.cameraPosition },
+        originalIndex,
+        token,
+      };
+      setPlayingAction(snapshot.action);
+      setPlayingCardKey(snapshot.cardKey);
+      setPlayingPresetId(presetId);
+      setPlayingToken(token);
+      setActivatingId(snapshot.action.id);
+      if (import.meta.env.DEV) setCardPlayPlaybackActive(true);
+      return true;
+    },
+    [],
+  );
 
   useEffect(() => {
     const resolvedEvent = [...events]
@@ -125,6 +160,7 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
       resolvedEvent.type === 'ability-used' ? resolvedEvent.abilityId : resolvedEvent.action,
       resolvedEvent.target.x,
       resolvedEvent.target.y,
+      resolvedEvent.entityName,
     ].join(':');
     if (lastPlaybackSignatureRef.current === eventSignature) return;
     lastPlaybackSignatureRef.current = eventSignature;
@@ -135,49 +171,92 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
         : resolvedEvent.action === 'ability'
           ? `ability:${resolvedEvent.abilityId ?? ''}`
           : `entity:${resolvedEvent.action}`;
+    const pendingSnapshotCandidate = pendingSnapshotsRef.current.get(cardKey);
+    const pendingSnapshot =
+      pendingSnapshotCandidate?.action.action.entityId === resolvedEvent.entityId
+        ? pendingSnapshotCandidate
+        : undefined;
+    if (!pendingSnapshot && pendingSnapshotCandidate) pendingSnapshotsRef.current.delete(cardKey);
     const rememberedAction = knownActionsRef.current.get(cardKey);
-    const action =
-      rememberedAction?.action.entityId === resolvedEvent.entityId
+    const rememberedOrEventAction =
+      pendingSnapshot?.action ??
+      (rememberedAction?.action.entityId === resolvedEvent.entityId
         ? rememberedAction
         : resolvedEvent.type === 'ability-used'
-          ? actionForAbilityUsedEvent(state, resolvedEvent)
-          : actionForResolvedEvent(state, resolvedEvent);
-    if (!action) return;
+          ? actionForAbilityUsedEvent(resolvedEvent)
+          : actionForResolvedEvent(resolvedEvent));
+    if (!rememberedOrEventAction) return;
 
-    setPlayingAction(action);
-    setPlayingGhost({ action, sourceRect: sourceRectsRef.current.get(cardKey) });
-    setActivatingId(action.id);
-    setReplacingCardKey(cardKey);
-  }, [events, state]);
+    // Keep the frozen card label/name from the mounted card. The simulation
+    // event may describe a generic target after the world mutation.
+    const action: ContextActionOption = {
+      ...rememberedOrEventAction,
+      action: { ...rememberedOrEventAction.action, target: { ...resolvedEvent.target } },
+    };
+    const snapshot = pendingSnapshot
+      ? {
+          ...pendingSnapshot,
+          action,
+          target: { ...resolvedEvent.target },
+        }
+      : snapshotForCardAnimation(
+          action,
+          cardKey,
+          state.hero.position,
+          sourceRectsRef.current.get(cardKey),
+          activePresetId,
+        );
+    pendingSnapshotsRef.current.delete(cardKey);
+    const originalIndex = cardIndexesRef.current.get(cardKey) ?? actions.length;
+    beginPlayback(snapshot, snapshot.presetId, originalIndex);
+  }, [actions, activePresetId, beginPlayback, events, state]);
 
-  useEffect(() => {
-    if (!playingAction || !replacingCardKey) return;
-    const playDuration = document.documentElement.dataset.reduceMotion === 'true' ? 80 : PLAY_DURATION_MS;
-    const timeout = window.setTimeout(() => {
-      setPlayingAction(undefined);
-      setActivatingId(undefined);
-      setReplacingCardKey(undefined);
-      setRevealingCardKey(replacingCardKey);
-      setPlayingGhost(undefined);
-    }, playDuration);
-    return () => window.clearTimeout(timeout);
-  }, [playingAction, replacingCardKey]);
+  const finishPlayback = useCallback((token: number): void => {
+    const active = activePlaybackRef.current;
+    if (!active || active.token !== token) return;
+    activePlaybackRef.current = undefined;
+    if (import.meta.env.DEV) {
+      setCardPlayPlaybackActive(false);
+    }
+    setPlayingAction(undefined);
+    setPlayingCardKey(undefined);
+    setPlayingPresetId(undefined);
+    setPlayingToken(undefined);
+    setActivatingId(undefined);
+  }, []);
 
-  useEffect(() => {
-    if (!revealingCardKey) return;
-    const timeout = window.setTimeout(() => setRevealingCardKey(undefined), REVEAL_DURATION_MS);
-    return () => window.clearTimeout(timeout);
-  }, [revealingCardKey]);
+  const cancelPlayback = useCallback((): void => {
+    const active = activePlaybackRef.current;
+    if (!active) return;
+    activePlaybackRef.current = undefined;
+    if (import.meta.env.DEV) setCardPlayPlaybackActive(false);
+    setPlayingAction(undefined);
+    setPlayingCardKey(undefined);
+    setPlayingPresetId(undefined);
+    setPlayingToken(undefined);
+    setActivatingId(undefined);
+  }, []);
 
   useEffect(() => {
     if (!hidden) return;
-    setPlayingGhost(undefined);
-    setPlayingAction(undefined);
-    setActivatingId(undefined);
-    setReplacingCardKey(undefined);
-  }, [hidden]);
+    cancelPlayback();
+    pendingSnapshotsRef.current.clear();
+  }, [cancelPlayback, hidden]);
 
-  const displayedActions = actionsDuringCardPlayback(actions, playingAction, replacingCardKey);
+  useEffect(() => {
+    const active = activePlaybackRef.current;
+    if (!active) return;
+    if (positionKey(active.origin) === heroPositionKey) return;
+    cancelPlayback();
+  }, [cancelPlayback, heroPositionKey]);
+
+  const activeOriginalIndex = activePlaybackRef.current?.originalIndex;
+  const displayedActions = actionsDuringCardPlayback(actions, playingAction, playingCardKey, activeOriginalIndex);
+  const activePreset = cardAnimationPresetForId(activePresetId);
+  const metrics = useMemo(
+    () => calculateHandMetrics(availableWidth, displayedActions.length, activePreset),
+    [activePreset, availableWidth, displayedActions.length],
+  );
   const displayedPlayingId = playingAction?.id ?? activatingId;
   const handLayer =
     !hidden && displayedActions.length > 0 ? (
@@ -188,63 +267,92 @@ export function ContextActionHand({ state, events, hidden = false }: ContextActi
         aria-label="Available actions"
       >
         <div className="context-action-hand__cards" style={{ height: `${metrics.cardHeight + 42}px` }}>
-          {displayedActions.map((action, index) => (
-            <ContextActionCard
-              action={action}
-              index={index}
-              count={displayedActions.length}
-              metrics={metrics}
-              entering={
-                enteringCardKeys.has(contextActionCardKey(action)) || revealingCardKey === contextActionCardKey(action)
-              }
-              activating={displayedPlayingId === action.id}
-              playing={playingAction?.id === action.id}
-              key={contextActionCardKey(action)}
-              onActivate={(activatedAction, rect) => {
-                if (activatedAction.disabledReason) return;
-                sourceRectsRef.current.set(contextActionCardKey(activatedAction), rect);
-                gameSession.performAction(activatedAction.action);
-              }}
-            />
-          ))}
+          {displayedActions.map((action, index) => {
+            const cardKey = contextActionCardKey(action);
+            const isPlaying = playingCardKey === cardKey && playingToken !== undefined;
+            return (
+              <ContextActionCard
+                action={action}
+                index={index}
+                count={displayedActions.length}
+                metrics={metrics}
+                animationPreset={activePreset}
+                entering={enteringCardKeys.has(cardKey)}
+                activating={displayedPlayingId === action.id}
+                playing={isPlaying}
+                presentationBusy={presentationBusy}
+                playPresetId={isPlaying ? playingPresetId : undefined}
+                playToken={isPlaying ? playingToken : undefined}
+                onPlayComplete={finishPlayback}
+                key={cardKey}
+                onActivate={(activatedAction, rect) => {
+                  if (activatedAction.disabledReason || activePlaybackRef.current || presentationBusy) return;
+                  const activatedCardKey = contextActionCardKey(activatedAction);
+                  const snapshot = snapshotForCardAnimation(
+                    activatedAction,
+                    activatedCardKey,
+                    state.hero.position,
+                    rect,
+                    activePresetId,
+                  );
+                  sourceRectsRef.current.set(activatedCardKey, rect);
+                  pendingSnapshotsRef.current.set(activatedCardKey, snapshot);
+                  beginPlayback(snapshot, activePresetId, index);
+                  const result = gameSession.performAction(activatedAction.action);
+                  if (!result.accepted) {
+                    pendingSnapshotsRef.current.delete(activatedCardKey);
+                    cancelPlayback();
+                  }
+                }}
+              />
+            );
+          })}
         </div>
       </div>
     ) : null;
 
-  const ghostLayer =
-    !hidden && playingGhost && typeof document !== 'undefined'
-      ? createPortal(<PlayGhost {...playingGhost} />, document.body)
+  if (!handLayer) return null;
+  const transfer =
+    playingAction && playingCardKey && playingPresetId
+      ? createPortal(
+          <CardTransferOverlay
+            action={playingAction}
+            sourceRect={sourceRectsRef.current.get(playingCardKey)}
+            preset={cardAnimationPresetForId(playingPresetId)}
+          />,
+          document.body,
+        )
       : null;
-
-  if (!handLayer && !ghostLayer) return null;
   return (
     <>
       {handLayer}
-      {ghostLayer}
+      {transfer}
     </>
   );
 }
 
-/**
- * Keeps the played card in place while its animation runs. If the simulation
- * immediately projects a new card with the same presentation key (for
- * example, another Chop target), that replacement is withheld until the
- * playback timer ends so React cannot reuse the old card in place.
- */
 export function actionsDuringCardPlayback(
   actions: ContextActionOption[],
   playingAction: ContextActionOption | undefined,
   replacingCardKey: string | undefined,
+  originalIndex?: number,
 ): ContextActionOption[] {
-  const currentActions = replacingCardKey
-    ? actions.filter((action) => contextActionCardKey(action) !== replacingCardKey)
-    : actions;
-  if (!playingAction) return currentActions;
-
-  const playingCardKey = contextActionCardKey(playingAction);
-  const replacementIndex = actions.findIndex((action) => contextActionCardKey(action) === playingCardKey);
-  if (replacementIndex < 0) return [playingAction, ...currentActions];
-  return [...currentActions.slice(0, replacementIndex), playingAction, ...currentActions.slice(replacementIndex)];
+  if (!playingAction || !replacingCardKey) return actions;
+  const currentActions = actions.filter((action) => contextActionCardKey(action) !== replacingCardKey);
+  const replacementIndex = actions.findIndex((action) => contextActionCardKey(action) === replacingCardKey);
+  // The simulation can remove the target immediately. Retain the same React
+  // key in the hand until the preset timer reports completion, so the mounted
+  // card owns the entire transition and no second hand card is created. When the same
+  // key is still present, prefer the frozen slot index so target retargeting
+  // cannot silently move the card during its play.
+  const insertionIndex = Math.max(
+    0,
+    Math.min(
+      originalIndex ?? (replacementIndex >= 0 ? replacementIndex : currentActions.length),
+      currentActions.length,
+    ),
+  );
+  return [...currentActions.slice(0, insertionIndex), playingAction, ...currentActions.slice(insertionIndex)];
 }
 
 function ContextActionCard({
@@ -252,18 +360,28 @@ function ContextActionCard({
   index,
   count,
   metrics,
+  animationPreset,
   entering,
   activating,
   playing,
+  presentationBusy,
+  playPresetId,
+  playToken,
+  onPlayComplete,
   onActivate,
 }: {
   action: ContextActionOption;
   index: number;
   count: number;
   metrics: HandMetrics;
+  animationPreset: CardAnimationPreset;
   entering: boolean;
   activating: boolean;
   playing: boolean;
+  presentationBusy: boolean;
+  playPresetId?: CardAnimationPresetId;
+  playToken?: number;
+  onPlayComplete: (token: number) => void;
   onActivate: (action: ContextActionOption, rect: CardRect) => void;
 }): ReactElement {
   const centeredIndex = index - (count - 1) / 2;
@@ -277,16 +395,32 @@ function ContextActionCard({
   const playArmedRef = useRef(false);
   const didDragRef = useRef(false);
 
-  const cardStyle = {
+  const slotStyle = {
     '--action-width': `${metrics.cardWidth}px`,
     '--action-x': `${centeredIndex * metrics.step}px`,
-    '--action-y': `${Math.abs(centeredIndex) * 7}px`,
+    '--action-y': `${Math.abs(centeredIndex) * animationPreset.layout.verticalStep}px`,
     '--action-angle': `${centeredIndex * metrics.angleStep}deg`,
-    '--action-delay': `${index * 38}ms`,
+    '--action-delay': `${index * animationPreset.timing.entryStaggerMs}ms`,
     '--action-drag-x': `${dragOffset.x}px`,
     '--action-drag-y': `${dragOffset.y}px`,
+    '--card-hover-lift': `${animationPreset.layout.hoverLift}px`,
+    '--card-hover-rotation': `${centeredIndex * animationPreset.layout.hoverRotationStep}deg`,
+    '--card-hover-scale': `${animationPreset.layout.hoverScale}`,
+    '--card-entry-duration': `${animationPreset.timing.entryMs}ms`,
+    '--card-reflow-duration': `${animationPreset.timing.reflowMs}ms`,
+    '--card-play-duration': `${animationPreset.timing.playMs}ms`,
     zIndex: 20 + index,
   } as CSSProperties;
+
+  const preset = playPresetId ? cardAnimationPresetForId(playPresetId) : animationPreset;
+  const reduced = prefersReducedMotion();
+
+  useEffect(() => {
+    if (!playing || playToken === undefined) return;
+    const durationMs = animationDurationForPhase(preset, 'play', reduced);
+    const timeout = window.setTimeout(() => onPlayComplete(playToken), durationMs + 60);
+    return () => window.clearTimeout(timeout);
+  }, [onPlayComplete, playToken, playing, preset, reduced]);
 
   const resetGesture = (): void => {
     pointerStartRef.current = undefined;
@@ -299,18 +433,13 @@ function ContextActionCard({
   };
 
   const activate = (element: HTMLButtonElement): void => {
-    if (isDisabled || playing) return;
+    if (isDisabled || playing || presentationBusy) return;
     const rect = element.getBoundingClientRect();
-    onActivate(action, {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-    });
+    onActivate(action, { left: rect.left, top: rect.top, width: rect.width, height: rect.height });
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>): void => {
-    if (isDisabled || playing || event.button !== 0) return;
+    if (isDisabled || playing || presentationBusy || event.button !== 0) return;
     didDragRef.current = false;
     pointerStartRef.current = { x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -322,7 +451,6 @@ function ContextActionCard({
     if (!start || isDisabled || playing) return;
     const offset = { x: event.clientX - start.x, y: event.clientY - start.y };
     if (!draggingRef.current && Math.hypot(offset.x, offset.y) < 8) return;
-
     draggingRef.current = true;
     didDragRef.current = true;
     const armed = offset.y < -54 && Math.abs(offset.y) > Math.abs(offset.x) * 0.72;
@@ -333,97 +461,82 @@ function ContextActionCard({
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>): void => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
-    }
     if (draggingRef.current && playArmedRef.current) activate(event.currentTarget);
     resetGesture();
   };
 
   const handlePointerCancel = (event: ReactPointerEvent<HTMLButtonElement>): void => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
-    }
     resetGesture();
   };
 
+  const cardKey = contextActionCardKey(action);
+  const targetLabel = action.entityName;
   return (
-    <button
-      className={`context-action-card${entering ? ' is-entering' : ''}${isDisabled ? ' is-disabled' : ''}${activating ? ' is-activating' : ''}${playing ? ' is-playing' : ''}${pointerDown ? ' is-pressed' : ''}${dragging ? ' is-dragging' : ''}${playArmed ? ' is-play-armed' : ''}`}
-      type="button"
-      style={cardStyle}
-      disabled={isDisabled || playing}
-      aria-label={playing ? `${actionAriaLabel(action)}, resolving` : actionAriaLabel(action)}
-      aria-disabled={isDisabled || playing}
-      aria-busy={playing}
-      data-testid={`context-action-card-${action.id.replaceAll(':', '-')}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onClick={(event) => {
-        if (didDragRef.current) {
-          event.preventDefault();
-          didDragRef.current = false;
-          return;
-        }
-        activate(event.currentTarget);
-      }}
+    <div
+      className={`context-action-card-slot${entering ? ' is-entering' : ''}${isDisabled ? ' is-disabled' : ''}${activating ? ' is-activating' : ''}${playing ? ' is-playing' : ''}${pointerDown ? ' is-pressed' : ''}${dragging ? ' is-dragging' : ''}${playArmed ? ' is-play-armed' : ''}`}
+      style={slotStyle}
+      data-card-key={cardKey}
+      data-card-play-state={playing ? 'playing' : 'idle'}
+      data-card-animation-preset={animationPreset.id}
+      data-card-animation-phase={playing ? 'play' : entering ? 'draw' : activating ? 'hover' : 'idle'}
     >
-      <span className="context-action-card__art" aria-hidden="true">
-        <CardArtwork action={action} />
-      </span>
-      <span className="context-action-card__shade" aria-hidden="true" />
-      <span className="context-action-card__meta">
-        <strong>{action.label}</strong>
-        <small>{action.source === 'ability' ? action.slot : action.entityName}</small>
-      </span>
-      {action.progress ? (
-        <span
-          className="context-action-card__progress"
-          aria-label={`${action.progress.current} of ${action.progress.required}`}
-        >
-          {action.progress.current}/{action.progress.required}
+      <button
+        className={`context-action-card${isDisabled ? ' is-disabled' : ''}${activating ? ' is-activating' : ''}${playing ? ' is-playing' : ''}${pointerDown ? ' is-pressed' : ''}${dragging ? ' is-dragging' : ''}${playArmed ? ' is-play-armed' : ''}`}
+        type="button"
+        disabled={isDisabled || playing || presentationBusy}
+        aria-label={playing ? `${actionAriaLabel(action)}, resolving` : actionAriaLabel(action)}
+        aria-disabled={isDisabled || playing || presentationBusy}
+        aria-busy={playing}
+        data-card-play-preset={animationPreset.id}
+        data-card-play-state={playing ? 'playing' : 'idle'}
+        data-card-play-key={cardKey}
+        data-card-animation-preset={animationPreset.id}
+        data-card-animation-phase={playing ? 'play' : entering ? 'draw' : activating ? 'hover' : 'idle'}
+        data-card-animation-key={cardKey}
+        data-card-key={cardKey}
+        data-testid={`context-action-card-${action.id.replaceAll(':', '-')}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onClick={(event) => {
+          if (didDragRef.current) {
+            event.preventDefault();
+            didDragRef.current = false;
+            return;
+          }
+          activate(event.currentTarget);
+        }}
+      >
+        <span className="context-action-card__art" aria-hidden="true">
+          <CardArtwork action={action} />
         </span>
-      ) : null}
-      {action.disabledReason ? <span className="context-action-card__cooldown">{action.cooldownRemaining}</span> : null}
-      {playing ? (
-        <span className="context-action-card__status" role="status">
-          Resolving…
+        <span className="context-action-card__shade" aria-hidden="true" />
+        <span className="context-action-card__meta">
+          <strong>{action.label}</strong>
+          <small>{action.source === 'ability' ? `${action.slot} · ${targetLabel}` : targetLabel}</small>
         </span>
-      ) : null}
-    </button>
-  );
-}
-
-function PlayGhost({ action, sourceRect }: PlayingGhost): ReactElement {
-  const cardWidth = sourceRect?.width ?? 108;
-  const cardHeight = sourceRect?.height ?? cardWidth * CARD_ASPECT_HEIGHT;
-  const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
-  const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
-  const left = sourceRect?.left ?? viewportWidth / 2 - cardWidth / 2;
-  const top = sourceRect?.top ?? viewportHeight - cardHeight - 74;
-  const targetLeft = viewportWidth / 2 - cardWidth / 2;
-  const targetTop = Math.max(72, viewportHeight * 0.38 - cardHeight / 2);
-  const style = {
-    '--ghost-left': `${left}px`,
-    '--ghost-top': `${top}px`,
-    '--ghost-width': `${cardWidth}px`,
-    '--ghost-height': `${cardHeight}px`,
-    '--ghost-travel-x': `${targetLeft - left}px`,
-    '--ghost-travel-y': `${targetTop - top}px`,
-  } as CSSProperties;
-
-  return (
-    <div className="context-action-play-ghost" style={style} data-testid="context-action-play-ghost" aria-hidden="true">
-      <span className="context-action-card__art">
-        <CardArtwork action={action} />
-      </span>
-      <span className="context-action-card__shade" />
-      <span className="context-action-card__meta">
-        <strong>{action.label}</strong>
-        <small>{action.source === 'ability' ? action.slot : action.entityName}</small>
-      </span>
+        {action.progress ? (
+          <span
+            className="context-action-card__progress"
+            aria-label={`${action.progress.current} of ${action.progress.required}`}
+          >
+            {action.progress.current}/{action.progress.required}
+          </span>
+        ) : null}
+        {action.disabledReason ? (
+          <span className="context-action-card__cooldown">{action.cooldownRemaining}</span>
+        ) : null}
+        {playing ? (
+          <span className="context-action-card__status" role="status">
+            Resolving…
+          </span>
+        ) : null}
+      </button>
     </div>
   );
 }
@@ -431,75 +544,40 @@ function PlayGhost({ action, sourceRect }: PlayingGhost): ReactElement {
 function CardArtwork({ action }: { action: ContextActionOption }): ReactElement {
   if (action.source === 'ability') {
     const ability = abilities.find((candidate) => candidate.id === action.abilityId);
-    if (ability) {
-      return <img src={ability.assetPath} alt="" loading="eager" />;
-    }
+    if (ability) return <img src={ability.assetPath} alt="" loading="eager" />;
     return <Sparkles aria-hidden="true" />;
   }
-
   if (action.action.kind === 'chop') return <Axe aria-hidden="true" />;
   if (action.action.kind === 'mine') return <Pickaxe aria-hidden="true" />;
   return <Sword aria-hidden="true" />;
 }
 
 function actionForAbilityUsedEvent(
-  state: GameState,
   event: Extract<SimEvent, { type: 'ability-used' }>,
 ): ContextActionOption | undefined {
-  const entityName = state.entities[event.entityId]?.name ?? 'Target';
   const ability = abilities.find((candidate) => candidate.id === event.abilityId);
   if (!ability) return undefined;
-
   return {
     id: `context:ability:${ability.id}`,
     label: ability.name,
     source: 'ability',
-    entityName,
+    entityName: event.entityName,
     abilityId: ability.id,
     slot: ability.slot,
-    action: {
-      kind: 'ability',
-      entityId: event.entityId,
-      target: { ...event.target },
-      abilityId: ability.id,
-    },
+    action: { kind: 'ability', entityId: event.entityId, target: { ...event.target }, abilityId: ability.id },
   };
 }
 
 function actionForResolvedEvent(
-  state: GameState,
   event: Extract<SimEvent, { type: 'action-resolved' }>,
 ): ContextActionOption | undefined {
-  if (event.action === 'ability') {
-    const ability = abilities.find((candidate) => candidate.id === event.abilityId);
-    if (!ability) return undefined;
-
-    return {
-      id: `context:ability:${ability.id}`,
-      label: ability.name,
-      source: 'ability',
-      entityName: state.entities[event.entityId]?.name ?? 'Target',
-      abilityId: ability.id,
-      slot: ability.slot,
-      action: {
-        kind: 'ability',
-        entityId: event.entityId,
-        target: { ...event.target },
-        abilityId: ability.id,
-      },
-    };
-  }
-
+  if (event.action === 'ability') return undefined;
   return {
     id: `context:entity:${event.entityId}:${event.action}`,
     label: event.action === 'attack' ? 'Attack' : event.action === 'chop' ? 'Chop' : 'Mine',
     source: 'entity',
-    entityName: state.entities[event.entityId]?.name ?? 'Target',
-    action: {
-      kind: event.action,
-      entityId: event.entityId,
-      target: { ...event.target },
-    },
+    entityName: event.entityName,
+    action: { kind: event.action, entityId: event.entityId, target: { ...event.target } },
   };
 }
 
@@ -509,7 +587,11 @@ function actionAriaLabel(action: ContextActionOption): string {
   return `${action.label} ${action.source === 'ability' ? 'against' : 'at'} ${action.entityName}`;
 }
 
-export function calculateHandMetrics(availableWidth: number, count: number): HandMetrics {
+export function calculateHandMetrics(
+  availableWidth: number,
+  count: number,
+  preset: CardAnimationPreset = cardAnimationPresetForId(DEFAULT_CARD_ANIMATION_PRESET),
+): HandMetrics {
   if (count <= 0) {
     const cardHeight = MAX_CARD_WIDTH * CARD_ASPECT_HEIGHT;
     return {
@@ -523,17 +605,79 @@ export function calculateHandMetrics(availableWidth: number, count: number): Han
   const usableWidth = Math.max(220, availableWidth || 560) - 20;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
-    Math.min(MAX_CARD_WIDTH, usableWidth / (count - (count - 1) * HAND_OVERLAP)),
+    Math.min(MAX_CARD_WIDTH, usableWidth / (count - (count - 1) * preset.layout.overlap)),
   );
   const cardHeight = cardWidth * CARD_ASPECT_HEIGHT;
-  const angleStep = Math.min(8, Math.max(2.6, 24 / count));
+  const angleStep = Math.min(
+    preset.layout.angleStep,
+    Math.max(2.6, preset.layout.angleStep * (count <= 3 ? 1 : 3 / count)),
+  );
   return {
     cardWidth,
     cardHeight,
-    step: cardWidth * (1 - HAND_OVERLAP),
+    step: cardWidth * (1 - preset.layout.overlap),
     angleStep,
     tuckDepth: cardHeight * CARD_TUCK_RATIO,
   };
+}
+
+function CardTransferOverlay({
+  action,
+  sourceRect,
+  preset,
+}: {
+  action: ContextActionOption;
+  sourceRect?: CardRect;
+  preset: CardAnimationPreset;
+}): ReactElement | null {
+  if (!sourceRect || preset.transfer.playMode !== 'travel') return null;
+
+  const target = transferTargetRect(sourceRect);
+  const style = {
+    '--card-transfer-left': `${sourceRect.left}px`,
+    '--card-transfer-top': `${sourceRect.top}px`,
+    '--card-transfer-width': `${sourceRect.width}px`,
+    '--card-transfer-height': `${sourceRect.height}px`,
+    '--card-transfer-x': `${target.left - sourceRect.left}px`,
+    '--card-transfer-y': `${target.top - sourceRect.top}px`,
+    '--card-transfer-duration': `${preset.transfer.playTravelMs}ms`,
+  } as CSSProperties;
+
+  return (
+    <div
+      className="card-animation-transfer"
+      style={style}
+      data-testid="card-animation-transfer"
+      data-card-animation-preset={preset.id}
+      data-card-animation-phase="play"
+      aria-hidden="true"
+    >
+      <div className="card-animation-transfer__card">
+        <span className="context-action-card__art">
+          <CardArtwork action={action} />
+        </span>
+        <span className="context-action-card__shade" />
+        <span className="context-action-card__meta">
+          <strong>{action.label}</strong>
+          <small>{action.entityName}</small>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function transferTargetRect(sourceRect: CardRect): CardRect {
+  const width = sourceRect.width;
+  const height = sourceRect.height;
+  const left = Math.max(12, Math.min(window.innerWidth - width - 12, window.innerWidth / 2 - width * 0.37));
+  const top = Math.max(72, Math.min(window.innerHeight - height - 120, window.innerHeight * 0.3));
+  return { left, top, width, height };
+}
+
+function prefersReducedMotion(): boolean {
+  if (typeof document === 'undefined') return false;
+  if (document.documentElement.dataset.reduceMotion === 'true') return true;
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
 
 function parsePositionKey(key: string): Position | undefined {

@@ -3,6 +3,8 @@ import type { ReactElement } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  CircleEllipsis,
+  Coins,
   FlaskConical,
   Gem,
   Hammer,
@@ -19,7 +21,8 @@ import { gameSession } from '../game/session';
 import { itemDefinition } from '../content/items';
 import type { ItemIconId } from '../content/items';
 import type { CraftingCategory, RecipeDefinition } from '../content/recipes';
-import { availableRecipes } from '../sim/crafting';
+import { stationDefinition } from '../content/stations';
+import { availableRecipes, craftingContextForState } from '../sim/crafting';
 import type { GameState, RecipeAvailability, SimEvent } from '../sim';
 import { TorchButton } from './primitives';
 
@@ -40,6 +43,8 @@ const craftingIcons: Record<ItemIconId, LucideIcon> = {
   sparkles: Sparkles,
   package: PackageOpen,
   sword: Hammer,
+  coins: Coins,
+  ellipsis: CircleEllipsis,
 };
 
 export function CraftingScreen({ state, events }: { state: GameState; events: SimEvent[] }): ReactElement {
@@ -51,7 +56,8 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
   const [quantity, setQuantity] = useState(1);
   const [feedback, setFeedback] = useState('Select a recipe to inspect its ingredients.');
 
-  const recipeEntries = useMemo(() => availableRecipes(state), [state]);
+  const craftingContext = useMemo(() => craftingContextForState(state), [state]);
+  const recipeEntries = useMemo(() => availableRecipes(state, craftingContext), [craftingContext, state]);
   const visibleRecipes = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return recipeEntries.filter(({ recipe, known, craftable }) => {
@@ -99,6 +105,11 @@ export function CraftingScreen({ state, events }: { state: GameState; events: Si
           <p className="crafting-kicker">Workshop</p>
           <h2>Crafting</h2>
           <p className="crafting-subtitle">Turn gathered resources into supplies for the next expedition.</p>
+          <p className="crafting-location" data-testid="crafting-station-status">
+            {craftingContext.stationIds?.includes('workbench')
+              ? 'At the homestead workbench'
+              : 'Expedition crafting · return to the homestead for station recipes'}
+          </p>
         </div>
         <div className="crafting-feedback" role="status" aria-live="polite">
           <CheckCircle2 aria-hidden="true" />
@@ -382,7 +393,9 @@ function itemIcon(itemId: string): LucideIcon {
 function statusForAvailability(entry: RecipeAvailability): string {
   if (entry.craftable) return `Ready · up to ${entry.maxCraftableQuantity}`;
   if (entry.reason === 'locked') return 'Locked';
-  if (entry.reason === 'requires-station') return 'Requires a station';
+  if (entry.reason === 'requires-station') {
+    return `Requires ${stationDefinition(entry.recipe.stationId ?? '')?.name ?? 'a station'}`;
+  }
   if (entry.reason === 'unknown-recipe') return 'Unavailable';
   if (entry.reason === 'invalid-quantity') return 'Choose a valid quantity';
   if (entry.missingIngredients.length > 0) {

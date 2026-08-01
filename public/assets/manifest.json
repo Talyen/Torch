@@ -30,8 +30,8 @@
         },
         "marker": {
           "path": "assets/heroes/knight-marker.png",
-          "width": 896,
-          "height": 896,
+          "width": 1536,
+          "height": 1536,
           "crop": {
             "left": 412,
             "top": 236,
@@ -131,6 +131,142 @@
           "width": 896,
           "height": 1200,
           "cornerRadius": 0.06
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.wood",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_wood.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-wood.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.stone",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_stone.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-stone.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.iron",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_iron.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-iron.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.food",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_food.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-food.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.herbs",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_herbs.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-herbs.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.hide",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_hide.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-hide.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.crystal",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_crystal.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-crystal.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
+        }
+      }
+    },
+    {
+      "id": "resource.homestead.gold",
+      "kind": "resource",
+      "source": "Raw Assets/Homestead Materials/resource_homestead_gold.png",
+      "sourceDimensions": {
+        "width": 1600,
+        "height": 1600
+      },
+      "variants": {
+        "icon": {
+          "path": "assets/resources/homestead-gold.png",
+          "width": 256,
+          "height": 256,
+          "cornerRadius": 0
         }
       }
     }

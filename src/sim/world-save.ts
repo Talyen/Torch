@@ -2,15 +2,27 @@ import {
   entityStateAt,
   exactKeys,
   fail,
+  booleanAt,
   heroStateAt,
   integerAt,
   nonNegativeIntegerAt,
   positiveIntegerAt,
   recordAt,
   safeRecordKey,
+  stringAt,
 } from './save-validation';
 import { cloneGameState, cloneSerializable } from './state';
-import type { EntityState, GameState, HeroState, Position } from './types';
+import type {
+  EntityState,
+  GameState,
+  HeroState,
+  JournalEntryRuntime,
+  JournalEntryStatus,
+  Position,
+  WaypointStatus,
+  WorldJournalState,
+} from './types';
+import { createInitialWorldJournalState } from './journal';
 import { createInitialGameState, GENERATION_VERSION, materializeGeneratedTrees, worldIdForSeed } from './world';
 
 export const WORLD_SAVE_SCHEMA_VERSION = 1;
@@ -31,6 +43,8 @@ export interface WorldSaveV1 {
   gatheringProgress: Record<string, number>;
   discoveries: Record<string, true>;
   revealedTiles: Record<string, true>;
+  /** Optional for backwards compatibility with pre-Journal v1 world saves. */
+  journal?: WorldJournalState;
 }
 
 function isGeneratedEntityId(id: string): boolean {
@@ -100,6 +114,7 @@ export function createWorldSave(state: GameState): WorldSaveV1 {
     gatheringProgress: cloneRecord(state.gatheringProgress),
     discoveries: cloneRecord(state.discoveries),
     revealedTiles: cloneRecord(state.revealedTiles),
+    journal: cloneSerializable(state.journal),
   };
 }
 
@@ -142,6 +157,102 @@ function numberRecordAt(value: unknown, path: string, requiredPrefix?: string): 
   return result;
 }
 
+const JOURNAL_STATUSES = new Set<JournalEntryStatus>([
+  'locked',
+  'active',
+  'complete',
+  'reward-ready',
+  'claimed',
+  'failed',
+  'expired',
+  'abandoned',
+]);
+
+function journalRuntimeAt(value: unknown, path: string): JournalEntryRuntime {
+  const record = recordAt(value, path);
+  exactKeys(record, ['status', 'progress', 'discoveredClueIds', 'seen'], ['lastUpdatedTurn'], path);
+  const status = stringAt(record.status, `${path}.status`) as JournalEntryStatus;
+  if (!JOURNAL_STATUSES.has(status)) fail(`${path}.status`, 'unexpected value');
+  const progress = numberRecordAt(record.progress, `${path}.progress`);
+  return {
+    status,
+    progress,
+    discoveredClueIds: trueRecordAt(record.discoveredClueIds, `${path}.discoveredClueIds`),
+    seen: booleanAt(record.seen, `${path}.seen`),
+    ...(Object.hasOwn(record, 'lastUpdatedTurn')
+      ? { lastUpdatedTurn: nonNegativeIntegerAt(record.lastUpdatedTurn, `${path}.lastUpdatedTurn`) }
+      : {}),
+  };
+}
+
+function waypointAt(value: unknown, path: string): WorldJournalState['waypoint'] {
+  const record = recordAt(value, path);
+  exactKeys(record, ['entryId', 'target', 'status'], [], path);
+  const target = recordAt(record.target, `${path}.target`);
+  const kind = stringAt(target.kind, `${path}.target.kind`);
+  const status = stringAt(record.status, `${path}.status`);
+  if (!new Set(['active', 'unresolved', 'removed']).has(status)) fail(`${path}.status`, 'unexpected value');
+  if (kind === 'coordinate') {
+    const position = recordAt(target.position, `${path}.target.position`);
+    exactKeys(position, ['x', 'y'], [], `${path}.target.position`);
+    return {
+      entryId: stringAt(record.entryId, `${path}.entryId`),
+      target: {
+        kind,
+        position: {
+          x: integerAt(position.x, `${path}.target.position.x`),
+          y: integerAt(position.y, `${path}.target.position.y`),
+        },
+      },
+      status: status as WaypointStatus,
+    };
+  }
+  if (kind !== 'location' && kind !== 'entity' && kind !== 'derived') fail(`${path}.target.kind`, 'unexpected value');
+  const targetCopy =
+    kind === 'location'
+      ? { kind: 'location' as const, locationId: stringAt(target.locationId, `${path}.target.locationId`) }
+      : kind === 'entity'
+        ? { kind: 'entity' as const, entityId: stringAt(target.entityId, `${path}.target.entityId`) }
+        : {
+            kind: 'derived' as const,
+            resolverId: stringAt(target.resolverId, `${path}.target.resolverId`),
+            parameters: stringRecordAt(target.parameters, `${path}.target.parameters`),
+          };
+  return { entryId: stringAt(record.entryId, `${path}.entryId`), target: targetCopy, status: status as WaypointStatus };
+}
+
+function stringRecordAt(value: unknown, path: string): Record<string, string> {
+  const record = recordAt(value, path);
+  const result: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    safeRecordKey(key, `${path}.${key}`);
+    result[key] = stringAt(entry, `${path}.${key}`);
+  }
+  return result;
+}
+
+function worldJournalAt(value: unknown, path: string): WorldJournalState {
+  const record = recordAt(value, path);
+  exactKeys(record, ['schemaVersion', 'entries', 'rewardClaims'], ['focusedEntryId', 'waypoint'], path);
+  if (positiveIntegerAt(record.schemaVersion, `${path}.schemaVersion`) !== 1)
+    fail(`${path}.schemaVersion`, 'unsupported Journal schema version');
+  const entriesRecord = recordAt(record.entries, `${path}.entries`);
+  const entries: Record<string, JournalEntryRuntime> = {};
+  for (const [key, value] of Object.entries(entriesRecord)) {
+    safeRecordKey(key, `${path}.entries.${key}`);
+    entries[key] = journalRuntimeAt(value, `${path}.entries.${key}`);
+  }
+  return {
+    schemaVersion: 1,
+    entries,
+    rewardClaims: trueRecordAt(record.rewardClaims, `${path}.rewardClaims`),
+    ...(Object.hasOwn(record, 'focusedEntryId')
+      ? { focusedEntryId: stringAt(record.focusedEntryId, `${path}.focusedEntryId`) }
+      : {}),
+    ...(Object.hasOwn(record, 'waypoint') ? { waypoint: waypointAt(record.waypoint, `${path}.waypoint`) } : {}),
+  };
+}
+
 export function decodeWorldSave(value: unknown): WorldSaveV1 {
   const record = recordAt(value, 'worldSave');
   exactKeys(
@@ -160,7 +271,7 @@ export function decodeWorldSave(value: unknown): WorldSaveV1 {
       'discoveries',
       'revealedTiles',
     ],
-    [],
+    ['journal'],
     'worldSave',
   );
 
@@ -224,6 +335,7 @@ export function decodeWorldSave(value: unknown): WorldSaveV1 {
     gatheringProgress: numberRecordAt(record.gatheringProgress, 'worldSave.gatheringProgress', 'generated-tree:'),
     discoveries: trueRecordAt(record.discoveries, 'worldSave.discoveries'),
     revealedTiles: trueRecordAt(record.revealedTiles, 'worldSave.revealedTiles'),
+    ...(Object.hasOwn(record, 'journal') ? { journal: worldJournalAt(record.journal, 'worldSave.journal') } : {}),
   };
 }
 
@@ -245,6 +357,7 @@ export function restoreWorldSave(value: unknown): GameState {
   state.gatheringProgress = cloneRecord(save.gatheringProgress);
   state.discoveries = cloneRecord(save.discoveries);
   state.revealedTiles = cloneRecord(save.revealedTiles);
+  state.journal = cloneSerializable(save.journal ?? createInitialWorldJournalState());
 
   for (const id of Object.keys(state.entities)) {
     if (isGeneratedEntityId(id)) delete state.entities[id];

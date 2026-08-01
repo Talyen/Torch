@@ -7,13 +7,30 @@ import {
   findAdjacentResource,
   latestMessage,
   restoreWorldSave,
+  advanceProfileJournal,
+  claimProfileJournalReward,
+  createInitialProfileJournalState,
+  decodeProfileSave,
+  createProfileSave,
+  encodeProfileSave,
+  markJournalEntrySeen,
+  recordProfileObservation,
 } from '../sim';
-import type { AbilitySlotId, ActionRequest, Command, Direction, GameState, SimEvent } from '../sim';
+import type {
+  AbilitySlotId,
+  ActionRequest,
+  Command,
+  Direction,
+  GameState,
+  ProfileJournalState,
+  SimEvent,
+  WaypointTarget,
+} from '../sim';
 import { devFrameMonitor } from '../dev/frame-monitor';
 import type { SaveProvider } from './save-provider';
-import { PRIMARY_WORLD_SAVE_SLOT } from './save-provider';
+import { PRIMARY_PROFILE_SAVE_SLOT, PRIMARY_WORLD_SAVE_SLOT } from './save-provider';
 
-export type SessionListener = (state: GameState, events: SimEvent[]) => void;
+export type SessionListener = (state: GameState, events: SimEvent[], profileJournal: ProfileJournalState) => void;
 export type SessionInputMode = 'world' | 'ui';
 export type SaveStatus = 'unconfigured' | 'loaded' | 'saved' | 'error';
 
@@ -26,9 +43,11 @@ export class GameSession {
   private listeners = new Set<SessionListener>();
   private lastEvents: SimEvent[] = [];
   private _state: GameState;
+  private _profileJournal: ProfileJournalState = createInitialProfileJournalState();
   private _inputMode: SessionInputMode = 'world';
   private saveProvider?: SaveProvider;
   private saveSlot = PRIMARY_WORLD_SAVE_SLOT;
+  private profileSaveSlot = PRIMARY_PROFILE_SAVE_SLOT;
   private saveRevision = 0;
   private _saveStatus: SaveStatus = 'unconfigured';
 
@@ -44,6 +63,10 @@ export class GameSession {
 
   public get message(): string {
     return latestMessage(this.lastEvents) ?? 'The Torch reveals a path into the dark.';
+  }
+
+  public get profileJournal(): ProfileJournalState {
+    return this._profileJournal;
   }
 
   public get inputMode(): SessionInputMode {
@@ -65,21 +88,28 @@ export class GameSession {
       this._saveStatus = 'error';
       return;
     }
-    if (!serialized) {
+    if (serialized) {
+      try {
+        const parsed: unknown = JSON.parse(serialized);
+        this._state = restoreWorldSave(decodeWorldSave(parsed));
+        this._saveStatus = 'loaded';
+      } catch {
+        // Keep the fresh deterministic state and leave the corrupt data intact so
+        // a later recovery tool can inspect it. Gameplay remains usable.
+        this._saveStatus = 'error';
+      }
+    } else {
       this._saveStatus = 'unconfigured';
-      return;
     }
-
-    try {
-      const parsed: unknown = JSON.parse(serialized);
-      this._state = restoreWorldSave(decodeWorldSave(parsed));
-      this._saveStatus = 'loaded';
-      this.notifyListeners();
-    } catch {
-      // Keep the fresh deterministic state and leave the corrupt data intact so
-      // a later recovery tool can inspect it. Gameplay remains usable.
-      this._saveStatus = 'error';
+    if (provider.supportsIndependentSlots) {
+      try {
+        const profileSerialized = provider.load(this.profileSaveSlot);
+        if (profileSerialized) this._profileJournal = decodeProfileSave(JSON.parse(profileSerialized)).journal;
+      } catch {
+        this._saveStatus = 'error';
+      }
     }
+    this.notifyListeners();
   }
 
   public setInputMode(mode: SessionInputMode): void {
@@ -88,7 +118,7 @@ export class GameSession {
 
   public subscribe(listener: SessionListener): () => void {
     this.listeners.add(listener);
-    listener(this._state, this.lastEvents);
+    listener(this._state, this.lastEvents, this._profileJournal);
     return () => this.listeners.delete(listener);
   }
 
@@ -96,7 +126,10 @@ export class GameSession {
     const result = devFrameMonitor.measure('simulation', () => applyCommand(this._state, command));
     this._state = result.state;
     this.lastEvents = result.events;
-    if (result.accepted) this.persistAtActionBoundary();
+    if (result.accepted) {
+      this._profileJournal = advanceProfileJournal(this._profileJournal, result.events);
+      this.persistAtActionBoundary();
+    }
     this.notifyListeners();
   }
 
@@ -129,8 +162,47 @@ export class GameSession {
     this.dispatch({ type: 'craft', recipeId, quantity });
   }
 
+  public setJournalFocus(entryId?: string): void {
+    this.dispatch({ type: 'set-journal-focus', entryId });
+  }
+
+  public setWaypoint(entryId: string, target: WaypointTarget): void {
+    this.dispatch({ type: 'set-waypoint', entryId, target });
+  }
+
+  public clearWaypoint(): void {
+    this.dispatch({ type: 'clear-waypoint' });
+  }
+
+  public claimJournalReward(entryId: string): void {
+    this.dispatch({ type: 'claim-journal-reward', entryId });
+  }
+
+  public claimProfileJournalReward(entryId: string): boolean {
+    const result = claimProfileJournalReward(this._profileJournal, entryId);
+    if (!result.accepted) return false;
+    this._profileJournal = result.state;
+    this.persistAtActionBoundary();
+    this.notifyListeners();
+    return true;
+  }
+
+  public recordProfileObservation(observation: 'open-inventory' | 'open-journal'): void {
+    this._profileJournal = recordProfileObservation(this._profileJournal, observation);
+    this.persistAtActionBoundary();
+    this.notifyListeners();
+  }
+
+  public markJournalEntrySeen(scope: 'profile' | 'world', entryId: string): void {
+    if (scope === 'profile')
+      this._profileJournal = markJournalEntrySeen(this._profileJournal, entryId) as ProfileJournalState;
+    else this._state = { ...this._state, journal: markJournalEntrySeen(this._state.journal, entryId) };
+    this.persistAtActionBoundary();
+    this.notifyListeners();
+  }
+
   private notifyListeners(): void {
-    this.listeners.forEach((listener) => listener(this._state, this.lastEvents));
+    this.listeners.forEach((listener) => listener(this._state, this.lastEvents, this._profileJournal));
   }
 
   private persistAtActionBoundary(): void {
@@ -139,8 +211,10 @@ export class GameSession {
 
     const revision = ++this.saveRevision;
     let serialized: string;
+    let profileSerialized: string;
     try {
       serialized = encodeWorldSave(createWorldSave(this._state));
+      profileSerialized = encodeProfileSave(createProfileSave(this._profileJournal));
     } catch {
       this._saveStatus = 'error';
       return;
@@ -148,6 +222,12 @@ export class GameSession {
 
     try {
       const pending = provider.save(this.saveSlot, serialized, revision);
+      if (provider.supportsIndependentSlots) {
+        const profilePending = provider.save(this.profileSaveSlot, profileSerialized, revision);
+        void Promise.resolve(profilePending).catch(() => {
+          if (revision === this.saveRevision) this._saveStatus = 'error';
+        });
+      }
       void Promise.resolve(pending)
         .then(() => {
           if (revision === this.saveRevision) this._saveStatus = 'saved';

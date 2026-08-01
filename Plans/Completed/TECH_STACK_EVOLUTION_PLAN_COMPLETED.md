@@ -1,5 +1,8 @@
 # Torch Tech Stack Evolution Plan
 
+Archive status: completed for the current scope; deferred follow-ups are tracked
+in `ROADMAP.md`.
+
 Status: implemented through the Phase 1 guardrail/save/controller slice
 Scope: architecture, developer tooling, quality gates, and delivery workflow
 Current milestone: Phase 1 first playable vertical slice

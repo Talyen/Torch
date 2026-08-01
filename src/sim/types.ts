@@ -17,6 +17,49 @@ export type ActionKind = 'attack' | 'chop' | 'mine' | 'ability';
 export type CraftBlockedReason =
   'unknown-recipe' | 'locked' | 'requires-station' | 'missing-ingredients' | 'invalid-quantity';
 
+export type JournalEntryKind = 'quest' | 'mystery' | 'milestone';
+export type JournalScope = 'profile' | 'world';
+export type JournalEntryStatus =
+  'locked' | 'active' | 'complete' | 'reward-ready' | 'claimed' | 'failed' | 'expired' | 'abandoned';
+
+export type WaypointTarget =
+  | { kind: 'coordinate'; position: Position }
+  | { kind: 'location'; locationId: string }
+  | { kind: 'entity'; entityId: string }
+  | { kind: 'derived'; resolverId: string; parameters: Record<string, string> };
+
+export type WaypointStatus = 'active' | 'unresolved' | 'removed';
+
+export interface JournalWaypoint {
+  entryId: string;
+  target: WaypointTarget;
+  status: WaypointStatus;
+}
+
+export interface JournalEntryRuntime {
+  status: JournalEntryStatus;
+  progress: Record<string, number>;
+  discoveredClueIds: Record<string, true>;
+  seen: boolean;
+  lastUpdatedTurn?: number;
+}
+
+export interface WorldJournalState {
+  schemaVersion: 1;
+  entries: Record<string, JournalEntryRuntime>;
+  rewardClaims: Record<string, true>;
+  focusedEntryId?: string;
+  waypoint?: JournalWaypoint;
+}
+
+export interface ProfileJournalState {
+  schemaVersion: 1;
+  entries: Record<string, JournalEntryRuntime>;
+  rewardClaims: Record<string, true>;
+  unlocks: Record<string, true>;
+  observations: Record<string, true>;
+}
+
 export type AbilityEffectKind = 'stun' | 'halve-block' | 'holy-damage-from-block';
 
 export interface ActiveAbilityEffect {
@@ -102,6 +145,7 @@ export interface GameState {
   /** World-local discovery flags; profile/meta progression is intentionally separate. */
   discoveries: Record<string, true>;
   revealedTiles: Record<string, true>;
+  journal: WorldJournalState;
 }
 
 export type Command =
@@ -110,6 +154,10 @@ export type Command =
   | { type: 'action'; action: ActionRequest }
   | { type: 'equip-ability'; slot: AbilitySlotId; abilityId: string }
   | CraftingCommand
+  | { type: 'set-journal-focus'; entryId?: string }
+  | { type: 'set-waypoint'; entryId: string; target: WaypointTarget }
+  | { type: 'clear-waypoint' }
+  | { type: 'claim-journal-reward'; entryId: string }
   | { type: 'wait' };
 
 export type SimEvent =
@@ -132,11 +180,18 @@ export type SimEvent =
       reason: CraftBlockedReason;
       missingItems?: Array<{ itemId: string; quantity: number }>;
     }
+  | { type: 'tiles-revealed'; count: number }
   | { type: 'enemy-damaged'; entityId: string; amount: number }
   | { type: 'enemy-defeated'; entityId: string }
   | { type: 'resource-gathered'; resource: 'wood' | 'ore'; amount: number }
   | { type: 'hero-damaged'; amount: number; source: string }
   | { type: 'hero-respawned'; position: Position }
+  | { type: 'journal-progressed'; entryId: string; objectiveId: string; current: number; target: number }
+  | { type: 'journal-entry-discovered'; entryId: string }
+  | { type: 'journal-entry-completed'; entryId: string }
+  | { type: 'journal-reward-ready'; entryId: string }
+  | { type: 'journal-reward-claimed'; entryId: string }
+  | { type: 'waypoint-changed'; entryId?: string; status: WaypointStatus }
   | { type: 'blocked'; reason: string }
   | { type: 'turn-advanced'; turn: number };
 

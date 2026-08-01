@@ -387,6 +387,11 @@ function ContextActionCard({
         </span>
       ) : null}
       {action.disabledReason ? <span className="context-action-card__cooldown">{action.cooldownRemaining}</span> : null}
+      {playing ? (
+        <span className="context-action-card__status" role="status">
+          Resolving…
+        </span>
+      ) : null}
     </button>
   );
 }

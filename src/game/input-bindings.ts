@@ -7,9 +7,11 @@ import type { Direction } from '../sim';
  */
 export const KEY_BINDINGS_EVENT = 'torch:key-bindings-changed';
 export const OPEN_MAP_EVENT = 'torch:open-map';
+export const OPEN_JOURNAL_EVENT = 'torch:open-journal';
 const KEY_BINDINGS_STORAGE_KEY = 'torch.key-bindings';
 
-export type KeyBindingAction = 'move-north' | 'move-south' | 'move-west' | 'move-east' | 'wait' | 'gather' | 'map';
+export type KeyBindingAction =
+  'move-north' | 'move-south' | 'move-west' | 'move-east' | 'wait' | 'gather' | 'map' | 'journal';
 
 /** Shared client intent emitted by keyboard and controller adapters. */
 export type InputAction = KeyBindingAction;
@@ -36,6 +38,12 @@ export const keyBindingDefinitions: readonly KeyBindingDefinition[] = [
   { id: 'wait', label: 'Wait', description: 'Spend an action listening to the dark.', defaultKeys: ['Space'] },
   { id: 'gather', label: 'Gather', description: 'Gather the nearest adjacent resource.', defaultKeys: ['g'] },
   { id: 'map', label: 'Open Map', description: 'Open the world map.', defaultKeys: ['m'] },
+  {
+    id: 'journal',
+    label: 'Open Journal',
+    description: 'Review quests, mysteries, and milestones.',
+    defaultKeys: ['j'],
+  },
 ];
 
 export type KeyBindings = Record<KeyBindingAction, string[]>;

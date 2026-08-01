@@ -27,6 +27,7 @@ import {
   directionForInputAction,
   keyMatchesBinding,
   KEY_BINDINGS_EVENT,
+  OPEN_JOURNAL_EVENT,
   OPEN_MAP_EVENT,
   readKeyBindings,
 } from './input-bindings';
@@ -110,6 +111,9 @@ export class TorchScene extends Phaser.Scene {
     } else if (keyMatchesBinding(this.keyBindings, 'map', event.key)) {
       event.preventDefault();
       window.dispatchEvent(new Event(OPEN_MAP_EVENT));
+    } else if (keyMatchesBinding(this.keyBindings, 'journal', event.key)) {
+      event.preventDefault();
+      window.dispatchEvent(new Event(OPEN_JOURNAL_EVENT));
     }
   };
 
@@ -191,6 +195,7 @@ export class TorchScene extends Phaser.Scene {
     else if (action === 'wait') gameSession.wait();
     else if (action === 'gather') gameSession.gather();
     else if (action === 'map') window.dispatchEvent(new Event(OPEN_MAP_EVENT));
+    else if (action === 'journal') window.dispatchEvent(new Event(OPEN_JOURNAL_EVENT));
   }
 
   private handleScaleResize = (): void => {

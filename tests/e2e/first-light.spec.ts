@@ -55,9 +55,26 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('menu-map')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Journal' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Options' })).toBeVisible();
+  await expect(page.getByTestId('menu-talents')).toBeDisabled();
+  await expect(page.getByTestId('menu-talents')).toContainText('Coming in a later phase');
+
+  await page.getByTestId('menu-journal').click();
+  await expect(page.getByRole('dialog', { name: 'Journal' })).toBeVisible();
+  await expect(page.getByTestId('journal-screen')).toBeVisible();
+  await expect(page.getByTestId('journal-tab-overview')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('journal-entry-quest.gathering-trail')).toBeVisible();
+  await page.getByTestId('journal-entry-quest.gathering-trail').click();
+  await expect(page.getByRole('heading', { name: 'A Practical Trail' })).toBeVisible();
+  await page.getByTestId('close-menu').click();
+  await expect(page.getByRole('dialog', { name: 'Journal' })).toHaveCount(0);
+  await expect(page.getByTestId('menu-button')).toBeFocused();
+  await page.getByTestId('menu-button').click();
+  await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
 
   await page.getByTestId('menu-map').click();
   await expect(page.getByRole('dialog', { name: 'Map' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /Explored terrain map/ })).toBeVisible();
+  await expect(page.getByText('Waypoint', { exact: true })).toBeVisible();
   await page.getByTestId('close-menu').click();
   await expect(page.getByRole('dialog', { name: 'Map' })).toHaveCount(0);
   await expect(page.getByTestId('menu-button')).toBeFocused();
@@ -351,7 +368,7 @@ test('loads the Torch vertical slice with a minimal menu overlay', async ({ page
   await expect(page.getByTestId('map-grid').locator('.map-tile.is-grass')).not.toHaveCount(0);
   await expect(page.getByTestId('map-grid').locator('.map-tile.is-unexplored')).not.toHaveCount(0);
   await expect(page.getByTestId('map-screen').locator('.map-toolbar')).toHaveCount(0);
-  await expect(page.getByTestId('map-screen').locator('.map-legend')).toHaveCount(0);
+  await expect(page.getByTestId('map-screen').locator('.map-legend')).toBeVisible();
   await expect(page.getByTestId('map-grid').locator('.map-hero-token')).toHaveCount(1);
   await expect(page.getByTestId('map-grid').locator('.map-hero-token img')).toHaveAttribute(
     'src',
@@ -765,6 +782,7 @@ test('shows contextual action cards for gathering and combat', async ({ page }) 
   await page.waitForTimeout(350);
   await chopCard.click();
   await expect(chopCard).toHaveClass(/is-playing/);
+  await expect(chopCard.getByRole('status')).toHaveText('Resolving…');
   await expect(page.getByTestId('context-action-play-ghost')).toHaveCount(1);
   await expect(page.getByTestId('context-action-hand')).toHaveCount(0);
 
@@ -797,4 +815,30 @@ test('persists an action-boundary world and restores it after reload', async ({ 
   await page.getByTestId('menu-button').click();
   await page.getByTestId('menu-map').click();
   await expect(page.getByTestId('map-grid')).toHaveAttribute('aria-label', 'Explored terrain map with Hero at 1, 2');
+});
+
+test('keeps the Journal usable on a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByTestId('menu-button').click();
+  await page.getByTestId('menu-journal').click();
+  await expect(page.getByTestId('journal-screen')).toBeVisible();
+  await expect(page.getByTestId('journal-tab-guide')).toBeVisible();
+  await expect(page.getByTestId('journal-entry-quest.gathering-trail')).toBeVisible();
+  await expect(page.getByTestId('journal-entry-quest.gathering-trail')).toHaveAttribute(
+    'aria-controls',
+    'journal-entry-panel-quest-gathering-trail',
+  );
+  await page.getByTestId('journal-entry-quest.gathering-trail').click();
+  await expect(page.getByRole('heading', { name: 'A Practical Trail' })).toBeFocused();
+  await expect(page.getByTestId('journal-detail-back')).toBeVisible();
+  await page.getByTestId('journal-detail-back').click();
+  await expect(page.getByTestId('journal-entry-quest.gathering-trail')).toBeFocused();
+  const containment = await page.locator('.menu-panel').evaluate((panel) => ({
+    scrollWidth: panel.scrollWidth,
+    clientWidth: panel.clientWidth,
+    journal: document.querySelector<HTMLElement>('.journal-screen')?.getBoundingClientRect(),
+  }));
+  expect(containment.scrollWidth).toBeLessThanOrEqual(containment.clientWidth + 1);
+  expect(containment.journal?.width ?? 0).toBeGreaterThan(0);
 });

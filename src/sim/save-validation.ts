@@ -9,6 +9,7 @@ import type {
   EntityState,
   HeroState,
   Position,
+  WaypointTarget,
 } from './types';
 import type { PrimaryStats } from './stats';
 
@@ -305,10 +306,56 @@ export function commandAt(value: unknown, path: string): Command {
         recipeId: stringAt(record.recipeId, `${path}.recipeId`),
         quantity: positiveIntegerAt(record.quantity, `${path}.quantity`),
       };
+    case 'set-journal-focus':
+      exactKeys(record, ['type'], ['entryId'], path);
+      return Object.hasOwn(record, 'entryId')
+        ? { type, entryId: stringAt(record.entryId, `${path}.entryId`) }
+        : { type };
+    case 'set-waypoint':
+      exactKeys(record, ['type', 'entryId', 'target'], [], path);
+      return {
+        type,
+        entryId: stringAt(record.entryId, `${path}.entryId`),
+        target: waypointTargetAt(record.target, `${path}.target`),
+      };
+    case 'clear-waypoint':
+      exactKeys(record, ['type'], [], path);
+      return { type };
+    case 'claim-journal-reward':
+      exactKeys(record, ['type', 'entryId'], [], path);
+      return { type, entryId: stringAt(record.entryId, `${path}.entryId`) };
     case 'wait':
       exactKeys(record, ['type'], [], path);
       return { type };
     default:
       return fail(`${path}.type`, 'unsupported command');
   }
+}
+
+function waypointTargetAt(value: unknown, path: string): WaypointTarget {
+  const record = recordAt(value, path);
+  const kind = stringAt(record.kind, `${path}.kind`);
+  if (kind === 'coordinate') {
+    exactKeys(record, ['kind', 'position'], [], path);
+    return { kind, position: positionAt(record.position, `${path}.position`) };
+  }
+  if (kind === 'location') {
+    exactKeys(record, ['kind', 'locationId'], [], path);
+    return { kind, locationId: stringAt(record.locationId, `${path}.locationId`) };
+  }
+  if (kind === 'entity') {
+    exactKeys(record, ['kind', 'entityId'], [], path);
+    return { kind, entityId: stringAt(record.entityId, `${path}.entityId`) };
+  }
+  if (kind === 'derived') {
+    exactKeys(record, ['kind', 'resolverId', 'parameters'], [], path);
+    const parameters = recordAt(record.parameters, `${path}.parameters`);
+    const parsed: Record<string, string> = {};
+    for (const [key, entry] of Object.entries(parameters)) {
+      safeRecordKey(key, `${path}.parameters.${key}`);
+      parsed[key] = stringAt(entry, `${path}.parameters.${key}`);
+    }
+    return { kind, resolverId: stringAt(record.resolverId, `${path}.resolverId`), parameters: parsed };
+  }
+  return fail(`${path}.kind`, 'unexpected value');
 }

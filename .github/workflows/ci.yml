@@ -38,6 +38,9 @@ jobs:
       - name: Run verification suite
         run: npm run verify
 
+      - name: Record unit coverage baseline
+        run: npm run test:coverage
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -46,4 +49,5 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            coverage/
           if-no-files-found: ignore

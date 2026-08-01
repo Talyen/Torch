@@ -15,6 +15,7 @@ function isStoredSave(value: unknown): value is StoredSave {
 
 /** Synchronous localStorage adapter used by the browser vertical slice. */
 export class LocalStorageSaveProvider implements SaveProvider {
+  public readonly supportsIndependentSlots = true;
   private revisions = new Map<string, number>();
 
   public load(slot: string): string | undefined {

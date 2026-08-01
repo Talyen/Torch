@@ -4,6 +4,7 @@ import type { GameState, Position, TileKind } from './types';
 import { enemyDefinitions } from '../content/enemies';
 import { GATHERING_ACTION_COSTS } from './gathering';
 import { heroDefinitions } from '../content/heroes';
+import { createInitialWorldJournalState } from './journal';
 
 export const GENERATION_VERSION = 6;
 export const CHUNK_SIZE = 16;
@@ -246,6 +247,7 @@ export function createInitialGameState(seed = 20260730): GameState {
     gatheringProgress: {},
     discoveries: {},
     revealedTiles: {},
+    journal: createInitialWorldJournalState(),
   };
 
   revealAround(state, heroPosition);

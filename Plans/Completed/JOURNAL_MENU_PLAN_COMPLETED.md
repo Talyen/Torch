@@ -1,5 +1,7 @@
 # Torch Journal Menu — Product, UX, and Implementation Plan
 
+Archive status: completed; retained here as historical implementation context.
+
 ## Executive summary
 
 The Journal should become a first-class destination from the Main Menu—not a

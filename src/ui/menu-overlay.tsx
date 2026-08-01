@@ -22,6 +22,7 @@ import {
   Menu as MenuIcon,
   Monitor,
   PackageOpen,
+  Pin,
   Pickaxe,
   RotateCcw,
   Settings2,
@@ -57,8 +58,9 @@ import {
 import type { InventoryLayout, InventorySort } from './inventory-pagination';
 import { mapFitForViewport } from './responsive-layout';
 import { useElementSize } from './use-element-size';
-import { abilityActionDefinition, positionKey, tileAt } from '../sim';
-import type { GameState, Position, SimEvent } from '../sim';
+import { abilityActionDefinition, positionKey, resolvedWaypointPosition, tileAt } from '../sim';
+import type { GameState, Position, ProfileJournalState, SimEvent } from '../sim';
+import { journalEntryDefinition } from '../content/journal';
 import {
   PRESENTATION_SETTINGS_EVENT,
   readPresentationSettings,
@@ -68,6 +70,7 @@ import {
 import type { PresentationSettings, PresentationSettingKey } from '../game/presentation-settings';
 import { ContextActionHand } from './context-action-hand';
 import { CraftingScreen } from './crafting-screen';
+import { JournalScreen } from './journal-screen';
 import {
   TorchButton,
   TorchDialog,
@@ -86,6 +89,7 @@ import {
   defaultKeyBindings,
   keyBindingDefinitions,
   KEY_BINDINGS_EVENT,
+  OPEN_JOURNAL_EVENT,
   OPEN_MAP_EVENT,
   readKeyBindings,
   setKeyBindings,
@@ -98,16 +102,17 @@ type MenuItem = {
   icon: LucideIcon;
   screen: Screen;
   available?: boolean;
+  disabledReason?: string;
   testId?: string;
 };
 
-type Screen = 'menu' | 'hero' | 'inventory' | 'gear' | 'crafting' | 'abilities' | 'map' | 'settings';
+type Screen = 'menu' | 'hero' | 'inventory' | 'gear' | 'crafting' | 'abilities' | 'journal' | 'map' | 'settings';
 
 const menuItems: MenuItem[] = [
   { label: 'Map', icon: MapIcon, screen: 'map', available: true },
   { label: 'Crafting', icon: Hammer, screen: 'crafting', available: true, testId: 'menu-crafting' },
-  { label: 'Journal', icon: BookOpen, screen: 'menu' },
-  { label: 'Talents', icon: Sparkles, screen: 'menu' },
+  { label: 'Journal', icon: BookOpen, screen: 'journal', available: true, testId: 'menu-journal' },
+  { label: 'Talents', icon: Sparkles, screen: 'menu', disabledReason: 'Coming in a later phase' },
   { label: 'Options', icon: Settings2, screen: 'settings', available: true, testId: 'menu-settings' },
 ];
 
@@ -126,6 +131,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   gear: 'Equipment',
   crafting: 'Crafting',
   abilities: 'Abilities',
+  journal: 'Journal',
   map: 'Map',
   settings: 'Options',
 };
@@ -180,6 +186,7 @@ export function MenuOverlay(): ReactElement {
   const [open, setOpen] = useState(false);
   const [screen, setScreen] = useState<Screen>('menu');
   const [gameState, setGameState] = useState(() => gameSession.state);
+  const [profileJournal, setProfileJournal] = useState<ProfileJournalState>(() => gameSession.profileJournal);
   const [gameEvents, setGameEvents] = useState<SimEvent[]>([]);
   const [heroStatus, setHeroStatus] = useState(() => ({
     health: gameSession.state.hero.health,
@@ -193,8 +200,9 @@ export function MenuOverlay(): ReactElement {
   const hudRailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = gameSession.subscribe((state, events) => {
+    const unsubscribe = gameSession.subscribe((state, events, profile) => {
       setGameState(state);
+      setProfileJournal(profile);
       setGameEvents(events);
       setHeroStatus({
         health: state.hero.health,
@@ -221,8 +229,17 @@ export function MenuOverlay(): ReactElement {
       setScreen('map');
       setOpen(true);
     };
+    const handleOpenJournal = (): void => {
+      gameSession.recordProfileObservation('open-journal');
+      setScreen('journal');
+      setOpen(true);
+    };
     window.addEventListener(OPEN_MAP_EVENT, handleOpenMap);
-    return () => window.removeEventListener(OPEN_MAP_EVENT, handleOpenMap);
+    window.addEventListener(OPEN_JOURNAL_EVENT, handleOpenJournal);
+    return () => {
+      window.removeEventListener(OPEN_MAP_EVENT, handleOpenMap);
+      window.removeEventListener(OPEN_JOURNAL_EVENT, handleOpenJournal);
+    };
   }, []);
 
   const openMenu = (nextScreen: Screen = 'menu', invoker?: HTMLElement | null): void => {
@@ -234,6 +251,8 @@ export function MenuOverlay(): ReactElement {
       (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setScreen(nextScreen);
     setOpen(true);
+    if (nextScreen === 'inventory') gameSession.recordProfileObservation('open-inventory');
+    if (nextScreen === 'journal') gameSession.recordProfileObservation('open-journal');
   };
 
   const restoreMenuFocus = useCallback((): void => {
@@ -291,84 +310,87 @@ export function MenuOverlay(): ReactElement {
       <div ref={gameplayHudRef} className="gameplay-hud" data-testid="gameplay-hud">
         <ContextActionHand state={gameState} events={gameEvents} hidden={open} />
         {!open ? (
-          <div ref={hudRailRef} className="hud-rail" data-testid="hud-rail" aria-label="Hero controls">
-            <TorchButton
-              className="hud-icon-button hud-hero-button"
-              type="button"
-              aria-label="Open hero"
-              title="Hero"
-              aria-controls="torch-menu"
-              data-testid="hud-hero-button"
-              onClick={(event) => openMenu('hero', event.currentTarget)}
-            >
-              <img src={heroAssets.knight.hud} alt="" />
-            </TorchButton>
+          <>
+            <JournalTracker state={gameState} onOpen={() => openMenu('journal')} />
+            <div ref={hudRailRef} className="hud-rail" data-testid="hud-rail" aria-label="Hero controls">
+              <TorchButton
+                className="hud-icon-button hud-hero-button"
+                type="button"
+                aria-label="Open hero"
+                title="Hero"
+                aria-controls="torch-menu"
+                data-testid="hud-hero-button"
+                onClick={(event) => openMenu('hero', event.currentTarget)}
+              >
+                <img src={heroAssets.knight.hud} alt="" />
+              </TorchButton>
 
-            <div
-              className="hud-hp"
-              data-testid="hero-hp"
-              aria-label={`Hero HP ${heroStatus.health} of ${heroStatus.maxHealth}`}
-            >
-              <div className="hud-hp-meta">
-                <span>HP</span>
-                <span>
-                  {heroStatus.health}/{heroStatus.maxHealth}
-                </span>
+              <div
+                className="hud-hp"
+                data-testid="hero-hp"
+                aria-label={`Hero HP ${heroStatus.health} of ${heroStatus.maxHealth}`}
+              >
+                <div className="hud-hp-meta">
+                  <span>HP</span>
+                  <span>
+                    {heroStatus.health}/{heroStatus.maxHealth}
+                  </span>
+                </div>
+                <div className="hud-hp-track" aria-hidden="true">
+                  <span className="hud-hp-fill" style={{ width: `${hpRatio * 100}%` }} />
+                </div>
               </div>
-              <div className="hud-hp-track" aria-hidden="true">
-                <span className="hud-hp-fill" style={{ width: `${hpRatio * 100}%` }} />
-              </div>
+
+              <TorchButton
+                className="hud-icon-button"
+                type="button"
+                aria-label="Open inventory"
+                title="Inventory"
+                aria-controls="torch-menu"
+                data-testid="hud-inventory-button"
+                onClick={(event) => openMenu('inventory', event.currentTarget)}
+              >
+                <Backpack aria-hidden="true" />
+              </TorchButton>
+
+              <TorchButton
+                className="hud-icon-button"
+                type="button"
+                aria-label="Open gear"
+                title="Equipment"
+                aria-controls="torch-menu"
+                data-testid="hud-gear-button"
+                onClick={(event) => openMenu('gear', event.currentTarget)}
+              >
+                <Swords aria-hidden="true" />
+              </TorchButton>
+
+              <TorchButton
+                className="hud-icon-button"
+                type="button"
+                aria-label="Open abilities"
+                title="Abilities"
+                aria-controls="torch-menu"
+                data-testid="hud-abilities-button"
+                onClick={(event) => openMenu('abilities', event.currentTarget)}
+              >
+                <Sparkles aria-hidden="true" />
+              </TorchButton>
+
+              <TorchButton
+                className="hud-icon-button"
+                type="button"
+                aria-label="Open menu"
+                title="Menu"
+                aria-controls="torch-menu"
+                aria-expanded={open}
+                data-testid="menu-button"
+                onClick={(event) => openMenu('menu', event.currentTarget)}
+              >
+                <MenuIcon aria-hidden="true" />
+              </TorchButton>
             </div>
-
-            <TorchButton
-              className="hud-icon-button"
-              type="button"
-              aria-label="Open inventory"
-              title="Inventory"
-              aria-controls="torch-menu"
-              data-testid="hud-inventory-button"
-              onClick={(event) => openMenu('inventory', event.currentTarget)}
-            >
-              <Backpack aria-hidden="true" />
-            </TorchButton>
-
-            <TorchButton
-              className="hud-icon-button"
-              type="button"
-              aria-label="Open gear"
-              title="Equipment"
-              aria-controls="torch-menu"
-              data-testid="hud-gear-button"
-              onClick={(event) => openMenu('gear', event.currentTarget)}
-            >
-              <Swords aria-hidden="true" />
-            </TorchButton>
-
-            <TorchButton
-              className="hud-icon-button"
-              type="button"
-              aria-label="Open abilities"
-              title="Abilities"
-              aria-controls="torch-menu"
-              data-testid="hud-abilities-button"
-              onClick={(event) => openMenu('abilities', event.currentTarget)}
-            >
-              <Sparkles aria-hidden="true" />
-            </TorchButton>
-
-            <TorchButton
-              className="hud-icon-button"
-              type="button"
-              aria-label="Open menu"
-              title="Menu"
-              aria-controls="torch-menu"
-              aria-expanded={open}
-              data-testid="menu-button"
-              onClick={(event) => openMenu('menu', event.currentTarget)}
-            >
-              <MenuIcon aria-hidden="true" />
-            </TorchButton>
-          </div>
+          </>
         ) : null}
       </div>
 
@@ -417,8 +439,9 @@ export function MenuOverlay(): ReactElement {
                           type="button"
                           disabled={!item.available}
                           aria-label={`${item.label}${item.available ? '' : ', coming soon'}`}
-                          title={item.available ? undefined : 'Coming soon'}
-                          data-testid={item.available ? (item.testId ?? `menu-${item.label.toLowerCase()}`) : undefined}
+                          aria-describedby={item.available ? undefined : `menu-${item.label.toLowerCase()}-status`}
+                          title={item.available ? undefined : (item.disabledReason ?? 'Coming soon')}
+                          data-testid={item.testId ?? `menu-${item.label.toLowerCase()}`}
                           key={item.label}
                           onClick={item.available ? () => setScreen(item.screen) : undefined}
                         >
@@ -426,6 +449,11 @@ export function MenuOverlay(): ReactElement {
                             <Icon />
                           </span>
                           <span className="menu-item-label">{item.label}</span>
+                          {!item.available ? (
+                            <span className="menu-item-status" id={`menu-${item.label.toLowerCase()}-status`}>
+                              {item.disabledReason ?? 'Coming soon'}
+                            </span>
+                          ) : null}
                         </TorchButton>
                       );
                     })}
@@ -440,6 +468,8 @@ export function MenuOverlay(): ReactElement {
                   <CraftingScreen state={gameState} events={gameEvents} />
                 ) : screen === 'abilities' ? (
                   <AbilitiesScreen />
+                ) : screen === 'journal' ? (
+                  <JournalScreen state={gameState} profile={profileJournal} onOpenMap={() => setScreen('map')} />
                 ) : screen === 'map' ? (
                   <MapScreen />
                 ) : (
@@ -451,6 +481,37 @@ export function MenuOverlay(): ReactElement {
         </TorchDialog.Portal>
       </TorchDialog.Root>
     </>
+  );
+}
+
+function JournalTracker({ state, onOpen }: { state: GameState; onOpen: () => void }): ReactElement | null {
+  const entryId = state.journal.focusedEntryId;
+  if (!entryId) return null;
+  const definition = journalEntryDefinition(entryId);
+  const runtime = state.journal.entries[entryId];
+  if (!definition || !runtime || runtime.status === 'locked') return null;
+  const objective = definition.objectives.find((candidate) => (runtime.progress[candidate.id] ?? 0) < candidate.target);
+  if (!objective) return null;
+  const current = runtime.progress[objective.id] ?? 0;
+
+  return (
+    <TorchButton
+      variant="ghost"
+      className="journal-tracker"
+      type="button"
+      aria-label={`Open Journal: ${definition.title}`}
+      data-testid="journal-tracker"
+      onClick={onOpen}
+    >
+      <BookOpen aria-hidden="true" />
+      <span>
+        <strong>{definition.title}</strong>
+        <small>
+          {objective.label} · {current}/{objective.target}
+        </small>
+      </span>
+      <ChevronRight aria-hidden="true" />
+    </TorchButton>
   );
 }
 
@@ -836,8 +897,9 @@ function mapBounds(state: GameState): MapBounds {
     .map(parsePositionKey)
     .filter((position): position is Position => position !== undefined);
   const positions = explored.length > 0 ? explored : [state.hero.position];
-  const xs = [...positions.map(({ x }) => x), state.hero.position.x];
-  const ys = [...positions.map(({ y }) => y), state.hero.position.y];
+  const waypoint = resolvedWaypointPosition(state);
+  const xs = [...positions.map(({ x }) => x), state.hero.position.x, ...(waypoint ? [waypoint.x] : [])];
+  const ys = [...positions.map(({ y }) => y), state.hero.position.y, ...(waypoint ? [waypoint.y] : [])];
   return {
     minX: Math.min(...xs),
     maxX: Math.max(...xs),
@@ -869,6 +931,7 @@ function MapScreen(): ReactElement {
   }, [measuredMapViewport]);
 
   const bounds = mapBounds(mapState);
+  const waypoint = resolvedWaypointPosition(mapState);
   const exploredColumns = bounds.maxX - bounds.minX + 1;
   const exploredRows = bounds.maxY - bounds.minY + 1;
   const mapSizing = mapFitForViewport(mapViewportSize.width, mapViewportSize.height, exploredColumns, exploredRows);
@@ -903,7 +966,7 @@ function MapScreen(): ReactElement {
           className="map-grid"
           data-testid="map-grid"
           role="img"
-          aria-label={`Explored terrain map with Hero at ${mapState.hero.position.x}, ${mapState.hero.position.y}`}
+          aria-label={`Explored terrain map with Hero at ${mapState.hero.position.x}, ${mapState.hero.position.y}${waypoint ? ` and waypoint at ${waypoint.x}, ${waypoint.y}` : ''}`}
           style={mapStyle}
         >
           {cells.map((position) => {
@@ -911,6 +974,7 @@ function MapScreen(): ReactElement {
             const revealed = mapState.revealedTiles[key] === true;
             const terrain = tileAt(mapState.seed, position);
             const isHero = position.x === mapState.hero.position.x && position.y === mapState.hero.position.y;
+            const isWaypoint = waypoint?.x === position.x && waypoint.y === position.y;
             return (
               <div className={`map-tile ${revealed ? `is-${terrain}` : 'is-unexplored'}`} key={key} aria-hidden="true">
                 {isHero ? (
@@ -918,10 +982,37 @@ function MapScreen(): ReactElement {
                     <img src={heroAssets.knight.marker} alt="Hero" />
                   </span>
                 ) : null}
+                {isWaypoint ? (
+                  <span className="map-waypoint-token" aria-hidden="true">
+                    <Pin />
+                  </span>
+                ) : null}
               </div>
             );
           })}
         </div>
+      </div>
+      <div className="map-legend" aria-label="Map legend">
+        <span className="map-legend-item">
+          <span className="map-legend-icon" aria-hidden="true">
+            <Shield />
+          </span>
+          Hero
+        </span>
+        <span className="map-legend-item">
+          <span className="map-legend-icon" aria-hidden="true">
+            <Pin />
+          </span>
+          Waypoint
+        </span>
+        <span className="map-legend-item">
+          <span className="map-legend-swatch is-grass" aria-hidden="true" />
+          Explored
+        </span>
+        <span className="map-legend-item">
+          <span className="map-legend-swatch is-unexplored" aria-hidden="true" />
+          Unexplored
+        </span>
       </div>
     </div>
   );
@@ -2114,6 +2205,7 @@ function SettingRange({
   onChange: (value: number) => void;
   testId?: string;
 }): ReactElement {
+  const controlId = testId ?? `settings-${label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`;
   return (
     <label className="settings-range-row">
       <span className="options-row-copy">
@@ -2121,18 +2213,23 @@ function SettingRange({
         <small>{description}</small>
       </span>
       <span className="options-range-control">
-        <output htmlFor={testId}>{value}%</output>
+        <output htmlFor={controlId}>{value}%</output>
         <input
           aria-label={label}
           data-testid={testId}
           className="settings-range"
-          id={testId}
+          id={controlId}
           type="range"
           min="0"
           max="100"
           value={value}
+          aria-valuetext={`${value}%`}
+          aria-describedby={`${controlId}-description`}
           onChange={(event) => onChange(Number(event.target.value))}
         />
+      </span>
+      <span id={`${controlId}-description`} className="sr-only">
+        Use the arrow keys to adjust in 1 percent steps.
       </span>
     </label>
   );

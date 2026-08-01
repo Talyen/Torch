@@ -11,8 +11,9 @@ import { blockingEntityAt, entityAt } from './entities';
 import { abilityActionDefinition, canEquipAbility } from './ability-rules';
 import { resolveCraft } from './crafting';
 import { isTerrainWalkable, materializeGeneratedTrees, revealAround, tileAt } from './world';
+import { advanceWorldJournal, claimWorldJournalReward, resolveWaypointPosition } from './journal';
 import { cloneGameState } from './state';
-import type { Command, CommandResult, Direction, GameState, Position, SimEvent } from './types';
+import type { Command, CommandResult, Direction, GameState, Position, SimEvent, WaypointStatus } from './types';
 
 function directionToward(from: Position, to: Position): Direction | undefined {
   const dx = to.x - from.x;
@@ -27,10 +28,32 @@ function respawnHero(state: GameState, events: SimEvent[]): void {
   state.hero.deaths += 1;
   state.hero.position = { ...state.hero.boundPosition };
   state.hero.health = state.hero.maxHealth;
-  revealAround(state, state.hero.position);
+  revealAroundWithEvent(state, state.hero.position, events);
   materializeGeneratedTrees(state, state.hero.position);
   events.push({ type: 'hero-respawned', position: { ...state.hero.position } });
   events.push({ type: 'message', text: 'The Torch gutters out. You awaken at your bound homestead.' });
+}
+
+function revealAroundWithEvent(state: GameState, center: Position, events: SimEvent[]): void {
+  const before = Object.keys(state.revealedTiles).length;
+  revealAround(state, center);
+  const count = Object.keys(state.revealedTiles).length - before;
+  if (count > 0) events.push({ type: 'tiles-revealed', count });
+}
+
+function waypointStatusFor(state: GameState, target: Extract<Command, { type: 'set-waypoint' }>): WaypointStatus {
+  if (resolveWaypointPosition(state, target.target)) return 'active';
+  return target.target.kind === 'entity' ? 'removed' : 'unresolved';
+}
+
+function refreshWaypointStatus(state: GameState, events: SimEvent[]): void {
+  const waypoint = state.journal.waypoint;
+  if (!waypoint) return;
+  const position = resolveWaypointPosition(state, waypoint.target);
+  const nextStatus: WaypointStatus = position ? 'active' : waypoint.target.kind === 'entity' ? 'removed' : 'unresolved';
+  if (nextStatus === waypoint.status) return;
+  waypoint.status = nextStatus;
+  events.push({ type: 'waypoint-changed', entryId: waypoint.entryId, status: nextStatus });
 }
 
 function advanceEnemies(state: GameState, events: SimEvent[]): void {
@@ -120,6 +143,31 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
     // the cloned resolver updates inventory, without moving enemies or
     // advancing cooldowns.
     accepted = resolveCraft(next, command, events);
+  } else if (command.type === 'set-journal-focus') {
+    if (command.entryId && next.journal.entries[command.entryId]?.status === 'locked') {
+      events.push({ type: 'blocked', reason: 'That Journal entry is not available yet.' });
+      events.push({ type: 'message', text: 'That Journal entry is not available yet.' });
+    } else {
+      next.journal.focusedEntryId = command.entryId;
+      accepted = true;
+    }
+  } else if (command.type === 'set-waypoint') {
+    const runtime = next.journal.entries[command.entryId];
+    if (!runtime || runtime.status === 'locked') {
+      events.push({ type: 'blocked', reason: 'That Journal entry is not available yet.' });
+      events.push({ type: 'message', text: 'That Journal entry is not available yet.' });
+    } else {
+      const status = waypointStatusFor(next, command);
+      next.journal.waypoint = { entryId: command.entryId, target: command.target, status };
+      events.push({ type: 'waypoint-changed', entryId: command.entryId, status });
+      accepted = true;
+    }
+  } else if (command.type === 'clear-waypoint') {
+    delete next.journal.waypoint;
+    events.push({ type: 'waypoint-changed', status: 'removed' });
+    accepted = true;
+  } else if (command.type === 'claim-journal-reward') {
+    accepted = claimWorldJournalReward(next, command.entryId, events);
   } else {
     materializeGeneratedTrees(next, next.hero.position);
 
@@ -160,7 +208,7 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
           } else {
             const from = { ...next.hero.position };
             next.hero.position = destination;
-            revealAround(next, destination);
+            revealAroundWithEvent(next, destination, events);
             materializeGeneratedTrees(next, destination);
             events.push({ type: 'hero-moved', from, to: { ...destination } });
             events.push({ type: 'message', text: `Moved to ${destination.x}, ${destination.y}.` });
@@ -206,6 +254,19 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
 
   if (accepted && command.type !== 'equip-ability' && command.type !== 'craft') {
     advanceTurn(next, events, consumedAbilityIds);
+    refreshWaypointStatus(next, events);
+  }
+
+  if (
+    accepted &&
+    command.type !== 'equip-ability' &&
+    command.type !== 'craft' &&
+    command.type !== 'set-journal-focus' &&
+    command.type !== 'set-waypoint' &&
+    command.type !== 'clear-waypoint' &&
+    command.type !== 'claim-journal-reward'
+  ) {
+    advanceWorldJournal(next, events);
   }
 
   return { state: next, events, accepted };

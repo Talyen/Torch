@@ -1,44 +1,21 @@
-# Torch Development Workflow
+# Torch Development
 
-Torch is intentionally developed as a browser-first Phaser client with a
-headless TypeScript simulation. Keep feature work narrow and prove one complete
-path before adding a large content family.
+Torch is a browser-first Phaser client with a headless TypeScript simulation.
+Keep changes focused and finish one coherent path at a time.
 
-## Daily loop
+## Local development
 
 ```bash
-npm install                 # first checkout only
-npm run dev                 # Vite development server at 127.0.0.1:5173
+npm install   # first checkout or dependency change
+npm run dev   # Vite at 127.0.0.1:5173
 ```
 
-Open the Vite URL rather than `index.html` directly. The Phaser module and
-generated asset paths rely on the development server.
-
-## Vercel deployment
-
-Torch is deployed as a Vite static client through the repository's Vercel Git
-integration. Keep the Vercel project rooted at the repository root with the
-Vite framework preset, `npm run build` as the build command, and `dist` as the
-output directory. The repository pins Node.js to `22.x`, matching the GitHub
-Actions workflow.
-
-Pushes to `main` are production deployments; pull requests and other branches
-are preview deployments. The Vercel build should run `npm run build`, not
-`npm run verify`: browser installation and the full Playwright gate remain in
-GitHub Actions. `vercel.json` provides the SPA fallback for future URL-based
-screens while preserving the generated static asset paths.
-
-## Publishing
-
-The default handoff is a verified working tree for the user to review. Agents
-must not stage, commit, push, create branches, or open pull requests unless the
-user explicitly requests that publishing action. When publishing is requested,
-the solo-developer default is a direct push to `main`; GitHub Actions remains
-the hosted safety gate.
+Open the Vite URL rather than `index.html`; module and asset paths rely on the
+development server.
 
 ## Verification
 
-Run the focused checks while iterating:
+Use the checks closest to the change while iterating:
 
 ```bash
 npm run format:check
@@ -50,57 +27,52 @@ npm run typecheck
 npm test
 npm run test:e2e -- --reporter=line
 npm run test:e2e:prod -- --reporter=line
-npm run check:size   # after npm run build
 ```
 
-Run the complete local gate before handing off a change:
+Run the complete local gate before handing off code, asset, configuration, or
+workflow changes:
 
 ```bash
 npm run verify
 ```
 
-`verify` first checks formatting, lint, the Gold/Charcoal UI token contract,
-content/asset references, and the simulation-only TypeScript boundary. It then
-runs full TypeScript checking, headless tests, the production build, a bundle
-size budget, and a
-Playwright smoke suite against the built Vite preview. The development-only FPS monitor may log
-browser long-task warnings during automated browser work; those warnings are
-diagnostic and should be investigated separately from test failures.
+If port 4173 is occupied, use `TORCH_E2E_PORT=4174 npm run verify`. GitHub
+Actions runs the same gate and uploads Playwright reports on browser failures.
 
-If another local app is already using port 4173, isolate the Playwright server
-with `TORCH_E2E_PORT=4174 npm run verify`.
+Documentation-only changes do not need the full gate unless they change a
+command or workflow. Never report a check as passed unless it ran.
 
-GitHub Actions runs the same `npm run verify` gate on pushes to `main` and
-agent branches and on every pull request. The workflow installs Chromium with
-its system dependencies and uploads Playwright reports when a browser check
-fails.
+## Where changes belong
 
-## Change boundaries
+- `src/sim/`: rules, state transitions, deterministic generation, selectors
+- `src/game/`: session orchestration, input routing, Phaser presentation
+- `src/ui/`: React HUD, menus, and dialogs
+- `src/content/`: authored definitions and stable IDs
+- `src/styles.css`: design tokens
+- `Raw Assets/`: original artwork
+- `public/assets/`: generated asset output
 
-- Put rules, state transitions, seeded generation, and deterministic helpers in
-  `src/sim/`. They must not import Phaser, React, or browser APIs.
-- Put session orchestration and input routing in `src/game/`.
-- Keep Phaser world presentation in `src/game/scene.ts` and pure presentation
-  math in neighboring modules.
-- Keep React menus and HUD in `src/ui/`, using tokens from `src/styles.css`.
-- Keep authored data and stable IDs in `src/content/`; do not make content
-  definitions import UI components.
-- Keep original artwork under `Raw Assets/`. Generated files under
-  `public/assets/` are disposable pipeline outputs.
-
-For a simulation change, add a fixed-seed unit test. For a visible client
-change, add or update a Playwright smoke assertion. If a product or runtime
-boundary changes, update `README.md`, `ARCHITECTURE.md`, or `ROADMAP.md` in the
-same change.
+Simulation changes need a meaningful fixed-seed test. User-visible behavior
+usually needs the closest Playwright assertion. Save changes need round-trip and
+migration coverage. Update the owning product or architecture document when a
+decision or runtime boundary changes.
 
 ## Assets
 
-Add source artwork under the appropriate `Raw Assets/` content directory, then
-run:
+Add source artwork under `Raw Assets/`, then run:
 
 ```bash
 npm run assets:build
 ```
 
-The pipeline preserves raw files, emits intentional variants, and rewrites
-`public/assets/manifest.json`.
+Do not hand-edit generated assets or the manifest.
+
+## Deployment and publishing
+
+Vercel builds the repository-root Vite app with Node 22, `npm run build`, and
+`dist` as the output. `main` deploys to production; other branches and pull
+requests create previews. The full verification gate stays in GitHub Actions,
+not the Vercel build.
+
+The normal handoff is an unstaged working tree for review. Do not stage, commit,
+push, create a branch, or open a pull request unless the user asks.

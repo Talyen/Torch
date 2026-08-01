@@ -1,5 +1,8 @@
 # Torch UI/UX Audit and Improvement Plan
 
+Archive status: completed for the current scope; deferred follow-ups are tracked
+in `ROADMAP.md`.
+
 Date: 2026-07-31
 
 ## Audit scope and method

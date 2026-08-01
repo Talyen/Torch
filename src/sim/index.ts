@@ -6,6 +6,8 @@ export * from './crafting';
 export * from './entities';
 export * from './footprint';
 export * from './gathering';
+export * from './journal';
+export * from './profile-save';
 export * from './rng';
 export * from './replay';
 export * from './save-validation';

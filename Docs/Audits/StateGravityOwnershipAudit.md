@@ -12,19 +12,20 @@ owners.
 
 ## Current ownership map
 
-| Concern                                                                                                                                  | Owner                                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Rules, validation, deterministic action resolution, entities, generation, and visibility facts (`revealedTiles`, lit/revealed decisions) | `src/sim/` (`simulation.ts`, `actions.ts`, `ability-rules.ts`, `world.ts`, `entities.ts`, `types.ts`)                                      |
-| Application/session command routing and action-boundary snapshots                                                                        | `src/game/session.ts`                                                                                                                      |
-| Physical-key normalization, rebinding, and input preference storage                                                                      | `src/game/input-bindings.ts`                                                                                                               |
-| Phaser pointer/keyboard subscription and world-input gating                                                                              | `src/game/scene.ts` and `GameSession.inputMode`                                                                                            |
-| Phaser world presentation, camera, fog, terrain/entity draw orchestration                                                                | `src/game/scene.ts`                                                                                                                        |
-| Pure board/layout/presentation math and CSS color bridge                                                                                 | `src/game/layout.ts`, `src/game/visibility.ts` (renderer-facing snapshot/interpolation/alpha math only), `src/game/presentation-colors.ts` |
-| React HUD, menus, dialogs, selectors, settings, and screen-only state                                                                    | `src/ui/menu-overlay.tsx`, `src/ui/context-action-hand.tsx`                                                                                |
-| Shared React behavior boundary and styled controls                                                                                       | `src/ui/primitives.tsx`, `src/components/ui/`                                                                                              |
-| Stable content definitions and asset IDs                                                                                                 | `src/content/`                                                                                                                             |
-| Browser presentation preferences                                                                                                         | `src/game/presentation-settings.ts`                                                                                                        |
-| Raw artwork processing and generated outputs                                                                                             | `Raw Assets/`, `scripts/process-assets.mjs`, `public/assets/` (generated; never hand-edit)                                                 |
+| Concern                                                                                                                                  | Owner                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rules, validation, deterministic action resolution, entities, generation, and visibility facts (`revealedTiles`, lit/revealed decisions) | `src/sim/` (`simulation.ts`, `actions.ts`, `ability-rules.ts`, `world.ts`, `entities.ts`, `types.ts`)                                                   |
+| Application/session command routing and action-boundary snapshots                                                                        | `src/game/session.ts`                                                                                                                                   |
+| Physical-key normalization, rebinding, and input preference storage                                                                      | `src/game/input-bindings.ts`                                                                                                                            |
+| Phaser pointer/keyboard subscription and world-input gating                                                                              | `src/game/scene.ts` and `GameSession.inputMode`                                                                                                         |
+| Phaser world presentation, camera, fog, terrain/entity draw orchestration                                                                | `src/game/scene.ts`                                                                                                                                     |
+| Pure board/layout/presentation math and CSS color bridge                                                                                 | `src/game/layout.ts`, `src/game/visibility.ts` (renderer-facing snapshot/interpolation/alpha math only), `src/game/presentation-colors.ts`              |
+| React HUD, menus, dialogs, selectors, settings, and screen-only state                                                                    | `src/ui/menu-overlay.tsx`, `src/ui/context-action-hand.tsx`                                                                                             |
+| Shared React behavior boundary and styled controls                                                                                       | `src/ui/primitives.tsx`, `src/components/ui/`                                                                                                           |
+| Stable content definitions and asset IDs                                                                                                 | `src/content/`                                                                                                                                          |
+| Browser presentation preferences                                                                                                         | `src/game/presentation-settings.ts`                                                                                                                     |
+| Save codecs and provider persistence                                                                                                     | `src/sim/world-save.ts`, `src/sim/profile-save.ts`, `src/game/save-provider.ts`, `src/platform/local-save-provider.ts`, routed by `src/game/session.ts` |
+| Raw artwork processing and generated outputs                                                                                             | `Raw Assets/`, `scripts/process-assets.mjs`, `public/assets/` (generated; never hand-edit)                                                              |
 
 ## Intent
 
@@ -54,9 +55,9 @@ replace the typed `gameSession.dispatch`/`performAction` path.
 
 Read-only action-boundary snapshots may mirror simulation facts when captured
 from `GameSession` and kept synchronized; they are not a second authority.
-Roadmap-scoped UI fixture state (such as the current inventory prototypes while
-durable inventory state is not implemented) is also valid when clearly marked
-as a fixture and never written as canonical simulation state.
+Roadmap-scoped UI fixture state is valid only when clearly marked as a fixture
+and never written as canonical simulation state. Current inventory, equipment,
+and tool surfaces are backed by the simulation snapshot and typed commands.
 
 ## Hard stops
 
@@ -66,8 +67,9 @@ as a fixture and never written as canonical simulation state.
   presentation split.
 - Do not add a second state library, event bus, or generic app controller to
   solve a single flow.
-- Do not make `GameSession` persist settings or invent durable save behavior;
-  durable save/load is a roadmap item and must follow its versioned contracts.
+- Do not make `GameSession` own save schemas or provider storage. It may route
+  the existing versioned save codecs through `SaveProvider` at action
+  boundaries; new persistence behavior must follow those contracts.
 - Do not turn a state-ownership finding into a duplicate-surface or token
   migration; route those findings to their owning audit.
 - Pure `tileAt(seed, position)` terrain lookups or renderer caches are valid

@@ -13,6 +13,15 @@ test('keeps canonical Gear readable across supported viewports', async ({ page }
     await expect(page.getByTestId('equipment-screen')).toBeVisible();
     await expect(page.getByTestId('equipment-tab')).toHaveAttribute('aria-selected', 'true');
 
+    const gearTabHitAreas = await page.locator('.gear-tabs [role="tab"]').evaluateAll((tabs) =>
+      tabs.map((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      }),
+    );
+    expect(gearTabHitAreas).toHaveLength(2);
+    expect(gearTabHitAreas.every(({ width, height }) => width >= 42 && height >= 42)).toBe(true);
+
     const containment = await page.locator('#torch-menu').evaluate((panel) => {
       const screen = panel.querySelector<HTMLElement>('.gear-screen')?.getBoundingClientRect();
       const paneElement = panel.querySelector<HTMLElement>('.gear-loadout-pane');

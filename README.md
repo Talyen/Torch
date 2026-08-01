@@ -56,7 +56,7 @@ Before handing off a change, run `npm run verify` to execute the UI theme
 contract check, typechecking, headless tests, the production build, and the
 Playwright browser smoke suite.
 
-Raw artwork lives under [`Raw Assets/`](Raw%20Assets/). `npm run assets:build` uses the Sharp-based pipeline in [`scripts/`](scripts/) to create optimized WebP/PNG variants and a manifest under `public/assets/`. Raw sources are never modified by the pipeline.
+Raw artwork lives under [`Raw Assets/`](Raw%20Assets/). `npm run assets:build` runs [`scripts/process-assets.mjs`](scripts/process-assets.mjs), which uses the Sharp-based pipeline to create optimized WebP/PNG variants and `public/assets/manifest.json`. Raw sources are never modified by the pipeline.
 
 ## Current status
 

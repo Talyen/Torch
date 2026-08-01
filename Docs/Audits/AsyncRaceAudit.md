@@ -29,7 +29,13 @@ Investigate high-risk candidates and fix confirmed lifetime or ordering issues. 
 
 **Safe patterns:** `useEffect` returns cleanup for every DOM listener, timer, animation frame, observer, and subscription it registers; `GameSession.subscribe` returns its unsubscribe function; `TorchScene` removes window/Phaser listeners, disconnects `ResizeObserver`, and stops tweens during scene shutdown; timeout and animation-frame handles are cleared when cancellable and otherwise guard against stale work after an overlay unmounts. The development frame monitor pairs `start()` with `stop()` and never installs in production. `src/sim/**` remains synchronous and deterministic.
 
-The current checkout has no background save pipeline. Do not invent one during this audit. `localStorage` preference reads/writes in `src/game/presentation-settings.ts` and `src/game/input-bindings.ts` are browser-boundary work; malformed-value fallback or persistence semantics belong to `BehaviorHardeningAudit.md` unless teardown/order is the defect.
+The current save path is action-boundary persistence through `SaveProvider` in
+`src/game/session.ts`; the shipped `LocalStorageSaveProvider` is synchronous,
+and there is no separate background save queue. Do not invent one during this
+audit. `localStorage` preference reads/writes in
+`src/game/presentation-settings.ts` and `src/game/input-bindings.ts` are
+browser-boundary work; malformed-value fallback or persistence semantics belong
+to `BehaviorHardeningAudit.md` unless teardown/order is the defect.
 
 Presence of `Promise`, `async`, `await`, `setTimeout`, or an event listener is not itself a finding. Confirm ownership, cancellation, re-entry, and the ordering visible to the player.
 

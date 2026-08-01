@@ -127,9 +127,11 @@ If the default E2E port is occupied, use an isolated port:
 TORCH_E2E_PORT=4174 npm run verify
 ```
 
-Torch does not currently ship a separate lint, knip, madge, coverage, or audit
-aggregator command. The guides use scoped `rg`, `git`, and the checks above as
-discovery/verification signals; do not document nonexistent commands as gates.
+Torch does not currently ship separate knip, madge, or audit-aggregator
+commands. `lint` and `test:coverage` are available package scripts, but they
+are not default audit gates. The guides use scoped `rg`, `git`, and the checks
+above as discovery/verification signals; do not document nonexistent commands
+as gates.
 If a signal becomes stable and mechanical, propose promoting it to a checked-in
 script or lint rule rather than quietly adding a second policy owner.
 

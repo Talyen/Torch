@@ -4,7 +4,7 @@
 
 ## Intent
 
-Inventory confirmed transition or persistence issues and fix them at the owner that already enforces the behavior. A clean pass is valid; do not add guards, logs, seams, or tests solely to create work. Torch's current Phase 1 slice does not yet have durable world/profile save serialization, so do not invent a save subsystem in this audit. If the scope is large, phase the plan and keep proposals under [README.md](README.md) and [ARCHITECTURE.md](../../ARCHITECTURE.md).
+Inventory confirmed transition or persistence issues and fix them at the owner that already enforces the behavior. A clean pass is valid; do not add guards, logs, seams, or tests solely to create work. Torch now has versioned `WorldSave`/`ProfileSave` codecs and action-boundary local persistence; keep this audit focused on validation, provider failures, revision ordering, and recovery gaps rather than inventing a second save subsystem. If the scope is large, phase the plan and keep proposals under [README.md](README.md) and [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Hard stops
 
@@ -12,7 +12,7 @@ Inventory confirmed transition or persistence issues and fix them at the owner t
 - Presentation-only cleanup and timer/listener lifetime issues belong to `AsyncRaceAudit.md`.
 - If a duplicate command is caused by a stale timer, listener, or presentation re-entry, route that root cause to `AsyncRaceAudit.md`; keep the accepted/rejected state contract here.
 - Pure simulation rules belong in `src/sim/**`; do not move them into React or Phaser callbacks to hide a transition bug.
-- Do not add a durable save format, schema library, cloud provider, or migration path before the Phase 1 save decision in [ROADMAP.md](../../ROADMAP.md).
+- Do not add a second save format, schema library, cloud provider, or migration path without an explicit product decision in [ROADMAP.md](../../ROADMAP.md); the current `WorldSave`/`ProfileSave` codecs and local provider are the existing boundary.
 
 ## Triage
 
@@ -32,7 +32,12 @@ Prioritize P0–P1 by player-visible correctness and replay impact.
 - Rejected commands must not advance the turn or mutate unrelated state. Equip-ability is a non-turn state command and must use the same validation path as replayed commands.
 - Death/respawn, enemy response, ability cooldowns/effects, gathering progress, sparse generated-entity removal, and visibility reveal are deterministic state transitions. Use fixed seeds and event/state assertions in `tests/simulation.test.ts` and `tests/visibility.test.ts`.
 - Browser presentation settings and key bindings in `src/game/presentation-settings.ts` and `src/game/input-bindings.ts` are best-effort `localStorage` preferences, not world saves. Invalid or unavailable values should fall back to their declared defaults without changing simulation state.
-- When durable save/load is implemented, establish versioned profile/world envelopes and an explicit validation/migration owner first; then extend this audit with round-trip, partial, corrupt, and interrupted-write cases. Until then, absence of a save layer is a roadmap gap, not a finding to patch here.
+- Versioned save/load is implemented through `src/sim/world-save.ts`,
+  `src/sim/profile-save.ts`, `src/game/session.ts`, and the local provider.
+  Round-trip, malformed, and unsupported-version coverage lives in
+  `tests/save-replay.test.ts`; provider restore/failure coverage lives in
+  `tests/session-save.test.ts`. Migration, recovery, and fault-injection
+  coverage remain release-hardening work.
 - An empty `catch` is only a finding when it hides a player-visible state or persistence failure. Non-critical browser preference storage may deliberately fall back when storage is unavailable.
 
 ## Known signals
@@ -47,7 +52,7 @@ Optional discovery aids — choose probes that fit the candidate.
 - **Generated-state drift:** `materializeGeneratedTrees` or `removedGeneratedEntities` loses a sparse mutation, resurrects a chopped tree, or makes a different result for the same seed and command transcript.
 - **Malformed preference fallback:** `readShowGridPreference`, `readUiScalePreference`, or `readReduceMotionPreference` treats an unknown stored string as a meaningful value, throws at boot, or silently changes gameplay state instead of using its declared default (and the platform motion preference only where explicitly intended).
 - **Unavailable-storage key bindings:** `readKeyBindings`/`setKeyBindings` must keep default or in-memory bindings usable when `localStorage` is missing or throws; confirm that storage failure does not turn a key-binding change into a lost update or a visible command error.
-- **Swallowed transition errors:** empty `catch`/no-op `.catch` around command dispatch or a future save boundary that leaves the UI claiming success.
+- **Swallowed transition errors:** empty `catch`/no-op `.catch` around command dispatch or the current save boundary that leaves the UI claiming success.
 
 ## Matching verification
 
@@ -60,4 +65,5 @@ npm run test:e2e -- tests/e2e/first-light.spec.ts --reporter=line
 npm run verify
 ```
 
-If no confirmed correctness gap exists, report a clean pass and leave the roadmap's future save work untouched.
+If no confirmed correctness gap exists, report a clean pass and leave the
+roadmap's future recovery, migration, and fault-injection work untouched.

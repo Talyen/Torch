@@ -76,7 +76,8 @@ Discovery aids (choose focused probes; do not treat every match as a defect):
   styles in `src/styles.css` and `src/index.css`.
 - `data-reduce-motion`/`prefers-reduced-motion` missing on new motion rules.
 - Geometry and state assertions in
-  `tests/e2e/first-light.spec.ts` and `tests/e2e/theme.spec.ts` failing after a
+  `tests/e2e/first-light.spec.ts`, `tests/e2e/theme.spec.ts`,
+  `tests/e2e/crafting.spec.ts`, and `tests/e2e/loadout.spec.ts` failing after a
   style change.
 
 ## Verification

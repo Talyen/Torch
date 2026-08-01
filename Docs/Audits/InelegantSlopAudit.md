@@ -41,7 +41,7 @@ File length alone is a candidate signal, never a finding. Historical churn may s
 
 ## Hard stops
 
-- Do not collapse intentional seams: seeded RNG injection, typed command routing, simulation vs Phaser/React boundaries, design-system tokens, raw-art vs generated-asset boundaries, visibility/fog pooling, and planned versioned save envelopes. See [ARCHITECTURE.md](../../ARCHITECTURE.md).
+- Do not collapse intentional seams: seeded RNG injection, typed command routing, simulation vs Phaser/React boundaries, design-system tokens, raw-art vs generated-asset boundaries, visibility/fog pooling, and versioned save envelopes. See [ARCHITECTURE.md](../../ARCHITECTURE.md).
 - Do not rewrite simulation action, enemy-response, generation, or save invariants “for clarity” without fixed-seed tests proving equivalence.
 - Do not turn this into a style-only rename sweep, documentation rewrite, or mass deletion of tests that encode real invariants.
 - Prefer the owning audit when the hit is primarily dead code, reachable dual paths/shims (`DualPathRetentionAudit.md`), boundary legality, async races, type-safety escapes, duplicate UI, or state-ownership drift.

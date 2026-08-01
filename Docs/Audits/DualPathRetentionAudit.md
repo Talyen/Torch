@@ -22,8 +22,8 @@ Confirm two reachable paths for one behavior (or a reachable shim that only forw
 
 ## Hard stops
 
-- Do not collapse intentional seams listed in [ARCHITECTURE.md](../../ARCHITECTURE.md): simulation vs Phaser/React presentation, typed command routing through `src/game/session.ts`, seeded RNG inputs, `ProfileSave` vs `WorldSave` (planned persistence envelopes), raw assets vs the Sharp-generated `public/assets/` manifest, and platform adapters kept outside simulation rules.
-- Do not delete a save or schema compatibility path while a real save/resume/fixture consumer requires it. Durable save serialization and migrations are not implemented yet; do not invent a migration window or treat the future browser/platform providers as current duplicate paths. Check [ROADMAP.md](../../ROADMAP.md) and [DETERMINISM.md](../../DETERMINISM.md) before making a persistence claim.
+- Do not collapse intentional seams listed in [ARCHITECTURE.md](../../ARCHITECTURE.md): simulation vs Phaser/React presentation, typed command routing through `src/game/session.ts`, seeded RNG inputs, versioned `ProfileSave` vs `WorldSave` envelopes, raw assets vs the Sharp-generated `public/assets/` manifest, and platform adapters kept outside simulation rules.
+- Do not delete a save or schema compatibility path while a real save/resume/fixture consumer requires it. Versioned save serialization, local provider persistence, and round-trip consumers are implemented; migration, recovery, and cloud providers are not. Do not invent a migration window or treat future providers as current duplicate paths. Check [ROADMAP.md](../../ROADMAP.md) and [DETERMINISM.md](../../DETERMINISM.md) before making a persistence claim.
 - Do not rewrite simulation math, command contracts, or save wire format under this audit; prove equivalence through the existing `src/sim/` owner and its fixed-seed tests when a twin is confirmed. A resolver and a read-only context/default-action projection are not twins merely because they mention the same rule; compare inputs, mutation, and call sites before collapsing either path.
 - Do not demote or delete `src/sim/index.ts` or other barrel exports solely because they re-export a symbol. Inventory live imports first, then preserve stable cross-folder contracts.
 - Prefer the owning audit when the hit is primarily unused, ceremony-only (no twin), wrong ownership, duplicate UI, test-portfolio fit, or async isolation.
@@ -70,7 +70,10 @@ Optional discovery aids — confirm every hit with a call-site inventory and beh
 - **Live UI selectors:** before calling a path unused, inventory CSS selectors, DOM IDs, `data-testid` contracts, texture keys, and dynamic action/screen lookups; a selector-backed surface is a live consumer even without a TypeScript import.
 - **Generated/source twins:** code importing a generated `public/assets/manifest.json` path and a hand-authored alternate path for the same stable asset. Fix `Raw Assets/`, `src/content/`, or the pipeline; never hand-edit generated output.
 - **Flagged implementations:** `import.meta.env`/Vite branches that keep two reachable implementations of one behavior. `vite.config.ts` currently defines a single browser entry; do not claim an absent desktop/mobile branch as evidence.
-- **Closed persistence windows:** only after a versioned save envelope exists, inventory real provider/round-trip/migration consumers and focused tests; until then, record “not applicable” rather than inventing legacy-save paths.
+- **Persistence compatibility windows:** inventory the real versioned save
+  envelope, local provider, round-trip tests, and any migration consumers
+  before removing a compatibility path. Migration and recovery are currently
+  open hardening work, not reachable duplicate implementations.
 
 ## Matching verification
 

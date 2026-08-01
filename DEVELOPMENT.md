@@ -85,13 +85,15 @@ decision or runtime boundary changes.
 
 ## Assets
 
-Add source artwork under `Raw Assets/`, then run:
+Add source artwork under `Raw Assets/`, then run the owning pipeline script:
 
 ```bash
 npm run assets:build
 ```
 
-Do not hand-edit generated assets or the manifest.
+`npm run assets:build` invokes `scripts/process-assets.mjs`, which writes the
+generated assets and `public/assets/manifest.json`. Do not hand-edit generated
+assets or the manifest.
 
 ## Deployment and publishing
 

@@ -157,10 +157,10 @@ Heroes, enemies, items, equipment, abilities, recipes, quests, structures, and
 generation templates are data-driven and referenced by stable IDs. Validate
 content at load time, and keep content definitions independent of React.
 
-Original artwork lives under `Raw Assets/`. The asset pipeline generates web
-variants and `public/assets/manifest.json`; code references stable asset IDs and
-generated paths. Crops are intentional named variants rather than incidental CSS
-distortion.
+Original artwork lives under `Raw Assets/`. `scripts/process-assets.mjs`
+generates web variants and `public/assets/manifest.json`; code references
+stable asset IDs and generated paths. Crops are intentional named variants
+rather than incidental CSS distortion.
 
 ## Testing and packaging
 

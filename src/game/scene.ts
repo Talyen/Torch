@@ -7,7 +7,7 @@ import { resourceAssets } from '../content/resource-assets';
 import { devFrameMonitor } from '../dev/frame-monitor';
 import { tileSizeForViewport, viewRadiusForViewport } from './layout';
 import { gameSession } from './session';
-import { cssHexColorToNumber, readCssColorToken } from './presentation-colors';
+import { readBoardPresentationColors } from './presentation-colors';
 import {
   captureVisibilitySnapshot,
   entityVisibilityAlpha,
@@ -202,11 +202,12 @@ export class TorchScene extends Phaser.Scene {
     this.textures.get('enemy-slime-marker').setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.heroImage = this.add.image(0, 0, 'hero-knight-marker').setDepth(2);
     this.effectsLayer.add(this.heroImage);
+    const boardPresentationColors = readBoardPresentationColors();
     this.presentationColors = {
-      grid: cssHexColorToNumber(readCssColorToken('--ui-color-grid', '#3a3328'), 0x3a3328),
-      fog: cssHexColorToNumber(readCssColorToken('--ui-color-fog', '#15130f'), 0x15130f),
+      grid: boardPresentationColors.grid,
+      fog: boardPresentationColors.fog,
     };
-    this.cameras.main.setBackgroundColor(readCssColorToken('--ui-color-background', '#0c0b09'));
+    this.cameras.main.setBackgroundColor(boardPresentationColors.background);
     this.unsubscribe = gameSession.subscribe((_state, events) => this.redraw(true, events));
     this.unsubscribeBatches = gameSession.subscribeActionBatches((batch) => this.handleActionBatch(batch));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this);

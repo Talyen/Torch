@@ -5,7 +5,9 @@ This directory is the source-of-truth home for original artwork used by Torch.
 - Keep raw files unchanged so they can be reprocessed when the pipeline evolves.
 - Organize source art by content family, such as `Heroes`, `Enemies`, `Abilities`, and `Items`.
 - Do not hand-edit files under `public/assets`; those are generated outputs.
-- Run `npm run assets:build` after adding or replacing source art.
+- Run `npm run assets:build` after adding or replacing source art; the command
+  runs `scripts/process-assets.mjs` and writes generated output under
+  `public/assets/`.
 
 The asset pipeline preserves original-ratio variants for menus and creates focused
 variants for compact in-game surfaces without modifying the raw source file. Compact

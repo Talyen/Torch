@@ -8,6 +8,7 @@ import { LocalStorageSaveProvider } from './platform/local-save-provider';
 import { devFrameMonitor } from './dev/frame-monitor';
 import { CardPlayLab } from './dev/card-play-lab';
 import { applyReduceMotionPreference, applyUiScalePreference } from './game/presentation-settings';
+import { BOARD_PRESENTATION_FALLBACKS } from './game/presentation-colors';
 import './index.css';
 import './styles.css';
 
@@ -29,7 +30,7 @@ const game = new Phaser.Game({
   height: 640,
   // Matches --ui-color-background; TorchScene reads the live token after CSS
   // has loaded so the board and overlay share one charcoal foundation.
-  backgroundColor: '#0c0b09',
+  backgroundColor: BOARD_PRESENTATION_FALLBACKS.background,
   render: {
     antialias: true,
     antialiasGL: true,

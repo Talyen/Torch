@@ -61,12 +61,12 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 ## Phase 2 — Core survival and homestead loop
 
 - [x] Canonical inventory projection, item stacking, and a first data-driven crafting slice for gathered materials and consumables.
-- [ ] Equipment/loadout state and station-gated or equipment crafting (inventory remains unlimited; the remaining React gear surface is still a prototype).
+- [x] Simulation-backed equipment/tool loadout state, station-gated crafting, and the canonical React Gear surface (inventory remains unlimited).
 - [ ] Homestead building placement, farms, storage, and basic production.
 - [ ] Time-of-day presentation and lightweight weather effects.
 - [ ] Pets with follow, wait, interact, and simple combat behavior.
 - [x] World-local quests, mystery clues, waypoint targets, and Journal progress tracking.
-- [ ] Durable versioned save envelopes with local fallback.
+- [x] Versioned `WorldSave`/`ProfileSave` envelopes with a local provider (recovery, migration, and provider hardening remain future work).
 - [ ] Materialize world chunks and nearby entities with deterministic sleep/wake rules and sparse persistent mutations.
 - [ ] Add a visible homestead upgrade graph with repaired rooms, station dependencies, storage expansion, and production improvements.
 - [ ] Add renewable resource and production cadence such as crop cycles, regrowing nodes, and fuel or other recurring resource sinks.
@@ -78,7 +78,7 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 ## Phase 3 — RPG depth
 
 - [ ] Hero classes and class-specific starting choices.
-- [ ] Experience, levels, attributes, spells, and expanded abilities (starter ability effects and cooldowns exist; progression and durable loadout saves remain).
+- [ ] Experience, levels, attributes, spells, and expanded abilities (starter ability effects and cooldowns exist; progression remains, while current loadouts persist through `WorldSave`).
 - [ ] Equipment progression, enchantments, and item identification where appropriate.
 - [ ] More enemies, hazards, resources, and environmental interactions.
 - [ ] Hand-authored quests and mystery content.
@@ -147,7 +147,9 @@ This roadmap is deliberately staged around playable risk. Each phase should leav
 
 ## Current next milestone
 
-Complete the remaining Phase 2 survival loop around the Journal slice: equipment/loadouts, homestead production, and station-aware content while preserving deterministic saves and browser coverage.
+Complete the remaining Phase 2 survival loop around the Journal slice: homestead
+production, chunk/entity materialization, save-provider hardening, and profile
+progression while preserving deterministic saves and browser coverage.
 
 ## Deferred plan follow-ups
 
@@ -161,7 +163,7 @@ work:
 
 - Define the save-recovery contract for interrupted writes, last-known-good
   snapshots, migration policy, and multiple world slots before implementing
-  those behaviors.
+  recovery, migration, backup, or multi-slot behavior.
 - Choose the desktop shell, native lifecycle/filesystem adapter contract, and
   whether cloud saves or telemetry are release requirements.
 - Add a scheduled browser matrix for Mobile Chrome and WebKit after supported

@@ -20,12 +20,16 @@ large, phase it by flow (shell/menu, collection surfaces, action hand).
 The current browser suite is intentionally small:
 
 - `tests/e2e/first-light.spec.ts` owns the end-to-end vertical slice,
-  responsive Hero/Abilities/Equipment checks, and Action Hand feedback.
+  responsive Hero/Abilities checks, menu/input-mode behavior, persistence, and
+  Action Hand feedback.
 - `tests/e2e/theme.spec.ts` owns the Gold/Charcoal token contract across menu,
   settings, inventory, and equipment surfaces.
+- `tests/e2e/crafting.spec.ts` owns the gathered-resource → crafting → Inventory
+  journey and station-gating copy.
+- `tests/e2e/loadout.spec.ts` owns responsive canonical Gear/Tools containment
+  and hit-area checks.
 
-Do not duplicate assertions across these two owners merely to increase test
-count.
+Do not duplicate assertions across these owners merely to increase test count.
 
 ## How Torch runs E2E
 
@@ -112,6 +116,8 @@ Run a suspect spec directly first, then the normal gate:
 ```bash
 npm run test:e2e -- tests/e2e/first-light.spec.ts --reporter=line
 npm run test:e2e -- tests/e2e/theme.spec.ts --reporter=line
+npm run test:e2e -- tests/e2e/crafting.spec.ts --reporter=line
+npm run test:e2e -- tests/e2e/loadout.spec.ts --reporter=line
 npm run verify
 ```
 

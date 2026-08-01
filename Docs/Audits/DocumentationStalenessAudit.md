@@ -36,7 +36,7 @@ them. Recheck the target path and, when a fragment is present, optionally verify
 the heading anchor. A guide in `Docs/Audits/` reaches root project docs with
 `../../`, while links to the audit pack use the local `README.md`.
 
-**Current Torch facts to protect:** Phaser 4 + TypeScript 7 + React 19 overlay + Vite + Vitest + Playwright; browser-first development; `src/sim/**` is renderer-independent and deterministic; `src/game/**` owns session/input/Phaser presentation; `src/ui/**` owns the React overlay; Phase 1 save/reload/respawn and command-transcript coverage remain roadmap work, while Phase 2 owns durable versioned save envelopes.
+**Current Torch facts to protect:** Phaser 4 + TypeScript 6 + React 19 overlay + Vite + Vitest + Playwright; browser-first development; `src/sim/**` is renderer-independent and deterministic; `src/game/**` owns session/input/Phaser presentation; `src/ui/**` owns the React overlay; Phase 1 save/reload/respawn and command-transcript coverage are implemented and tested; the current Phase 2 slice includes local versioned save envelopes, while recovery, migration, chunk materialization, and provider hardening remain future work.
 
 ## Known signals
 
@@ -44,11 +44,11 @@ Optional discovery aids — choose probes that fit the candidate.
 
 - **Markdown inventory:** `find . -type f -name '*.md' -not -path './node_modules/*' -not -path './dist/*' | sort`.
 - **Path/framework drift:** `rg -n "npm run|src/|tests/|scripts/|public/|Phaser|TypeScript|React|Vite|Vitest|Playwright|version|Phase [0-9]" --glob '*.md' .` then inspect the cited source.
-- **Stale commands:** compare every documented `npm run ...` command with the scripts in `package.json`; current commands include `assets:build`, `dev`, `build`, `preview`, `typecheck`, `test`, `test:watch`, `test:e2e`, `check:theme`, and `verify`.
+- **Stale commands:** compare every documented `npm run ...` command with the scripts in `package.json`; current scripts include `assets:build`, `dev`, `build`, `preview`, `typecheck`, `typecheck:sim`, `test`, `test:coverage`, `test:watch`, `test:e2e`, `test:e2e:prod`, `format`, `format:check`, `lint`, `lint:fix`, `prepare`, `check:theme`, `check:ui-system`, `check:content`, `check:size`, and `verify`.
 - **Directory/owner mismatch:** compare claims about simulation, game, UI, content, tests, and generated assets with `find src tests scripts -maxdepth ... -type f`.
 - **Version drift:** compare framework/tool versions named in docs with `package.json`; do not infer versions from lockfile transitive entries.
 - **Broken links/anchors:** inspect Markdown link targets and headings from each changed file; pay special attention to paths under `Docs/Audits/`.
-- **Status drift:** compare `README.md` current status and `ROADMAP.md` checkboxes with actual source/tests. Keep future save, replay, crafting, and platform packaging claims marked as future until implemented.
+- **Status drift:** compare `README.md` current status and `ROADMAP.md` checkboxes with actual source/tests. Keep recovery/migration, chunk materialization, cloud/platform packaging, and other unreached release work marked as future; do not re-label implemented save, replay, crafting, or loadout behavior as roadmap-only.
 - **Generated-artifact claims:** ensure docs describe `scripts/process-assets.mjs` as the owner that writes `public/assets/manifest.json` and generated variants.
 - **Audit hygiene:** remove embedded run output or dated tracker residue from audit guides; outcomes belong in the handoff or `Docs/Audits/decisions.md` when a proposal is deliberately kept/deferred.
 

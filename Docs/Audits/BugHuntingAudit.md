@@ -46,7 +46,7 @@ Optional discovery aids — choose probes that match the changed area. A hit is 
 - **Phaser lifecycle and input:** pointer/resize listeners, tweens, pooled fog/grid/entity objects, and shutdown cleanup in `src/game/scene.ts`; reproduce rapid resize, menu-open input, repeated movement, and scene restart if the changed path touches them.
 - **React overlay actions:** rapid clicks, pointer holds, keyboard dismissal, and menu transitions in `src/ui/` and `src/components/ui/` that dispatch twice, leave `GameSession` in the wrong `world`/`ui` input mode, or lose focus. Pure lifetime/cancellation findings belong to `AsyncRaceAudit.md`.
 - **Asset boundary failures:** stable IDs or generated manifest paths that disagree with `scripts/process-assets.mjs`, `public/assets/manifest.json`, or native-ratio variants; do not “fix” generated files by hand.
-- **Swallowed orchestration errors:** empty `catch` blocks or ignored rejected work around session setup, asset processing, or future save-provider adapters (a save provider is not implemented yet, so do not invent migration bugs).
+- **Swallowed orchestration errors:** empty `catch` blocks or ignored rejected work around session setup, asset processing, or the current save-provider boundary. The local provider is implemented; cloud adapters and migration behavior remain future, so do not invent bugs for absent providers.
 
 ## Matching verification
 
